@@ -15,6 +15,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface InstructorUser {
   id: string;
@@ -61,16 +62,22 @@ export default function AdminInstructorsApprovalPage() {
     [instructors],
   );
 
+  const { showSuccess, showError } = useSnackbar();
+
   // Approve Mutation
   const approveMutation = useMutation({
     mutationFn: async (userId: string) => {
       return (await apiClient.patch(`/users/${userId}/approve-instructor`)).data;
     },
     onSuccess: () => {
+      showSuccess('Instructor approved');
       refetch();
       queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
     },
-    onError: () => alert('Failed to approve instructor.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to approve instructor.');
+    },
   });
 
   // Reject Mutation
@@ -79,10 +86,14 @@ export default function AdminInstructorsApprovalPage() {
       return (await apiClient.patch(`/users/${userId}/reject-instructor`)).data;
     },
     onSuccess: () => {
+      showSuccess('Instructor rejected');
       refetch();
       queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
     },
-    onError: () => alert('Failed to reject instructor.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to reject instructor.');
+    },
   });
 
   const handleApprove = (id: string) => {

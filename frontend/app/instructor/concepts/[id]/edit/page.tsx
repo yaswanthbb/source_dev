@@ -26,6 +26,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -103,6 +104,8 @@ export default function EditConceptPage({ params }: PageProps) {
     queryFn: async () => (await apiClient.get<McqQuestion[]>(`/concepts/${conceptId}/questions`)).data,
   });
 
+  const { showSuccess, showError } = useSnackbar();
+
   // Content Save mutation
   const updateConceptMutation = useMutation({
     mutationFn: async (payload: {
@@ -114,6 +117,7 @@ export default function EditConceptPage({ params }: PageProps) {
     },
     onSuccess: () => {
       setSuccessMessage('Concept article saved successfully.');
+      showSuccess('Concept updated');
       queryClient.invalidateQueries({ queryKey: ['concepts'] });
       queryClient.invalidateQueries({ queryKey: ['concepts', conceptId] });
       setTimeout(() => setSuccessMessage(null), 3000);
@@ -122,13 +126,12 @@ export default function EditConceptPage({ params }: PageProps) {
       const axiosErr = err as {
         response?: { status?: number; data?: { message?: string } };
       };
-      if (axiosErr.response?.status === 403) {
-        setErrorMessage('You do not have permission to edit this concept.');
-      } else {
-        setErrorMessage(
-          axiosErr.response?.data?.message || 'Failed to update concept. Please try again.',
-        );
-      }
+      const msg =
+        axiosErr.response?.status === 403
+          ? 'You do not have permission to edit this concept.'
+          : axiosErr.response?.data?.message || 'Failed to update concept. Please try again.';
+      setErrorMessage(msg);
+      showError(msg);
     },
   });
 
@@ -208,12 +211,15 @@ export default function EditConceptPage({ params }: PageProps) {
         { optionText: '', isCorrect: false },
       ]);
       setQuizFormError(null);
+      showSuccess('Quiz question created');
       refetchQuestions();
       queryClient.invalidateQueries({ queryKey: ['concepts', conceptId, 'quiz-status'] });
     },
     onError: (err: unknown) => {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      setQuizFormError(axiosErr.response?.data?.message || 'Failed to create question.');
+      const msg = axiosErr.response?.data?.message || 'Failed to create question.';
+      setQuizFormError(msg);
+      showError(msg);
     },
   });
 
@@ -223,22 +229,30 @@ export default function EditConceptPage({ params }: PageProps) {
 
     // Client-side Validation:
     if (!newQuestionText.trim()) {
-      setQuizFormError('Question text cannot be empty.');
+      const msg = 'Question text cannot be empty.';
+      setQuizFormError(msg);
+      showError(msg);
       return;
     }
     if (newOptions.length < 2) {
-      setQuizFormError('At least 2 options are required.');
+      const msg = 'At least 2 options are required.';
+      setQuizFormError(msg);
+      showError(msg);
       return;
     }
     for (let i = 0; i < newOptions.length; i++) {
       if (!newOptions[i].optionText.trim()) {
-        setQuizFormError(`Option ${i + 1} cannot be empty.`);
+        const msg = `Option ${i + 1} cannot be empty.`;
+        setQuizFormError(msg);
+        showError(msg);
         return;
       }
     }
     const correctCount = newOptions.filter((o) => o.isCorrect).length;
     if (correctCount !== 1) {
-      setQuizFormError('Exactly one option must be marked as the correct answer.');
+      const msg = 'Exactly one option must be marked as the correct answer.';
+      setQuizFormError(msg);
+      showError(msg);
       return;
     }
 
@@ -263,9 +277,13 @@ export default function EditConceptPage({ params }: PageProps) {
     },
     onSuccess: () => {
       setEditingQuestionId(null);
+      showSuccess('Quiz question updated');
       refetchQuestions();
     },
-    onError: () => alert('Failed to update question text.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to update question text.');
+    },
   });
 
   // Edit Option Text / Correctness Mutation
@@ -288,8 +306,14 @@ export default function EditConceptPage({ params }: PageProps) {
         })
       ).data;
     },
-    onSuccess: () => refetchQuestions(),
-    onError: () => alert('Failed to update option.'),
+    onSuccess: () => {
+      showSuccess('Correct answer updated');
+      refetchQuestions();
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to update option.');
+    },
   });
 
   // Delete Question Mutation
@@ -298,10 +322,14 @@ export default function EditConceptPage({ params }: PageProps) {
       return (await apiClient.delete(`/questions/${id}`)).data;
     },
     onSuccess: () => {
+      showSuccess('Quiz question deleted');
       refetchQuestions();
       queryClient.invalidateQueries({ queryKey: ['concepts', conceptId, 'quiz-status'] });
     },
-    onError: () => alert('Failed to delete question.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to delete question.');
+    },
   });
 
   const handleDeleteQuestion = (questionId: string) => {

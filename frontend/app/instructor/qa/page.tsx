@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface ConceptSummary {
   id: string;
@@ -129,6 +130,7 @@ export default function InstructorQaPage() {
   // Answer drafts state
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [submittingIds, setSubmittingIds] = useState<Record<string, boolean>>({});
+  const { showSuccess, showError } = useSnackbar();
 
   const handlePostAnswer = async (questionId: string) => {
     const body = answerDrafts[questionId]?.trim();
@@ -138,10 +140,12 @@ export default function InstructorQaPage() {
     try {
       await apiClient.post(`/qa-questions/${questionId}/answers`, { body });
       setAnswerDrafts((prev) => ({ ...prev, [questionId]: '' }));
+      showSuccess('Answer posted');
       refetch();
       queryClient.invalidateQueries({ queryKey: ['instructor', 'analytics'] });
-    } catch {
-      alert('Failed to post answer. Please try again.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to post answer. Please try again.');
     } finally {
       setSubmittingIds((prev) => ({ ...prev, [questionId]: false }));
     }

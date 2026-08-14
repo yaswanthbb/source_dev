@@ -20,6 +20,7 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface PageProps {
   params: Promise<{ roadmapId: string }>;
@@ -63,6 +64,8 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   const roadmapId = resolvedParams.roadmapId;
   const queryClient = useQueryClient();
 
+  const { showSuccess, showError } = useSnackbar();
+
   // 1. Fetch full roadmap structure
   const {
     data: roadmap,
@@ -85,10 +88,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     },
     onSuccess: () => {
       setIsEditingDetails(false);
+      showSuccess('Roadmap updated');
       refetch();
       queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
     },
-    onError: () => alert('Failed to update roadmap details.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to update roadmap details.');
+    },
   });
 
   const handleStartEditDetails = () => {
@@ -112,9 +119,13 @@ export default function RoadmapManagementPage({ params }: PageProps) {
       setIsAddingModule(false);
       setNewModuleTitle('');
       setNewModuleDesc('');
+      showSuccess('Module added');
       refetch();
     },
-    onError: () => alert('Failed to add module.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to add module.');
+    },
   });
 
   // Module Edit State
@@ -127,9 +138,13 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     },
     onSuccess: () => {
       setEditingModuleId(null);
+      showSuccess('Module updated');
       refetch();
     },
-    onError: () => alert('Failed to rename module.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to rename module.');
+    },
   });
 
   // Delete Module Mutation
@@ -137,8 +152,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     mutationFn: async (moduleId: string) => {
       return (await apiClient.delete(`/modules/${moduleId}`)).data;
     },
-    onSuccess: () => refetch(),
-    onError: () => alert('Failed to delete module.'),
+    onSuccess: () => {
+      showSuccess('Module deleted');
+      refetch();
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to delete module.');
+    },
   });
 
   const handleDeleteModule = (moduleId: string) => {
@@ -152,8 +173,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     mutationFn: async ({ moduleId, conceptId }: { moduleId: string; conceptId: string }) => {
       return (await apiClient.delete(`/modules/${moduleId}/concepts/${conceptId}`)).data;
     },
-    onSuccess: () => refetch(),
-    onError: () => alert('Failed to remove concept from module.'),
+    onSuccess: () => {
+      showSuccess('Concept removed from module');
+      refetch();
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to remove concept from module.');
+    },
   });
 
   const handleRemoveConcept = (moduleId: string, conceptId: string) => {
@@ -201,9 +228,13 @@ export default function RoadmapManagementPage({ params }: PageProps) {
       setAttachingModuleId(null);
       setSelectedConceptId('');
       setConceptSearchQuery('');
+      showSuccess('Concept attached to module');
       refetch();
     },
-    onError: () => alert('Failed to attach concept to module.'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to attach concept to module.');
+    },
   });
 
   if (isLoading) {

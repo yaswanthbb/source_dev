@@ -16,11 +16,13 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 export default function CreateConceptPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { showSuccess, showError } = useSnackbar();
 
   const moduleId = searchParams.get('moduleId');
   const roadmapId = searchParams.get('roadmapId');
@@ -56,6 +58,7 @@ export default function CreateConceptPage() {
       return newConcept;
     },
     onSuccess: (newConcept) => {
+      showSuccess('Concept created');
       queryClient.invalidateQueries({ queryKey: ['concepts'] });
       queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
       if (roadmapId) {
@@ -66,9 +69,9 @@ export default function CreateConceptPage() {
     },
     onError: (err: unknown) => {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      setErrorMessage(
-        axiosErr.response?.data?.message || 'Failed to create concept. Please try again.',
-      );
+      const msg = axiosErr.response?.data?.message || 'Failed to create concept. Please try again.';
+      setErrorMessage(msg);
+      showError(msg);
     },
   });
 

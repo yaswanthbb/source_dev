@@ -7,9 +7,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Layers, Sparkles } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
+import { useSnackbar } from '@/providers/snackbar-provider';
+
 export default function CreateRoadmapPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { showSuccess, showError } = useSnackbar();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -21,14 +24,15 @@ export default function CreateRoadmapPage() {
       return response.data;
     },
     onSuccess: (data) => {
+      showSuccess('Roadmap created');
       queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
       router.push(`/instructor/content/${data.id}`);
     },
     onError: (err: unknown) => {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      setErrorMessage(
-        axiosErr.response?.data?.message || 'Failed to create roadmap. Please try again.',
-      );
+      const msg = axiosErr.response?.data?.message || 'Failed to create roadmap. Please try again.';
+      setErrorMessage(msg);
+      showError(msg);
     },
   });
 
