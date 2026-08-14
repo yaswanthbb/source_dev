@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { useSnackbar } from '@/providers/snackbar-provider';
+import { ConfirmModal } from '@/components/confirm-modal';
 
 interface InstructorUser {
   id: string;
@@ -34,8 +35,26 @@ interface InstructorUser {
 
 export default function AdminInstructorsApprovalPage() {
   const queryClient = useQueryClient();
+  const { showSuccess, showError } = useSnackbar();
 
-  // 1. Fetch all instructors
+  // Themed Confirmation Modal State
+  const [confirmModal, setConfirmModal] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    variant: 'danger' | 'warning' | 'primary';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    variant: 'danger',
+    onConfirm: () => {},
+  });
+
+  // 1. Fetch all instructors and applicants
   const {
     data: instructors = [],
     isLoading,
@@ -43,26 +62,24 @@ export default function AdminInstructorsApprovalPage() {
     refetch,
   } = useQuery<InstructorUser[]>({
     queryKey: ['admin', 'users', 'instructors'],
-    queryFn: async () => (await apiClient.get<InstructorUser[]>('/users?role=instructor')).data,
+    queryFn: async () => (await apiClient.get<InstructorUser[]>('/users/instructor-applications')).data,
   });
 
   // Categorize by status
   const pendingInstructors = React.useMemo(
-    () => instructors.filter((i) => !i.instructorProfile || i.instructorProfile.status === 'pending'),
+    () => instructors.filter((i) => i.instructorProfile?.status === 'pending'),
     [instructors],
   );
 
   const approvedInstructors = React.useMemo(
-    () => instructors.filter((i) => i.instructorProfile?.status === 'approved'),
+    () => instructors.filter((i) => i.role === 'instructor' || i.instructorProfile?.status === 'approved'),
     [instructors],
   );
 
   const rejectedInstructors = React.useMemo(
-    () => instructors.filter((i) => i.instructorProfile?.status === 'rejected'),
+    () => instructors.filter((i) => i.instructorProfile?.status === 'rejected' && i.role !== 'instructor'),
     [instructors],
   );
-
-  const { showSuccess, showError } = useSnackbar();
 
   // Approve Mutation
   const approveMutation = useMutation({
@@ -87,6 +104,7 @@ export default function AdminInstructorsApprovalPage() {
     },
     onSuccess: () => {
       showSuccess('Instructor rejected');
+      setConfirmModal((prev) => ({ ...prev, isOpen: false }));
       refetch();
       queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
     },
@@ -96,14 +114,47 @@ export default function AdminInstructorsApprovalPage() {
     },
   });
 
+  // Demote / Degrade Mutation
+  const demoteMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return (await apiClient.patch(`/users/${userId}/demote-to-student`)).data;
+    },
+    onSuccess: () => {
+      showSuccess('Instructor degraded to student role');
+      setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to degrade instructor.');
+    },
+  });
+
   const handleApprove = (id: string) => {
     approveMutation.mutate(id);
   };
 
-  const handleReject = (id: string) => {
-    if (window.confirm('Are you sure you want to reject this instructor application?')) {
-      rejectMutation.mutate(id);
-    }
+  const handleReject = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Reject Application',
+      message: `Are you sure you want to reject the instructor application for "${name}"? They will remain a student.`,
+      confirmText: 'Reject Application',
+      variant: 'danger',
+      onConfirm: () => rejectMutation.mutate(id),
+    });
+  };
+
+  const handleDemote = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Degrade to Student',
+      message: `Are you sure you want to degrade "${name}" back to Student? Their instructor authoring privileges will be revoked immediately.`,
+      confirmText: 'Degrade to Student',
+      variant: 'danger',
+      onConfirm: () => demoteMutation.mutate(id),
+    });
   };
 
   return (
@@ -207,7 +258,7 @@ export default function AdminInstructorsApprovalPage() {
                   <button
                     type="button"
                     disabled={rejectMutation.isPending || approveMutation.isPending}
-                    onClick={() => handleReject(inst.id)}
+                    onClick={() => handleReject(inst.id, inst.name)}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition-all cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -255,7 +306,8 @@ export default function AdminInstructorsApprovalPage() {
                   <th className="p-4 font-semibold">Instructor</th>
                   <th className="p-4 font-semibold">Email</th>
                   <th className="p-4 font-semibold">Status</th>
-                  <th className="p-4 text-right font-semibold">Approved Date</th>
+                  <th className="p-4 font-semibold">Approved Date</th>
+                  <th className="p-4 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -273,7 +325,7 @@ export default function AdminInstructorsApprovalPage() {
                         <span>Approved</span>
                       </span>
                     </td>
-                    <td className="p-4 text-right text-text-secondary text-[11px]">
+                    <td className="p-4 text-text-secondary text-[11px]">
                       {inst.instructorProfile?.approvedAt
                         ? new Date(inst.instructorProfile.approvedAt).toLocaleDateString('en-US', {
                             month: 'short',
@@ -281,6 +333,18 @@ export default function AdminInstructorsApprovalPage() {
                             year: 'numeric',
                           })
                         : '—'}
+                    </td>
+                    <td className="p-4 text-right">
+                      <button
+                        type="button"
+                        disabled={demoteMutation.isPending}
+                        onClick={() => handleDemote(inst.id, inst.name)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-[11px] font-semibold transition-all cursor-pointer"
+                        title="Revoke instructor status and degrade back to student"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Degrade to Student</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -333,6 +397,18 @@ export default function AdminInstructorsApprovalPage() {
           </div>
         </section>
       )}
+
+      {/* Themed Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        variant={confirmModal.variant}
+        isLoading={rejectMutation.isPending || demoteMutation.isPending}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
