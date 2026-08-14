@@ -21,8 +21,8 @@ export const metadata: Metadata = {
   title: 'KIS — Knowledge Is Power',
   description: 'Structured roadmaps, concepts, quizzes, and gamified learning.',
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
+    icon: '/icon.png?v=3',
+    apple: '/icon.png?v=3',
   },
 };
 
