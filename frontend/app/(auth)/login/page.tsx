@@ -44,9 +44,9 @@ export default function LoginPage() {
       case 'student':
         return '/student/dashboard';
       case 'instructor':
-        return '/student/dashboard';
+        return '/instructor/dashboard';
       case 'admin':
-        return '/student/dashboard';
+        return '/admin/dashboard';
       default:
         return '/student/dashboard';
     }
@@ -66,7 +66,7 @@ export default function LoginPage() {
       setUser(user);
 
       const targetRoute = getDashboardRoute(user.role);
-      router.push(targetRoute);
+      router.replace(targetRoute);
     } catch (err: unknown) {
       const axiosError = err as {
         response?: { data?: { message?: string | string[] } };
