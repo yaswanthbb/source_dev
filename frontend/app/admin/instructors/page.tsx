@@ -1,0 +1,327 @@
+'use client';
+
+import React from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  UserCheck,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Check,
+  X,
+  AlertCircle,
+  Mail,
+  FileText,
+  User as UserIcon,
+} from 'lucide-react';
+import apiClient from '@/lib/api-client';
+
+interface InstructorUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  instructorProfile?: {
+    id: string;
+    status: 'pending' | 'approved' | 'rejected';
+    bio: string | null;
+    createdAt: string;
+    approvedAt: string | null;
+  };
+}
+
+export default function AdminInstructorsApprovalPage() {
+  const queryClient = useQueryClient();
+
+  // 1. Fetch all instructors
+  const {
+    data: instructors = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<InstructorUser[]>({
+    queryKey: ['admin', 'users', 'instructors'],
+    queryFn: async () => (await apiClient.get<InstructorUser[]>('/users?role=instructor')).data,
+  });
+
+  // Categorize by status
+  const pendingInstructors = React.useMemo(
+    () => instructors.filter((i) => !i.instructorProfile || i.instructorProfile.status === 'pending'),
+    [instructors],
+  );
+
+  const approvedInstructors = React.useMemo(
+    () => instructors.filter((i) => i.instructorProfile?.status === 'approved'),
+    [instructors],
+  );
+
+  const rejectedInstructors = React.useMemo(
+    () => instructors.filter((i) => i.instructorProfile?.status === 'rejected'),
+    [instructors],
+  );
+
+  // Approve Mutation
+  const approveMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return (await apiClient.patch(`/users/${userId}/approve-instructor`)).data;
+    },
+    onSuccess: () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
+    },
+    onError: () => alert('Failed to approve instructor.'),
+  });
+
+  // Reject Mutation
+  const rejectMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return (await apiClient.patch(`/users/${userId}/reject-instructor`)).data;
+    },
+    onSuccess: () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
+    },
+    onError: () => alert('Failed to reject instructor.'),
+  });
+
+  const handleApprove = (id: string) => {
+    approveMutation.mutate(id);
+  };
+
+  const handleReject = (id: string) => {
+    if (window.confirm('Are you sure you want to reject this instructor application?')) {
+      rejectMutation.mutate(id);
+    }
+  };
+
+  return (
+    <div className="space-y-10 max-w-5xl pb-16">
+      {/* Header */}
+      <div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold uppercase tracking-wider mb-2">
+          <UserCheck className="w-3.5 h-3.5" />
+          <span>Faculty Management</span>
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold font-display text-text-primary tracking-tight">
+          Instructor Approval Queue
+        </h1>
+        <p className="text-text-secondary text-sm mt-0.5">
+          Review, approve, or reject educator applications to grant curriculum authoring access.
+        </p>
+      </div>
+
+      {/* 1. PENDING APPROVAL QUEUE (Actionable) */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-amber-tint text-amber flex items-center justify-center font-bold text-xs">
+              <Clock className="w-3.5 h-3.5" />
+            </div>
+            <h2 className="text-lg font-bold font-display text-text-primary">
+              Pending Applications ({pendingInstructors.length})
+            </h2>
+          </div>
+          {pendingInstructors.length > 0 && (
+            <span className="text-xs text-amber font-semibold bg-amber-tint px-2.5 py-0.5 rounded-full">
+              Action Required
+            </span>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-3 animate-pulse">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="p-6 rounded-2xl bg-surface border border-border h-32" />
+            ))}
+          </div>
+        ) : pendingInstructors.length === 0 ? (
+          <div className="p-8 text-center bg-surface border border-dashed border-border rounded-2xl">
+            <CheckCircle2 className="w-8 h-8 text-green mx-auto mb-2 opacity-80" />
+            <p className="text-xs font-bold text-text-primary">All caught up!</p>
+            <p className="text-[11px] text-text-secondary mt-0.5">
+              There are no pending instructor applications awaiting review.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4">
+            {pendingInstructors.map((inst) => (
+              <div
+                key={inst.id}
+                className="p-6 rounded-2xl bg-surface border border-amber/30 ring-1 ring-amber/20 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6"
+              >
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-accent-tint text-accent font-bold flex items-center justify-center text-sm">
+                      {inst.name ? inst.name.charAt(0).toUpperCase() : <UserIcon className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-text-primary">
+                        {inst.name}
+                      </h3>
+                      <p className="text-xs text-text-secondary flex items-center gap-1.5 font-mono">
+                        <Mail className="w-3 h-3" />
+                        <span>{inst.email}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {inst.instructorProfile?.bio ? (
+                    <div className="pl-13 text-xs text-text-secondary bg-bg p-3 rounded-xl border border-border/80 leading-relaxed">
+                      <p className="font-semibold text-text-primary text-[10px] uppercase tracking-wider mb-1">
+                        Application Bio:
+                      </p>
+                      {inst.instructorProfile.bio}
+                    </div>
+                  ) : (
+                    <p className="pl-13 text-[11px] text-text-secondary/60 italic">
+                      No bio provided.
+                    </p>
+                  )}
+
+                  <div className="pl-13 text-[10px] text-text-secondary">
+                    Applied on:{' '}
+                    {new Date(
+                      inst.instructorProfile?.createdAt || inst.createdAt,
+                    ).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </div>
+                </div>
+
+                {/* Approve / Reject Actions */}
+                <div className="flex items-center gap-3 self-end md:self-center flex-shrink-0">
+                  <button
+                    type="button"
+                    disabled={rejectMutation.isPending || approveMutation.isPending}
+                    onClick={() => handleReject(inst.id)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Reject</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    onClick={() => handleApprove(inst.id)}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-green text-white hover:bg-green/90 text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Approve</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 2. APPROVED INSTRUCTORS (Read-only) */}
+      <section className="space-y-4 pt-4 border-t border-border/80">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-green-tint text-green flex items-center justify-center font-bold text-xs">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </div>
+            <h2 className="text-lg font-bold font-display text-text-primary">
+              Approved Faculty ({approvedInstructors.length})
+            </h2>
+          </div>
+        </div>
+
+        {approvedInstructors.length === 0 ? (
+          <div className="p-8 text-center bg-surface border border-border rounded-2xl text-xs text-text-secondary">
+            No approved instructors yet.
+          </div>
+        ) : (
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-2xs">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
+                  <th className="p-4 font-semibold">Instructor</th>
+                  <th className="p-4 font-semibold">Email</th>
+                  <th className="p-4 font-semibold">Status</th>
+                  <th className="p-4 text-right font-semibold">Approved Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {approvedInstructors.map((inst) => (
+                  <tr key={inst.id} className="hover:bg-bg/40 transition-colors">
+                    <td className="p-4 font-bold text-text-primary">
+                      {inst.name}
+                    </td>
+                    <td className="p-4 text-text-secondary font-mono text-[11px]">
+                      {inst.email}
+                    </td>
+                    <td className="p-4">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-green-tint text-green font-bold text-[10px] uppercase tracking-wider">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Approved</span>
+                      </span>
+                    </td>
+                    <td className="p-4 text-right text-text-secondary text-[11px]">
+                      {inst.instructorProfile?.approvedAt
+                        ? new Date(inst.instructorProfile.approvedAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* 3. REJECTED INSTRUCTORS (Read-only) */}
+      {rejectedInstructors.length > 0 && (
+        <section className="space-y-4 pt-4 border-t border-border/80">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs">
+              <XCircle className="w-3.5 h-3.5" />
+            </div>
+            <h2 className="text-lg font-bold font-display text-text-primary">
+              Rejected Applications ({rejectedInstructors.length})
+            </h2>
+          </div>
+
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-2xs">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
+                  <th className="p-4 font-semibold">Instructor</th>
+                  <th className="p-4 font-semibold">Email</th>
+                  <th className="p-4 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {rejectedInstructors.map((inst) => (
+                  <tr key={inst.id} className="hover:bg-bg/40 transition-colors">
+                    <td className="p-4 font-medium text-text-primary">
+                      {inst.name}
+                    </td>
+                    <td className="p-4 text-text-secondary font-mono text-[11px]">
+                      {inst.email}
+                    </td>
+                    <td className="p-4">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-50 text-red-600 font-bold text-[10px] uppercase tracking-wider">
+                        <XCircle className="w-3 h-3" />
+                        <span>Rejected</span>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
