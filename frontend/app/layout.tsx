@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import { QueryProvider } from '../providers/query-provider';
+import { SnackbarProvider } from '../providers/snackbar-provider';
 import './globals.css';
 
 const inter = Inter({
@@ -34,7 +35,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <body className="min-h-screen bg-bg text-text-primary antialiased font-sans">
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <SnackbarProvider>{children}</SnackbarProvider>
+        </QueryProvider>
       </body>
     </html>
   );

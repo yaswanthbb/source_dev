@@ -12,6 +12,8 @@
   --color-amber-tint: #FCF0E1;
   --color-green: #0F8C52;
   --color-green-tint: #E6F6EC;
+  --color-red: #D92D20;
+  --color-red-tint: #FEF3F2;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
