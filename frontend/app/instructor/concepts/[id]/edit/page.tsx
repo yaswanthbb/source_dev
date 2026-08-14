@@ -24,6 +24,11 @@ import {
   X,
   Edit2,
   HelpCircle,
+  Copy,
+  Sparkles,
+  FileJson,
+  UploadCloud,
+  Terminal,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { useSnackbar } from '@/providers/snackbar-provider';
@@ -55,6 +60,229 @@ interface McqQuestion {
   questionText: string;
   orderIndex: number;
   options: McqOption[];
+}
+
+const SAMPLE_QUIZ_JSON = JSON.stringify(
+  [
+    {
+      questionText: 'Which Git command is used to save staged changes permanently in the local repository history?',
+      options: [
+        { optionText: 'git commit -m "feat: add user authentication"', isCorrect: true },
+        { optionText: 'git add .', isCorrect: false },
+        { optionText: 'git push origin main', isCorrect: false },
+        { optionText: 'git status', isCorrect: false },
+      ],
+    },
+    {
+      questionText: 'What is the primary role of version control systems in modern software engineering?',
+      options: [
+        { optionText: 'Tracking change history and facilitating team collaboration safely', isCorrect: true },
+        { optionText: 'Compiling source code directly into executable machine code', isCorrect: false },
+        { optionText: 'Automating remote production server hosting only', isCorrect: false },
+      ],
+    },
+  ],
+  null,
+  2,
+);
+
+interface ParsedImportQuestion {
+  questionText: string;
+  orderIndex: number;
+  options: Array<{
+    optionText: string;
+    isCorrect: boolean;
+    orderIndex: number;
+  }>;
+}
+
+interface ValidationReport {
+  isValid: boolean;
+  questions: ParsedImportQuestion[];
+  errors: string[];
+  syntaxError: string | null;
+  totalParsed: number;
+  totalValid: number;
+}
+
+function validateAndParseQuizText(rawText: string, startingOrderIndex: number): ValidationReport {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return {
+      isValid: false,
+      questions: [],
+      errors: ['Text area is empty. Paste questions or click "Insert Template" to get started.'],
+      syntaxError: null,
+      totalParsed: 0,
+      totalValid: 0,
+    };
+  }
+
+  // 1. JSON parsing
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const rawList = Array.isArray(parsed) ? parsed : [parsed];
+      const errors: string[] = [];
+      const validatedList: ParsedImportQuestion[] = [];
+
+      rawList.forEach((item, qIdx) => {
+        const qNum = qIdx + 1;
+        if (!item || typeof item !== 'object') {
+          errors.push(`Question #${qNum}: Expected a JSON object, but received ${typeof item}.`);
+          return;
+        }
+
+        const questionText = typeof item.questionText === 'string' ? item.questionText.trim() : '';
+        if (!questionText) {
+          errors.push(`Question #${qNum}: "questionText" is required and cannot be empty.`);
+        }
+
+        if (!Array.isArray(item.options)) {
+          errors.push(`Question #${qNum}: "options" must be an array of option objects.`);
+          return;
+        }
+
+        if (item.options.length < 2) {
+          errors.push(`Question #${qNum}: Must have at least 2 options (found ${item.options.length}).`);
+        }
+
+        const parsedOptions: Array<{ optionText: string; isCorrect: boolean; orderIndex: number }> = [];
+        let correctCount = 0;
+
+        item.options.forEach((opt: any, optIdx: number) => {
+          const optNum = optIdx + 1;
+          if (!opt || typeof opt !== 'object') {
+            errors.push(`Question #${qNum}, Option #${optNum}: Expected an object with "optionText" and "isCorrect".`);
+            return;
+          }
+
+          const optionText = typeof opt.optionText === 'string' ? opt.optionText.trim() : '';
+          if (!optionText) {
+            errors.push(`Question #${qNum}, Option #${optNum}: "optionText" is required and cannot be empty.`);
+          }
+
+          const isCorrect = Boolean(opt.isCorrect);
+          if (isCorrect) correctCount++;
+
+          parsedOptions.push({
+            optionText,
+            isCorrect,
+            orderIndex: optIdx,
+          });
+        });
+
+        if (correctCount === 0) {
+          errors.push(`Question #${qNum}: No option is marked as correct. Exactly one option must have "isCorrect": true.`);
+        } else if (correctCount > 1) {
+          errors.push(`Question #${qNum}: ${correctCount} options marked as correct. Exactly one option must have "isCorrect": true.`);
+        }
+
+        if (questionText && parsedOptions.length >= 2 && correctCount === 1) {
+          validatedList.push({
+            questionText,
+            orderIndex: startingOrderIndex + qIdx,
+            options: parsedOptions,
+          });
+        }
+      });
+
+      return {
+        isValid: errors.length === 0 && validatedList.length > 0,
+        questions: validatedList,
+        errors,
+        syntaxError: null,
+        totalParsed: rawList.length,
+        totalValid: validatedList.length,
+      };
+    } catch (err: any) {
+      return {
+        isValid: false,
+        questions: [],
+        errors: [`Invalid JSON Syntax: ${err?.message || 'Check for missing commas, quotes, or unclosed braces.'}`],
+        syntaxError: err?.message || 'JSON Syntax Error',
+        totalParsed: 0,
+        totalValid: 0,
+      };
+    }
+  }
+
+  // 2. Structured text / Markdown fallback parsing
+  const blocks = trimmed.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  const errors: string[] = [];
+  const validatedList: ParsedImportQuestion[] = [];
+
+  blocks.forEach((block, bIdx) => {
+    const qNum = bIdx + 1;
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 3) {
+      errors.push(`Question #${qNum}: Must have at least 1 question title line and 2 option lines.`);
+      return;
+    }
+
+    const questionLine = lines[0].replace(/^(Q\s*\d*[:.]|\d+[\).])\s*/i, '').trim();
+    if (!questionLine) {
+      errors.push(`Question #${qNum}: Question text is missing.`);
+      return;
+    }
+
+    const optionLines = lines.slice(1);
+    const parsedOptions: Array<{ optionText: string; isCorrect: boolean; orderIndex: number }> = [];
+    let correctCount = 0;
+
+    optionLines.forEach((optLine, optIdx) => {
+      const isMarkedCorrect =
+        optLine.includes('(correct)') ||
+        optLine.includes('[x]') ||
+        optLine.includes('[X]') ||
+        optLine.startsWith('*');
+
+      const cleanText = optLine
+        .replace(/^(-\s*\[[ xX]\]|\*\s*|[a-dA-D][\).]|-\s*)/, '')
+        .replace(/\(correct\)/i, '')
+        .trim();
+
+      if (!cleanText) {
+        errors.push(`Question #${qNum}, Option #${optIdx + 1}: Option text is empty.`);
+        return;
+      }
+
+      if (isMarkedCorrect) correctCount++;
+
+      parsedOptions.push({
+        optionText: cleanText,
+        isCorrect: isMarkedCorrect,
+        orderIndex: optIdx,
+      });
+    });
+
+    if (parsedOptions.length < 2) {
+      errors.push(`Question #${qNum}: Must have at least 2 options.`);
+    }
+
+    if (correctCount === 0) {
+      errors.push(`Question #${qNum}: No option is marked as correct (use [x], * or '(correct)' to mark).`);
+    } else if (correctCount > 1) {
+      errors.push(`Question #${qNum}: ${correctCount} options marked as correct. Only 1 can be correct.`);
+    }
+
+    if (questionLine && parsedOptions.length >= 2 && correctCount === 1) {
+      validatedList.push({
+        questionText: questionLine,
+        orderIndex: startingOrderIndex + bIdx,
+        options: parsedOptions,
+      });
+    }
+  });
+
+  return {
+    isValid: errors.length === 0 && validatedList.length > 0,
+    questions: validatedList,
+    errors,
+    syntaxError: null,
+    totalParsed: blocks.length,
+    totalValid: validatedList.length,
+  };
 }
 
 export default function EditConceptPage({ params }: PageProps) {
@@ -152,12 +380,82 @@ export default function EditConceptPage({ params }: PageProps) {
   // MCQ QUIZ AUTHORING STATE & HANDLERS
   // =========================================================================
   const [isAddingQuestion, setIsAddingQuestion] = useState(false);
+  const [questionMode, setQuestionMode] = useState<'manual' | 'bulk_text'>('manual');
   const [newQuestionText, setNewQuestionText] = useState('');
   const [newOptions, setNewOptions] = useState<Array<{ optionText: string; isCorrect: boolean }>>([
     { optionText: '', isCorrect: true },
     { optionText: '', isCorrect: false },
   ]);
   const [quizFormError, setQuizFormError] = useState<string | null>(null);
+
+  // Bulk Text / JSON Auto-Mapper State
+  const [bulkText, setBulkText] = useState(SAMPLE_QUIZ_JSON);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Live Swagger-style validation report
+  const validationReport = React.useMemo(
+    () => validateAndParseQuizText(bulkText, questions.length),
+    [bulkText, questions.length],
+  );
+
+  // Copy sample template to clipboard
+  const handleCopySampleFormat = () => {
+    navigator.clipboard.writeText(SAMPLE_QUIZ_JSON);
+    setIsCopied(true);
+    showSuccess('Sample quiz JSON template copied to clipboard!');
+    setTimeout(() => setIsCopied(false), 2500);
+  };
+
+  // Insert sample template into editor
+  const handleLoadSampleTemplate = () => {
+    setBulkText(SAMPLE_QUIZ_JSON);
+    showSuccess('Sample template inserted.');
+  };
+
+  // Populate first question from bulk parser into manual builder
+  const handleLoadIntoManualBuilder = (q: ParsedImportQuestion) => {
+    setNewQuestionText(q.questionText);
+    setNewOptions(q.options.map((o) => ({ optionText: o.optionText, isCorrect: o.isCorrect })));
+    setQuestionMode('manual');
+    showSuccess('Question loaded into manual builder!');
+  };
+
+  // Submit all valid parsed questions in one click
+  const handleBulkImportSubmit = async () => {
+    if (!validationReport.isValid || validationReport.questions.length === 0) {
+      showError('Please resolve schema validation errors before importing.');
+      return;
+    }
+
+    setIsSubmittingBulk(true);
+    setBulkProgress({ current: 0, total: validationReport.questions.length });
+    let createdCount = 0;
+
+    try {
+      for (let i = 0; i < validationReport.questions.length; i++) {
+        const q = validationReport.questions[i];
+        setBulkProgress({ current: i + 1, total: validationReport.questions.length });
+        await apiClient.post(`/concepts/${conceptId}/questions`, q);
+        createdCount++;
+      }
+
+      showSuccess(`Successfully imported and created ${createdCount} quiz questions!`);
+      refetchQuestions();
+      queryClient.invalidateQueries({ queryKey: ['concepts', conceptId, 'quiz-status'] });
+      setIsAddingQuestion(false);
+      setBulkText(SAMPLE_QUIZ_JSON);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      const msg = axiosErr?.response?.data?.message || 'Failed to import some questions.';
+      showError(msg);
+      refetchQuestions();
+    } finally {
+      setIsSubmittingBulk(false);
+      setBulkProgress(null);
+    }
+  };
 
   // Add Option to New Question Form
   const handleAddOptionField = () => {
@@ -652,129 +950,390 @@ export default function EditConceptPage({ params }: PageProps) {
 
           {/* Add Question Form Card */}
           {isAddingQuestion && (
-            <form
-              onSubmit={handleCreateQuestionSubmit}
-              className="p-6 rounded-2xl bg-bg border border-accent/40 space-y-5 shadow-xs"
-            >
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="text-sm font-bold text-text-primary">Create New MCQ Question</h3>
-                <button
-                  type="button"
-                  onClick={() => setIsAddingQuestion(false)}
-                  className="p-1 text-text-secondary hover:text-text-primary"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {quizFormError && (
-                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{quizFormError}</span>
-                </div>
-              )}
-
-              {/* Question Text */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                  Question Text <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newQuestionText}
-                  onChange={(e) => setNewQuestionText(e.target.value)}
-                  placeholder="e.g., Which decorator defines a NestJS dependency injection provider?"
-                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface text-xs sm:text-sm focus:outline-none focus:border-accent"
-                />
-              </div>
-
-              {/* Options Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                    Options & Correct Answer (Select one correct)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAddOptionField}
-                    className="text-xs font-semibold text-accent hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add option</span>
-                  </button>
+            <div className="p-6 rounded-2xl bg-bg border border-accent/40 space-y-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-text-primary">Add MCQ Questions</span>
+                  <span className="text-xs text-text-secondary">
+                    (Manual Builder or Swagger Text Auto-Mapper)
+                  </span>
                 </div>
 
-                <div className="space-y-2.5">
-                  {newOptions.map((opt, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
-                        opt.isCorrect
-                          ? 'border-green bg-green-tint/40 ring-1 ring-green/50'
-                          : 'border-border bg-surface'
+                <div className="flex items-center gap-2">
+                  {/* Mode Tabs */}
+                  <div className="flex items-center p-1 rounded-xl bg-surface border border-border">
+                    <button
+                      type="button"
+                      onClick={() => setQuestionMode('manual')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        questionMode === 'manual'
+                          ? 'bg-accent text-white shadow-2xs'
+                          : 'text-text-secondary hover:text-text-primary'
                       }`}
                     >
-                      {/* Radio to mark correct */}
-                      <input
-                        type="radio"
-                        name="correct-option-group"
-                        checked={opt.isCorrect}
-                        onChange={() => handleSetCorrectOption(idx)}
-                        className="w-4 h-4 text-green focus:ring-green accent-green cursor-pointer"
-                        title="Mark as correct answer"
-                      />
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Manual Builder</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuestionMode('bulk_text')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        questionMode === 'bulk_text'
+                          ? 'bg-accent text-white shadow-2xs'
+                          : 'text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      <Code2 className="w-3.5 h-3.5" />
+                      <span>Text / JSON Auto-Mapper</span>
+                    </button>
+                  </div>
 
-                      {/* Option Text Input */}
-                      <input
-                        type="text"
-                        required
-                        value={opt.optionText}
-                        onChange={(e) => handleOptionTextChange(idx, e.target.value)}
-                        placeholder={`Option ${idx + 1} text...`}
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-border/80 bg-bg text-xs focus:outline-none focus:border-accent"
-                      />
-
-                      {opt.isCorrect && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-green-tint text-green">
-                          Correct Answer
-                        </span>
-                      )}
-
-                      {/* Remove Option Button (min 2) */}
-                      {newOptions.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveOptionField(idx)}
-                          className="p-1 text-text-secondary hover:text-red-500 rounded transition-colors"
-                          title="Remove option"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingQuestion(false)}
+                    className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingQuestion(false)}
-                  className="px-4 py-2 rounded-xl border border-border bg-surface text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createQuestionMutation.isPending}
-                  className="px-5 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 disabled:opacity-50"
-                >
-                  {createQuestionMutation.isPending ? 'Creating...' : 'Save Question'}
-                </button>
-              </div>
-            </form>
+              {/* MODE 1: MANUAL BUILDER */}
+              {questionMode === 'manual' && (
+                <form onSubmit={handleCreateQuestionSubmit} className="space-y-5">
+                  {quizFormError && (
+                    <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      <span>{quizFormError}</span>
+                    </div>
+                  )}
+
+                  {/* Question Text */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
+                      Question Text <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                      placeholder="e.g., Which decorator defines a NestJS dependency injection provider?"
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface text-xs sm:text-sm focus:outline-none focus:border-accent"
+                    />
+                  </div>
+
+                  {/* Options Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
+                        Options & Correct Answer (Select one correct)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleAddOptionField}
+                        className="text-xs font-semibold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add option</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {newOptions.map((opt, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
+                            opt.isCorrect
+                              ? 'border-green bg-green-tint/40 ring-1 ring-green/50'
+                              : 'border-border bg-surface'
+                          }`}
+                        >
+                          {/* Radio to mark correct */}
+                          <input
+                            type="radio"
+                            name="correct-option-group"
+                            checked={opt.isCorrect}
+                            onChange={() => handleSetCorrectOption(idx)}
+                            className="w-4 h-4 text-green focus:ring-green accent-green cursor-pointer"
+                            title="Mark as correct answer"
+                          />
+
+                          {/* Option Text Input */}
+                          <input
+                            type="text"
+                            required
+                            value={opt.optionText}
+                            onChange={(e) => handleOptionTextChange(idx, e.target.value)}
+                            placeholder={`Option ${idx + 1} text...`}
+                            className="flex-1 px-3 py-1.5 rounded-lg border border-border/80 bg-bg text-xs focus:outline-none focus:border-accent"
+                          />
+
+                          {opt.isCorrect && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-green-tint text-green">
+                              Correct Answer
+                            </span>
+                          )}
+
+                          {/* Remove Option Button (min 2) */}
+                          {newOptions.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveOptionField(idx)}
+                              className="p-1 text-text-secondary hover:text-red-500 rounded transition-colors cursor-pointer"
+                              title="Remove option"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingQuestion(false)}
+                      className="px-4 py-2 rounded-xl border border-border bg-surface text-xs font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={createQuestionMutation.isPending}
+                      className="px-5 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
+                    >
+                      {createQuestionMutation.isPending ? 'Creating...' : 'Save Question'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* MODE 2: TEXT / JSON AUTO-MAPPER (SWAGGER-STYLE) */}
+              {questionMode === 'bulk_text' && (
+                <div className="space-y-5">
+                  {/* Top Action Toolbar with Copy Sample */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-surface border border-border">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-4 h-4 text-accent" />
+                      <span className="text-xs font-semibold text-text-primary">
+                        Auto-Mapper Schema Input (JSON or Plaintext QA)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Copy Sample Button */}
+                      <button
+                        type="button"
+                        onClick={handleCopySampleFormat}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-bg hover:bg-surface text-text-primary text-xs font-semibold transition-all cursor-pointer shadow-2xs hover:scale-102 active:scale-98"
+                        title="Copy sample JSON schema to clipboard"
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-green" />
+                            <span className="text-green">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-text-secondary" />
+                            <span>Copy Sample Format</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Insert Template Button */}
+                      <button
+                        type="button"
+                        onClick={handleLoadSampleTemplate}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent-tint/60 text-accent text-xs font-semibold transition-all cursor-pointer hover:bg-accent-tint"
+                        title="Load sample template into editor"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Insert Template</span>
+                      </button>
+
+                      {/* Clear Button */}
+                      <button
+                        type="button"
+                        onClick={() => setBulkText('')}
+                        className="p-1.5 rounded-lg text-text-secondary hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        title="Clear input"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Main Grid: Text Editor + Swagger Schema Inspector */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    {/* Left Col: Code/Text Area */}
+                    <div className="lg:col-span-7 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-text-secondary">
+                        <span className="font-semibold uppercase tracking-wider text-[10px]">
+                          Schema Definition Editor
+                        </span>
+                        <span>{bulkText.length} chars</span>
+                      </div>
+
+                      <textarea
+                        rows={12}
+                        value={bulkText}
+                        onChange={(e) => setBulkText(e.target.value)}
+                        placeholder={`Paste JSON array of questions, e.g.:\n[\n  {\n    "questionText": "What is Version Control?",\n    "options": [\n      { "optionText": "A change tracking system", "isCorrect": true },\n      { "optionText": "A compiler", "isCorrect": false }\n    ]\n  }\n]`}
+                        className="w-full p-4 rounded-xl border border-border bg-surface font-mono text-xs text-text-primary leading-relaxed focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y shadow-2xs"
+                      />
+                    </div>
+
+                    {/* Right Col: Swagger Live Schema Inspector & Status */}
+                    <div className="lg:col-span-5 space-y-4">
+                      {/* Swagger Schema Validation Box */}
+                      <div className="p-4 rounded-xl bg-surface border border-border space-y-3 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-border pb-2.5">
+                          <span className="text-xs font-bold uppercase tracking-wider text-text-primary">
+                            Swagger Schema Validator
+                          </span>
+
+                          {/* Status Badge */}
+                          {validationReport.isValid ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-green-tint text-green text-xs font-bold">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              <span>Valid ({validationReport.totalValid} Ready)</span>
+                            </span>
+                          ) : validationReport.syntaxError ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-50 text-red-600 text-xs font-bold">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Syntax Error</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-tint text-amber text-xs font-bold">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Schema Issues ({validationReport.errors.length})</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Error Messages List */}
+                        {validationReport.errors.length > 0 ? (
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                            {validationReport.errors.map((errStr, eIdx) => (
+                              <div
+                                key={eIdx}
+                                className="p-2 rounded-lg bg-red-50/80 border border-red-200/80 text-red-700 text-xs flex items-start gap-2"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
+                                <span className="leading-tight">{errStr}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-lg bg-green-tint/60 text-green text-xs flex items-center gap-2 font-medium">
+                            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                            <span>
+                              All {validationReport.questions.length} question(s) strictly match the MCQ Swagger schema.
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Expected Schema Constraints Summary */}
+                        <div className="pt-2 border-t border-border/80 text-[11px] text-text-secondary space-y-1">
+                          <p className="font-semibold text-text-primary text-xs">Schema Contract:</p>
+                          <p>• <code>questionText</code>: required non-empty string</p>
+                          <p>• <code>options</code>: minimum 2 options with <code>optionText</code></p>
+                          <p>• <code>isCorrect</code>: exactly one option set to <code>true</code></p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Visual Preview of Mapped Questions */}
+                  {validationReport.questions.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary">
+                          Auto-Mapped Live Preview ({validationReport.questions.length} Questions)
+                        </h4>
+                        <span className="text-xs text-text-secondary">
+                          Green badge indicates the correct answer
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        {validationReport.questions.map((q, qIdx) => (
+                          <div
+                            key={qIdx}
+                            className="p-4 rounded-xl bg-surface border border-border shadow-2xs space-y-3"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-xs font-bold text-text-primary">
+                                #{qIdx + 1}. {q.questionText}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleLoadIntoManualBuilder(q)}
+                                className="text-[10px] font-semibold text-accent hover:underline flex-shrink-0 cursor-pointer"
+                                title="Edit in manual builder"
+                              >
+                                Edit in Builder
+                              </button>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              {q.options.map((opt, optIdx) => (
+                                <div
+                                  key={optIdx}
+                                  className={`p-2 rounded-lg text-xs flex items-center justify-between gap-2 ${
+                                    opt.isCorrect
+                                      ? 'bg-green-tint text-green font-semibold border border-green/30'
+                                      : 'bg-bg text-text-secondary border border-border/60'
+                                  }`}
+                                >
+                                  <span className="truncate">{opt.optionText}</span>
+                                  {opt.isCorrect && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-green text-white flex-shrink-0">
+                                      Correct
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bulk Actions Footer */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingQuestion(false)}
+                      className="px-4 py-2 rounded-xl border border-border bg-surface text-xs font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!validationReport.isValid || isSubmittingBulk}
+                        onClick={handleBulkImportSubmit}
+                        className="px-5 py-2.5 rounded-xl bg-accent text-white font-bold text-xs hover:bg-accent/90 disabled:opacity-40 transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+                      >
+                        <UploadCloud className="w-4 h-4" />
+                        <span>
+                          {isSubmittingBulk
+                            ? `Saving Question ${bulkProgress?.current || 0}/${bulkProgress?.total || 0}...`
+                            : `Import & Save All (${validationReport.questions.length} Questions)`}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Existing Questions List */}
