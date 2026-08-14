@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Info,
   CheckCircle2,
+  BookOpen,
 } from 'lucide-react';
 import {
   useRoadmapDetail,
@@ -179,37 +180,19 @@ export default function StudentRoadmapDetailPage({ params }: PageProps) {
             </p>
           </div>
         ) : (
-          roadmap.modules.map((moduleItem, modIdx) => {
+          roadmap.modules.map((moduleItem) => {
             const conceptsInModule = (moduleItem.moduleConcepts || [])
               .map((mc) => mc.concept)
               .filter(Boolean);
 
-            // Determine "Current" Concept in this module:
-            // First concept whose status is NOT 'completed',
-            // preferring one with 'in_progress' if any exists, otherwise first 'not_started'
-            const inProgressConcept = conceptsInModule.find((c) => {
-              const status = progressConceptMap.get(c.id)?.status;
-              return status === 'in_progress';
-            });
-
-            const currentConceptId =
-              inProgressConcept?.id ||
-              conceptsInModule.find((c) => {
-                const status = progressConceptMap.get(c.id)?.status;
-                return status !== 'completed';
-              })?.id;
-
             return (
               <div
                 key={moduleItem.id}
-                className="p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-sm space-y-6"
+                className="p-6 sm:p-7 rounded-2xl bg-surface border border-border shadow-xs space-y-2"
               >
                 {/* Module Heading */}
-                <div className="border-b border-border/80 pb-4">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                    Module {modIdx + 1}
-                  </div>
-                  <h2 className="text-lg sm:text-xl font-bold font-display text-text-primary mt-0.5">
+                <div className="border-b border-border pb-4">
+                  <h2 className="text-base sm:text-lg font-bold font-display text-text-primary">
                     {moduleItem.title}
                   </h2>
                   {moduleItem.description && (
@@ -219,120 +202,47 @@ export default function StudentRoadmapDetailPage({ params }: PageProps) {
                   )}
                 </div>
 
-                {/* Connected Vertical Concept Path */}
+                {/* Concepts List (Matching Reference Design) */}
                 {conceptsInModule.length === 0 ? (
-                  <p className="text-xs text-text-secondary italic py-2">
+                  <p className="text-xs text-text-secondary italic py-3">
                     No concepts in this module yet.
                   </p>
                 ) : (
-                  <div className="relative pl-6 space-y-4">
-                    {/* Vertical connecting line */}
-                    <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-border -z-0" />
-
-                    {conceptsInModule.map((concept, cIdx) => {
+                  <div className="divide-y divide-border/60">
+                    {conceptsInModule.map((concept) => {
                       const conceptProgress = progressConceptMap.get(concept.id);
-                      const status =
-                        conceptProgress?.status || 'not_started';
-                      const unmetPrereqs =
-                        conceptProgress?.unmetPrereqs || [];
-
+                      const status = conceptProgress?.status || 'not_started';
                       const isCompleted = status === 'completed';
-                      const isCurrent = concept.id === currentConceptId;
+                      const isInProgress = status === 'in_progress';
 
-                      // Dot marker calculation
-                      // 1. Filled accent dot: completed
-                      // 2. Accent-ringed dot: current
-                      // 3. Gray-ringed dot: other not started
                       return (
-                        <div key={concept.id} className="relative z-10">
-                          {/* Dot Marker */}
-                          <div
-                            className={`absolute -left-[24px] top-4 -translate-x-1/2 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                              isCompleted
-                                ? 'bg-accent text-white shadow-xs'
-                                : isCurrent
-                                ? 'border-2 border-accent bg-surface ring-4 ring-accent/15'
-                                : 'border-2 border-border bg-bg text-text-secondary/40'
-                            }`}
-                          >
-                            {isCompleted ? (
-                              <Check className="w-3.5 h-3.5 stroke-[3]" />
-                            ) : isCurrent ? (
-                              <span className="w-2 h-2 rounded-full bg-accent" />
-                            ) : (
-                              <Circle className="w-2.5 h-2.5 fill-current opacity-30" />
-                            )}
+                        <Link
+                          key={concept.id}
+                          href={`/student/concepts/${concept.id}?roadmapId=${roadmapId}&moduleId=${moduleItem.id}`}
+                          className="flex items-center justify-between py-3.5 px-3 -mx-3 rounded-xl hover:bg-bg transition-colors group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0 pr-4">
+                            <BookOpen className="w-5 h-5 text-text-secondary/70 group-hover:text-accent transition-colors flex-shrink-0 stroke-[1.75]" />
+                            <span className="text-sm sm:text-base font-medium text-text-primary group-hover:text-accent transition-colors truncate">
+                              {concept.title}
+                            </span>
                           </div>
 
-                          {/* Concept Row Card */}
-                          <Link
-                            href={`/student/concepts/${concept.id}?roadmapId=${roadmapId}&moduleId=${moduleItem.id}`}
-                            className={`block p-4 sm:p-5 rounded-xl border transition-all hover:border-accent/40 group ${
-                              isCurrent
-                                ? 'bg-accent-tint/30 border-accent/30 shadow-xs'
-                                : 'bg-bg border-border'
-                            }`}
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="text-sm sm:text-base font-bold text-text-primary group-hover:text-accent transition-colors">
-                                    {concept.title}
-                                  </h3>
-                                </div>
-
-                                {/* Difficulty & Informational Prerequisite Note */}
-                                <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                                  {concept.difficulty && (
-                                    <span
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider ${
-                                        concept.difficulty === 'easy'
-                                          ? 'bg-green-tint text-green'
-                                          : concept.difficulty === 'medium'
-                                          ? 'bg-amber-tint text-amber'
-                                          : 'bg-accent-tint text-accent'
-                                      }`}
-                                    >
-                                      {concept.difficulty}
-                                    </span>
-                                  )}
-
-                                  {unmetPrereqs.length > 0 && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] text-amber font-medium bg-amber-tint/80 px-2 py-0.5 rounded-md">
-                                      <Info className="w-3 h-3 flex-shrink-0" />
-                                      <span>
-                                        Recommended first: {unmetPrereqs[0]}
-                                      </span>
-                                    </span>
-                                  )}
-                                </div>
+                          {/* Completion / Status Check Circle */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {isCompleted ? (
+                              <div className="w-6 h-6 rounded-full bg-[#0F8C52] text-white flex items-center justify-center shadow-2xs">
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
                               </div>
-
-                              {/* Status Badge & Arrow */}
-                              <div className="flex items-center gap-3 self-end sm:self-auto flex-shrink-0">
-                                <span
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize flex items-center gap-1.5 ${
-                                    isCompleted
-                                      ? 'bg-green-tint text-green'
-                                      : status === 'in_progress'
-                                      ? 'bg-accent-tint text-accent'
-                                      : 'bg-surface border border-border text-text-secondary'
-                                  }`}
-                                >
-                                  {isCompleted && (
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                  )}
-                                  {status === 'in_progress' && (
-                                    <Clock className="w-3.5 h-3.5" />
-                                  )}
-                                  <span>{status.replace('_', ' ')}</span>
-                                </span>
-
-                                <ChevronRight className="w-4 h-4 text-text-secondary group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
+                            ) : isInProgress ? (
+                              <div className="w-6 h-6 rounded-full border-2 border-accent bg-accent-tint/60 flex items-center justify-center">
+                                <span className="w-2 h-2 rounded-full bg-accent" />
                               </div>
-                            </div>
-                          </Link>
-                        </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full border-2 border-border group-hover:border-text-secondary/50 transition-colors" />
+                            )}
+                          </div>
+                        </Link>
                       );
                     })}
                   </div>
