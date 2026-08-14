@@ -55,11 +55,11 @@ export default function InstructorContentDirectoryPage() {
     queryFn: async () => (await apiClient.get<RoadmapItem[]>('/roadmaps')).data,
   });
 
-  // Filter client-side by author ID
+  // Filter client-side by author ID (admin sees all)
   const myRoadmaps = React.useMemo(() => {
     if (!currentUser?.id) return allRoadmaps;
-    const filtered = allRoadmaps.filter((r) => r.createdById === currentUser.id);
-    return filtered.length > 0 ? filtered : allRoadmaps;
+    if (currentUser.role === 'admin') return allRoadmaps;
+    return allRoadmaps.filter((r) => r.createdById === currentUser.id);
   }, [allRoadmaps, currentUser]);
 
   // 2. Fetch all authored concepts
@@ -73,8 +73,8 @@ export default function InstructorContentDirectoryPage() {
 
   const myConcepts = React.useMemo(() => {
     if (!currentUser?.id) return allConcepts;
-    const filtered = allConcepts.filter((c) => c.authorId === currentUser.id);
-    return filtered.length > 0 ? filtered : allConcepts;
+    if (currentUser.role === 'admin') return allConcepts;
+    return allConcepts.filter((c) => c.authorId === currentUser.id);
   }, [allConcepts, currentUser]);
 
   return (
