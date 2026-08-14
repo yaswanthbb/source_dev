@@ -28,6 +28,7 @@ import {
   useRoadmapDetail,
   useRoadmapProgress,
 } from '@/lib/hooks/use-roadmap-progress';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -232,6 +233,8 @@ export default function ConceptReadingPage({ params }: PageProps) {
     return map;
   }, [quizStatus]);
 
+  const { showSuccess, showError } = useSnackbar();
+
   // Handle MCQ Option Attempt Submission
   const handleAttemptSubmit = async (questionId: string) => {
     const selectedOptionId = selectedOptions[questionId];
@@ -248,11 +251,18 @@ export default function ConceptReadingPage({ params }: PageProps) {
       const result = response.data;
       setAttemptFeedback((prev) => ({ ...prev, [questionId]: result }));
 
+      if (result.isCorrect) {
+        showSuccess('Correct answer!');
+      } else {
+        showError(`Incorrect. ${result.attemptsRemaining} attempt(s) remaining.`);
+      }
+
       // Refetch quiz status
       const updatedStatus = await refetchQuizStatus();
 
       // If all questions resolved, invalidate progress queries for auto-completion
       if (updatedStatus.data?.allQuestionsResolved) {
+        showSuccess('Concept mastered! XP awarded.');
         queryClient.invalidateQueries({ queryKey: ['progress'] });
         queryClient.invalidateQueries({ queryKey: ['gamification'] });
         queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
@@ -261,7 +271,8 @@ export default function ConceptReadingPage({ params }: PageProps) {
       const axiosError = err as {
         response?: { data?: { message?: string } };
       };
-      alert(axiosError.response?.data?.message || 'Attempt failed. Please try again.');
+      const msg = axiosError.response?.data?.message || 'Attempt failed. Please try again.';
+      showError(msg);
     } finally {
       setSubmittingQuestions((prev) => ({ ...prev, [questionId]: false }));
     }
@@ -273,11 +284,13 @@ export default function ConceptReadingPage({ params }: PageProps) {
     setIsCompletingManually(true);
     try {
       await apiClient.post(`/concepts/${conceptId}/complete`);
+      showSuccess('Concept completed!');
       await queryClient.invalidateQueries({ queryKey: ['progress'] });
       await queryClient.invalidateQueries({ queryKey: ['gamification'] });
       await queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
-    } catch {
-      alert('Failed to mark concept completed. Please try again.');
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { message?: string } } };
+      showError(axiosError.response?.data?.message || 'Failed to mark concept completed.');
     } finally {
       setIsCompletingManually(false);
     }
@@ -296,10 +309,12 @@ export default function ConceptReadingPage({ params }: PageProps) {
       await apiClient.post(`/concepts/${conceptId}/qa-questions`, {
         body: qaInputBody.trim(),
       });
+      showSuccess('Question posted');
       setQaInputBody('');
       refetchQa();
-    } catch {
-      alert('Failed to post question. Please try again.');
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { message?: string } } };
+      showError(axiosError.response?.data?.message || 'Failed to post question.');
     } finally {
       setIsPostingQa(false);
     }

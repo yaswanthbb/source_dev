@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { Eye, EyeOff } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { setToken, setUser, User } from '@/lib/auth';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 const registerSchema = z.object({
   name: z
@@ -43,6 +44,8 @@ export default function RegisterPage() {
     reValidateMode: 'onChange',
   });
 
+  const { showSuccess, showError } = useSnackbar();
+
   const onSubmit = async (data: RegisterFormData) => {
     setServerError(null);
 
@@ -56,20 +59,23 @@ export default function RegisterPage() {
       setToken(accessToken);
       setUser(user);
 
-      router.push('/student/dashboard');
+      showSuccess('Account created successfully!');
+      router.replace('/student/dashboard');
     } catch (err: unknown) {
       const axiosError = err as {
         response?: { data?: { message?: string | string[] } };
       };
       const backendMessage = axiosError.response?.data?.message;
+      let errorText = 'Failed to create account. Please check your information and try again.';
 
       if (Array.isArray(backendMessage)) {
-        setServerError(backendMessage.join(', '));
+        errorText = backendMessage.join(', ');
       } else if (typeof backendMessage === 'string') {
-        setServerError(backendMessage);
-      } else {
-        setServerError('Failed to create account. Please check your information and try again.');
+        errorText = backendMessage;
       }
+
+      setServerError(errorText);
+      showError(errorText);
     }
   };
 

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { Eye, EyeOff } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { setToken, setUser, User } from '@/lib/auth';
+import { useSnackbar } from '@/providers/snackbar-provider';
 
 const loginSchema = z.object({
   email: z
@@ -52,6 +53,8 @@ export default function LoginPage() {
     }
   };
 
+  const { showError } = useSnackbar();
+
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
 
@@ -72,14 +75,16 @@ export default function LoginPage() {
         response?: { data?: { message?: string | string[] } };
       };
       const backendMessage = axiosError.response?.data?.message;
+      let errorText = 'Invalid credentials. Please check your email and password.';
 
       if (Array.isArray(backendMessage)) {
-        setServerError(backendMessage.join(', '));
+        errorText = backendMessage.join(', ');
       } else if (typeof backendMessage === 'string') {
-        setServerError(backendMessage);
-      } else {
-        setServerError('Invalid credentials. Please check your email and password.');
+        errorText = backendMessage;
       }
+
+      setServerError(errorText);
+      showError(errorText);
     }
   };
 
