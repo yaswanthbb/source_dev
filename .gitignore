@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Production / Build outputs
+dist/
+*/dist/
+.next/
+*/.next/
+build/
+out/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS & Editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+.temp/
+.tmp/
+pids
+*.pid
+*.seed
+*.pid.lock
