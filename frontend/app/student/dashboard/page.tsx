@@ -19,6 +19,10 @@ import {
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User } from '@/lib/auth';
+import {
+  useAllRoadmapsProgress,
+  RoadmapProgressData,
+} from '@/lib/hooks/use-roadmap-progress';
 
 // Types matching backend models
 interface GamificationData {
@@ -124,36 +128,10 @@ export default function StudentDashboardPage() {
     queryFn: async () => (await apiClient.get<Roadmap[]>('/roadmaps')).data,
   });
 
-  // 5. Progress per Roadmap
+  // 5. Progress per Roadmap (using normalized bulk progress hook)
+  const roadmapIds = useMemo(() => roadmaps.map((r) => r.id), [roadmaps]);
   const { data: roadmapsProgressMap = {}, isLoading: roadmapsProgressLoading } =
-    useQuery<Record<string, RoadmapProgress>>({
-      queryKey: ['roadmaps', 'progress', roadmaps.map((r) => r.id)],
-      queryFn: async () => {
-        const progressEntries = await Promise.all(
-          roadmaps.map(async (r) => {
-            try {
-              const res = await apiClient.get<RoadmapProgress>(
-                `/roadmaps/${r.id}/progress`,
-              );
-              return [r.id, res.data] as const;
-            } catch {
-              return [
-                r.id,
-                {
-                  roadmapId: r.id,
-                  title: r.title,
-                  totalConcepts: 0,
-                  completedConceptsCount: 0,
-                  completionPercentage: 0,
-                },
-              ] as const;
-            }
-          }),
-        );
-        return Object.fromEntries(progressEntries);
-      },
-      enabled: roadmaps.length > 0,
-    });
+    useAllRoadmapsProgress(roadmapIds);
 
   // 6. All System Badges
   const {
@@ -519,6 +497,12 @@ export default function StudentDashboardPage() {
                 completionPercentage: 0,
               };
 
+              const completedCount =
+                progress.completedConceptsCount ?? progress.completedConcepts ?? 0;
+              const totalCount = progress.totalConcepts ?? 0;
+              const completionPct =
+                progress.completionPercentage ?? progress.percentage ?? 0;
+
               return (
                 <div
                   key={roadmap.id}
@@ -545,19 +529,19 @@ export default function StudentDashboardPage() {
                         <div
                           className="h-full bg-accent transition-all duration-300 rounded-full"
                           style={{
-                            width: `${Math.min(100, Math.max(0, progress.completionPercentage))}%`,
+                            width: `${Math.min(100, Math.max(0, completionPct))}%`,
                           }}
                         />
                       </div>
                       <span className="text-xs font-semibold text-text-primary whitespace-nowrap">
-                        {Math.round(progress.completionPercentage)}%
+                        {Math.round(completionPct)}%
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
                     <span className="text-xs text-text-secondary font-medium">
-                      {progress.completedConceptsCount} / {progress.totalConcepts} concepts
+                      {completedCount} / {totalCount} concepts
                     </span>
                     <Link
                       href={`/student/roadmaps/${roadmap.id}`}

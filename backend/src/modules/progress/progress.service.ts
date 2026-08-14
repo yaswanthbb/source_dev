@@ -201,7 +201,9 @@ export class ProgressService {
         roadmapTitle: roadmap.title,
         totalConcepts: 0,
         completedConcepts: 0,
+        completedConceptsCount: 0,
         percentage: 0,
+        completionPercentage: 0,
         concepts: [],
       };
     }
@@ -284,7 +286,9 @@ export class ProgressService {
       roadmapTitle: roadmap.title,
       totalConcepts,
       completedConcepts: completedCount,
+      completedConceptsCount: completedCount,
       percentage,
+      completionPercentage: percentage,
       concepts: resultConcepts,
     };
   }
