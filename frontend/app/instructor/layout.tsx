@@ -15,9 +15,13 @@ import {
   ArrowRight,
   AlertCircle,
   RefreshCw,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ArrowLeftRight,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { getToken, clearAuth, User } from '@/lib/auth';
+import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 
 interface FullUser extends User {
   instructorProfile?: {
@@ -55,6 +59,7 @@ export default function InstructorAppShellLayout({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isTokenChecked, setIsTokenChecked] = useState(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -86,6 +91,8 @@ export default function InstructorAppShellLayout({
     enabled: isTokenChecked,
     staleTime: 30000,
   });
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogout = () => {
     clearAuth();
@@ -159,17 +166,17 @@ export default function InstructorAppShellLayout({
         <header className="max-w-6xl w-full mx-auto flex items-center justify-between">
           <Link href="/student/dashboard" className="flex items-center">
             <Image
-              src="/logo.png?v=2"
-              alt="KIS Logo"
-              width={140}
-              height={44}
-              className="h-10 w-auto object-contain"
+              src="/logo.png"
+              alt="KIP Logo"
+              width={105}
+              height={33}
+              className="h-[30px] w-auto object-contain"
               priority
               unoptimized
             />
           </Link>
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutModal(true)}
             className="px-3.5 py-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-text-primary text-xs font-medium cursor-pointer"
           >
             Sign out
@@ -205,30 +212,46 @@ export default function InstructorAppShellLayout({
         </main>
 
         <footer className="text-center text-xs text-text-secondary">
-          &copy; {new Date().getFullYear()} KIS. All rights reserved.
+          &copy; {new Date().getFullYear()} KIP. All rights reserved.
         </footer>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-bg flex">
-      {/* Fixed Left Sidebar (240px) */}
-      <aside className="w-[240px] flex-shrink-0 bg-surface border-r border-border min-h-screen flex flex-col justify-between sticky top-0 h-screen z-20">
+    <div className="min-h-screen bg-bg flex relative">
+      {/* Smooth Collapsible Left Sidebar (240px) */}
+      <aside
+        className={`w-[240px] flex-shrink-0 bg-surface border-r border-border min-h-screen flex flex-col justify-between sticky top-0 h-screen z-20 transition-all duration-300 ease-in-out ${
+          isSidebarHidden
+            ? '-ml-[240px] opacity-0 pointer-events-none -translate-x-full'
+            : 'ml-0 opacity-100 translate-x-0'
+        }`}
+      >
         <div className="flex flex-col">
-          {/* Top Brand Header */}
-          <div className="h-20 px-6 flex items-center border-b border-border">
+          {/* Top Brand Header with Collapse Button */}
+          <div className="h-20 px-6 flex items-center justify-between border-b border-border">
             <Link href="/instructor/dashboard" className="flex items-center">
               <Image
-                src="/logo.png?v=2"
-                alt="KIS Logo"
-                width={160}
-                height={52}
-                className="h-11 w-auto object-contain"
+                src="/logo.png"
+                alt="KIP Logo"
+                width={120}
+                height={39}
+                className="h-[33px] w-auto object-contain"
                 priority
                 unoptimized
               />
             </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsSidebarHidden(true)}
+              className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-all cursor-pointer hover:scale-105 active:scale-95"
+              title="Hide sidebar"
+              aria-label="Hide sidebar"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -261,7 +284,16 @@ export default function InstructorAppShellLayout({
         </div>
 
         {/* Bottom User Profile Section */}
-        <div className="p-4 border-t border-border bg-surface">
+        <div className="p-4 border-t border-border bg-surface space-y-3">
+          {/* Switch to Student View Button */}
+          <Link
+            href="/student/dashboard"
+            className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg hover:border-accent/40 hover:bg-accent-tint/50 text-text-primary hover:text-accent text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-2xs group cursor-pointer"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5 text-accent transition-transform group-hover:rotate-180" />
+            <span>Switch to Student View</span>
+          </Link>
+
           <div className="p-3 rounded-xl bg-bg border border-border/80 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-full bg-accent-tint text-accent flex items-center justify-center font-semibold text-xs flex-shrink-0">
@@ -277,7 +309,7 @@ export default function InstructorAppShellLayout({
               </div>
             </div>
             <button
-              onClick={handleLogout}
+              onClick={() => setShowLogoutModal(true)}
               title="Sign out"
               aria-label="Sign out"
               className="p-1.5 text-text-secondary hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer flex-shrink-0"
@@ -289,9 +321,34 @@ export default function InstructorAppShellLayout({
       </aside>
 
       {/* Main Content Viewport */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 p-8 max-w-7xl w-full mx-auto">{children}</main>
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out">
+        {/* Top Header Strip when Sidebar is Collapsed */}
+        {isSidebarHidden && (
+          <div className="h-14 px-6 lg:px-10 flex items-center border-b border-border/80 bg-surface/80 backdrop-blur-md sticky top-0 z-30 animate-in fade-in duration-200">
+            <button
+              type="button"
+              onClick={() => setIsSidebarHidden(false)}
+              className="px-3 py-1.5 rounded-xl bg-surface border border-border shadow-2xs hover:bg-bg text-text-primary text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer group"
+              title="Show sidebar"
+              aria-label="Show sidebar"
+            >
+              <PanelLeftOpen className="w-4 h-4 text-accent transition-transform group-hover:translate-x-0.5" />
+              <span className="font-display">Sidebar</span>
+            </button>
+          </div>
+        )}
+
+        <main className="flex-1 py-6 lg:py-8 px-6 lg:px-8 xl:px-10 w-full transition-all duration-300 ease-in-out">
+          {children}
+        </main>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogout}
+      />
     </div>
   );
 }
