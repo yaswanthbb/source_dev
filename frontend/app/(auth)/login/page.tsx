@@ -94,11 +94,11 @@ export default function LoginPage() {
       <header className="w-full border-b border-border bg-surface px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center py-1">
           <Image
-            src="/logo.png?v=2"
-            alt="KIS Logo"
-            width={200}
-            height={64}
-            className="h-12 sm:h-14 w-auto object-contain"
+            src="/logo.png"
+            alt="KIP Logo"
+            width={150}
+            height={48}
+            className="h-9 sm:h-10.5 w-auto object-contain"
             priority
             unoptimized
           />
@@ -243,7 +243,7 @@ export default function LoginPage() {
 
       {/* Footer Note */}
       <footer className="py-4 text-center text-xs text-text-secondary">
-        &copy; {new Date().getFullYear()} KIS. All rights reserved.
+        &copy; {new Date().getFullYear()} KIP. All rights reserved.
       </footer>
     </div>
   );

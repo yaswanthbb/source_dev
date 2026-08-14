@@ -10,11 +10,11 @@ export default function NotFoundPage() {
       <header className="max-w-6xl w-full mx-auto flex items-center justify-between">
         <Link href="/student/dashboard" className="flex items-center">
           <Image
-            src="/logo.png?v=2"
-            alt="KIS Logo"
-            width={140}
-            height={44}
-            className="h-10 w-auto object-contain"
+            src="/logo.png"
+            alt="KIP Logo"
+            width={105}
+            height={33}
+            className="h-[30px] w-auto object-contain"
             priority
             unoptimized
           />
@@ -56,7 +56,7 @@ export default function NotFoundPage() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-text-secondary">
-        &copy; {new Date().getFullYear()} KIS. All rights reserved.
+        &copy; {new Date().getFullYear()} KIP. All rights reserved.
       </footer>
     </div>
   );
