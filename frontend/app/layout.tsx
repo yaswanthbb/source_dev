@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import { QueryProvider } from '../providers/query-provider';
 import { SnackbarProvider } from '../providers/snackbar-provider';
+import { ScrollProgressBar } from '@/components/scroll-progress-bar';
 import './globals.css';
 
 const inter = Inter({
@@ -19,11 +20,11 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'KIS — Knowledge Is Power',
+  title: 'KIP — Knowledge Is Power',
   description: 'Structured roadmaps, concepts, quizzes, and gamified learning.',
   icons: {
-    icon: '/icon.png?v=3',
-    apple: '/icon.png?v=3',
+    icon: '/favicon.ico',
+    apple: '/favicon.ico',
   },
 };
 
@@ -33,8 +34,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${inter.variable} ${spaceGrotesk.variable}`}
+    >
       <body className="min-h-screen bg-bg text-text-primary antialiased font-sans">
+        <ScrollProgressBar />
         <QueryProvider>
           <SnackbarProvider>{children}</SnackbarProvider>
         </QueryProvider>
