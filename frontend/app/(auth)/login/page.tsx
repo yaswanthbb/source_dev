@@ -2,39 +2,63 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Eye, EyeOff } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { setToken, setUser, User } from '@/lib/auth';
 
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Enter a valid email address'),
+  password: z
+    .string()
+    .min(1, 'Password is required')
+    .min(8, 'Password must be at least 8 characters'),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
+
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+  });
 
   const getDashboardRoute = (role: User['role']) => {
     switch (role) {
       case 'student':
         return '/student/dashboard';
       case 'instructor':
-        return '/student/dashboard'; // Extensible for instructor dashboard later
+        return '/student/dashboard';
       case 'admin':
-        return '/student/dashboard'; // Extensible for admin dashboard later
+        return '/student/dashboard';
       default:
         return '/student/dashboard';
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setIsLoading(true);
+  const onSubmit = async (data: LoginFormData) => {
+    setServerError(null);
 
     try {
       const response = await apiClient.post<{ accessToken: string; user: User }>(
         '/auth/login',
-        { email, password },
+        data,
       );
 
       const { accessToken, user } = response.data;
@@ -50,14 +74,12 @@ export default function LoginPage() {
       const backendMessage = axiosError.response?.data?.message;
 
       if (Array.isArray(backendMessage)) {
-        setErrorMessage(backendMessage.join(', '));
+        setServerError(backendMessage.join(', '));
       } else if (typeof backendMessage === 'string') {
-        setErrorMessage(backendMessage);
+        setServerError(backendMessage);
       } else {
-        setErrorMessage('Unable to sign in. Please check your credentials and try again.');
+        setServerError('Invalid credentials. Please check your email and password.');
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -65,13 +87,16 @@ export default function LoginPage() {
     <div className="min-h-screen bg-bg flex flex-col justify-between">
       {/* Top Navigation */}
       <header className="w-full border-b border-border bg-surface px-6 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-white font-bold font-display text-lg">
-            K
-          </div>
-          <span className="font-display font-bold text-xl tracking-tight text-text-primary">
-            Knowledge Is Power
-          </span>
+        <Link href="/" className="flex items-center py-1">
+          <Image
+            src="/logo.png?v=2"
+            alt="KIS Logo"
+            width={200}
+            height={64}
+            className="h-12 sm:h-14 w-auto object-contain"
+            priority
+            unoptimized
+          />
         </Link>
         <div className="flex items-center gap-2 text-sm text-text-secondary">
           <span>Don&apos;t have an account?</span>
@@ -96,7 +121,8 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {errorMessage && (
+          {/* Server API Error Banner */}
+          {serverError && (
             <div className="mb-6 p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-sm font-medium flex items-start gap-3">
               <svg
                 className="w-5 h-5 flex-shrink-0 mt-0.5"
@@ -111,11 +137,11 @@ export default function LoginPage() {
                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                 />
               </svg>
-              <span>{errorMessage}</span>
+              <span>{serverError}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <div>
               <label
                 htmlFor="email"
@@ -126,12 +152,21 @@ export default function LoginPage() {
               <input
                 id="email"
                 type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+                autoComplete="email"
                 placeholder="you@example.com"
-                className="w-full px-4 py-3 rounded-xl border border-border bg-bg text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-sm transition-all"
+                {...register('email')}
+                className={`w-full px-4 py-3 rounded-xl border bg-bg text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:ring-2 text-sm transition-all ${
+                  errors.email
+                    ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500'
+                    : 'border-border focus:ring-accent/20 focus:border-accent'
+                }`}
               />
+              {errors.email && (
+                <p className="text-red-500 text-xs mt-1.5 font-medium">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
             <div>
@@ -149,23 +184,46 @@ export default function LoginPage() {
                   Forgot your password?
                 </span>
               </div>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-border bg-bg text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-sm transition-all"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Minimum 8 characters"
+                  {...register('password')}
+                  className={`w-full pl-4 pr-11 py-3 rounded-xl border bg-bg text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:ring-2 text-sm transition-all ${
+                    errors.password
+                      ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500'
+                      : 'border-border focus:ring-accent/20 focus:border-accent'
+                  }`}
+                />
+                <button
+                  type="button"
+                  tabIndex={0}
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary p-1 rounded-md transition-colors cursor-pointer"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="text-red-500 text-xs mt-1.5 font-medium">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full py-3.5 px-4 bg-accent hover:bg-accent/90 disabled:opacity-60 text-white font-medium rounded-xl text-sm transition-all duration-150 shadow-sm flex items-center justify-center cursor-pointer disabled:cursor-not-allowed mt-2"
+              disabled={!isValid || isSubmitting}
+              className="w-full py-3.5 px-4 bg-accent hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl text-sm transition-all duration-150 shadow-sm flex items-center justify-center cursor-pointer mt-2"
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Signing in...</span>
@@ -180,7 +238,7 @@ export default function LoginPage() {
 
       {/* Footer Note */}
       <footer className="py-4 text-center text-xs text-text-secondary">
-        &copy; {new Date().getFullYear()} Knowledge Is Power. All rights reserved.
+        &copy; {new Date().getFullYear()} KIS. All rights reserved.
       </footer>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import Image from 'next/image';
 import { getUser, clearAuth, User } from '@/lib/auth';
 
 export default function StudentDashboardPlaceholder() {
@@ -37,13 +37,16 @@ export default function StudentDashboardPlaceholder() {
     <div className="min-h-screen bg-bg flex flex-col">
       {/* Navigation Header */}
       <header className="w-full border-b border-border bg-surface px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-white font-bold font-display text-lg">
-            K
-          </div>
-          <span className="font-display font-bold text-xl tracking-tight text-text-primary">
-            Knowledge Is Power
-          </span>
+        <div className="flex items-center py-1">
+          <Image
+            src="/logo.png?v=2"
+            alt="KIS Logo"
+            width={200}
+            height={64}
+            className="h-12 sm:h-14 w-auto object-contain"
+            priority
+            unoptimized
+          />
         </div>
 
         <div className="flex items-center gap-4">

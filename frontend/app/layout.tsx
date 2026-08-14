@@ -18,8 +18,12 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Knowledge Is Power - Learning Platform',
+  title: 'KIS — Knowledge Is Power',
   description: 'Structured roadmaps, concepts, quizzes, and gamified learning.',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
