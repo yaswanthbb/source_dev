@@ -121,6 +121,63 @@ interface QaQuestion {
   answers?: QaAnswer[];
 }
 
+interface ParsedHeading {
+  id: string;
+  text: string;
+  level: number;
+}
+
+function slugifyHeadingText(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function extractHeadings(markdown: string): ParsedHeading[] {
+  if (!markdown) return [];
+  const lines = markdown.split('\n');
+  const headings: ParsedHeading[] = [];
+  const slugCounts = new Map<string, number>();
+
+  for (const line of lines) {
+    // Match only main headings (# and ##), omitting subheadings (###)
+    const match = line.match(/^(#{1,2})\s+(.+)$/);
+    if (match) {
+      const level = match[1].length;
+      const rawText = match[2].replace(/[*_`#]/g, '').trim();
+      if (!rawText) continue;
+
+      let baseSlug = slugifyHeadingText(rawText);
+      if (!baseSlug) baseSlug = `heading-${headings.length + 1}`;
+
+      const count = slugCounts.get(baseSlug) || 0;
+      slugCounts.set(baseSlug, count + 1);
+      const slug = count > 0 ? `${baseSlug}-${count}` : baseSlug;
+
+      headings.push({
+        id: slug,
+        text: rawText,
+        level,
+      });
+    }
+  }
+
+  return headings;
+}
+
+function getNodeText(node: React.ReactNode): string {
+  if (!node) return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(getNodeText).join('');
+  if (React.isValidElement(node) && node.props && (node.props as { children?: React.ReactNode }).children) {
+    return getNodeText((node.props as { children?: React.ReactNode }).children);
+  }
+  return '';
+}
+
 export default function ConceptReadingPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const conceptId = resolvedParams.id;
@@ -355,6 +412,48 @@ export default function ConceptReadingPage({ params }: PageProps) {
     return Boolean(concept?.content && (concept.content.includes('```') || concept.content.includes('<code>')));
   }, [concept?.content]);
 
+  // Dynamic Main Headings for Lesson Contents
+  const parsedHeadings = useMemo(() => {
+    return extractHeadings(concept?.content || '');
+  }, [concept?.content]);
+
+  // Active Section ID for Lesson Contents Tree Highlight
+  const [activeSectionId, setActiveSectionId] = useState<string>('introduction');
+
+  useEffect(() => {
+    if (!concept?.content) return;
+
+    const handleScroll = () => {
+      const headingIds = [
+        'introduction',
+        ...parsedHeadings.map((h) => h.id),
+        ...(quizQuestions.length > 0 ? ['quiz'] : []),
+        'qa',
+      ];
+
+      const scrollPosition = window.scrollY + 140;
+
+      let currentId = 'introduction';
+      for (const id of headingIds) {
+        const el = document.getElementById(id);
+        if (el) {
+          const top = el.getBoundingClientRect().top + window.scrollY;
+          if (scrollPosition >= top) {
+            currentId = id;
+          }
+        }
+      }
+
+      setActiveSectionId(currentId);
+    };
+
+    // Check initial position and listen on scroll
+    handleScroll();
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [concept?.content, parsedHeadings, quizQuestions.length]);
+
   if (conceptLoading) {
     return (
       <div className="space-y-6 max-w-5xl py-8 animate-pulse">
@@ -382,111 +481,23 @@ export default function ConceptReadingPage({ params }: PageProps) {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 items-start relative pb-16">
+    <div className="flex flex-col lg:flex-row justify-between items-start gap-8 xl:gap-12 relative pb-16 w-full max-w-[1600px] mx-auto">
       {/* ========================================================================= */}
-      {/* COLUMN 1: LEFT CURRICULUM SIDEBAR (240px) */}
+      {/* MAIN CONCEPT CANVAS (CENTERED) */}
       {/* ========================================================================= */}
-      <aside className="w-full lg:w-[240px] flex-shrink-0 bg-surface border border-border rounded-2xl p-4 shadow-xs lg:sticky lg:top-8 self-start space-y-5">
-        {/* Back to Roadmap Link */}
-        {effectiveRoadmapId && (
-          <Link
-            href={`/student/roadmaps/${effectiveRoadmapId}`}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-accent transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="truncate max-w-[190px]">
-              {roadmap?.title || 'Back to Roadmap'}
-            </span>
-          </Link>
-        )}
-
-        {/* Current Module Info */}
-        <div className="pt-2 border-t border-border/80 space-y-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-            Current Module
-          </div>
-          <h3 className="text-xs font-bold text-text-primary font-display leading-tight line-clamp-2">
-            {currentModule?.title || 'Course Module'}
-          </h3>
-
-          {/* Module Progress Bar */}
-          <div className="space-y-1 pt-1">
-            <div className="flex items-center justify-between text-[10px] text-text-secondary font-medium">
-              <span>{moduleProgress.completed} of {moduleProgress.total} complete</span>
-              <span>{moduleProgress.percentage}%</span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-accent-tint overflow-hidden">
-              <div
-                className="h-full bg-accent transition-all duration-300 rounded-full"
-                style={{ width: `${Math.min(100, Math.max(0, moduleProgress.percentage))}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Sibling Concepts in Module */}
-        <div className="pt-3 border-t border-border/80 space-y-1.5">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-2">
-            Concepts in Module
-          </div>
-
-          <div className="space-y-1">
-            {moduleConcepts.map((item) => {
-              const isCurrent = item.id === conceptId;
-              const status =
-                roadmapProgress?.concepts?.find((c) => c.conceptId === item.id)?.status ||
-                'not_started';
-              const isCompleted = status === 'completed';
-
-              if (isCurrent) {
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-accent-tint text-accent font-semibold text-xs transition-colors"
-                  >
-                    <div className="w-4 h-4 rounded-full border-2 border-accent bg-surface ring-2 ring-accent/20 flex items-center justify-center flex-shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                    </div>
-                    <span className="truncate">{item.title}</span>
-                  </div>
-                );
-              }
-
-              return (
-                <Link
-                  key={item.id}
-                  href={`/student/concepts/${item.id}?roadmapId=${effectiveRoadmapId || ''}&moduleId=${currentModule?.id || ''}`}
-                  className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-text-secondary hover:bg-bg hover:text-text-primary text-xs transition-colors group"
-                >
-                  <div
-                    className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
-                      isCompleted
-                        ? 'bg-accent text-white shadow-xs'
-                        : 'border-2 border-border bg-bg text-text-secondary/40'
-                    }`}
-                  >
-                    {isCompleted ? (
-                      <Check className="w-2.5 h-2.5 stroke-[3]" />
-                    ) : (
-                      <Circle className="w-1.5 h-1.5 fill-current opacity-30" />
-                    )}
-                  </div>
-                  <span className="truncate group-hover:text-accent transition-colors">
-                    {item.title}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </aside>
-
-      {/* ========================================================================= */}
-      {/* COLUMN 2: MAIN ARTICLE CONTENT (CENTER) */}
-      {/* ========================================================================= */}
-      <div className="flex-1 min-w-0 space-y-10">
+      <div className="w-full flex-1 max-w-[780px] xl:max-w-[840px] 2xl:max-w-[880px] mx-auto min-w-0 space-y-10">
         {/* Concept Article Header */}
         <section id="introduction" className="space-y-4">
+          {effectiveRoadmapId && (
+            <Link
+              href={`/student/roadmaps/${effectiveRoadmapId}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-accent transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>{roadmap?.title || 'Back to Roadmap'}</span>
+            </Link>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             {concept.difficulty && (
               <span
@@ -541,21 +552,42 @@ export default function ConceptReadingPage({ params }: PageProps) {
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              h1: ({ children }) => (
-                <h1 className="text-2xl font-bold font-display text-text-primary mt-6 mb-3 border-b border-border pb-2">
-                  {children}
-                </h1>
-              ),
-              h2: ({ children }) => (
-                <h2 className="text-xl font-bold font-display text-text-primary mt-6 mb-3">
-                  {children}
-                </h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="text-lg font-bold font-display text-text-primary mt-4 mb-2">
-                  {children}
-                </h3>
-              ),
+              h1: ({ children }) => {
+                const text = getNodeText(children);
+                const id = slugifyHeadingText(text) || 'section';
+                return (
+                  <h1
+                    id={id}
+                    className="scroll-mt-24 text-2xl font-bold font-display text-text-primary mt-8 mb-4 border-b border-border pb-2"
+                  >
+                    {children}
+                  </h1>
+                );
+              },
+              h2: ({ children }) => {
+                const text = getNodeText(children);
+                const id = slugifyHeadingText(text) || 'section';
+                return (
+                  <h2
+                    id={id}
+                    className="scroll-mt-24 text-xl font-bold font-display text-text-primary mt-8 mb-3"
+                  >
+                    {children}
+                  </h2>
+                );
+              },
+              h3: ({ children }) => {
+                const text = getNodeText(children);
+                const id = slugifyHeadingText(text) || 'section';
+                return (
+                  <h3
+                    id={id}
+                    className="scroll-mt-24 text-lg font-bold font-display text-text-primary mt-6 mb-2"
+                  >
+                    {children}
+                  </h3>
+                );
+              },
               p: ({ children }) => (
                 <p className="text-sm sm:text-base text-text-primary leading-relaxed my-3 font-sans">
                   {children}
@@ -929,70 +961,97 @@ export default function ConceptReadingPage({ params }: PageProps) {
       </div>
 
       {/* ========================================================================= */}
-      {/* COLUMN 3: RIGHT TABLE OF CONTENTS (240px) */}
+      {/* RIGHT SIDEBAR (LESSON CONTENTS) */}
       {/* ========================================================================= */}
-      <aside className="w-full lg:w-[240px] flex-shrink-0 bg-surface border border-border rounded-2xl p-5 shadow-xs lg:sticky lg:top-8 self-start space-y-4">
-        <div className="text-xs font-bold font-display uppercase tracking-wider text-text-primary pb-2 border-b border-border">
-          On This Page
-        </div>
+      <aside className="w-full lg:w-[260px] xl:w-[280px] flex-shrink-0 space-y-4 lg:sticky lg:top-8 self-start">
+        {/* CARD: LESSON CONTENTS */}
+        <div className="bg-surface border border-border rounded-2xl p-5 shadow-xs space-y-4">
+          <h4 className="text-sm font-bold font-display text-text-primary tracking-tight">
+            Lesson contents
+          </h4>
 
-        <nav className="space-y-1 text-xs" aria-label="Table of contents">
-          <a
-            href="#introduction"
-            className="block px-2.5 py-1.5 rounded-lg text-text-secondary hover:bg-bg hover:text-accent font-medium transition-colors"
-          >
-            Introduction
-          </a>
+          <nav className="border-l-2 border-border/80 relative flex flex-col py-0.5" aria-label="Lesson contents">
+            {parsedHeadings.length > 0 ? (
+              parsedHeadings.map((heading) => {
+                const isActive = activeSectionId === heading.id;
+                return (
+                  <a
+                    key={heading.id}
+                    href={`#${heading.id}`}
+                    onClick={() => setActiveSectionId(heading.id)}
+                    className={`block py-2.5 px-4 text-xs transition-all -ml-[2px] truncate ${
+                      isActive
+                        ? 'border-l-2 border-accent bg-accent-tint/60 text-accent font-semibold'
+                        : 'border-l-2 border-transparent text-text-secondary hover:text-text-primary hover:bg-bg/60 font-medium'
+                    }`}
+                    title={heading.text}
+                  >
+                    {heading.text}
+                  </a>
+                );
+              })
+            ) : (
+              <a
+                href="#introduction"
+                onClick={() => setActiveSectionId('introduction')}
+                className={`block py-2.5 px-4 text-xs transition-all -ml-[2px] truncate ${
+                  activeSectionId === 'introduction'
+                    ? 'border-l-2 border-accent bg-accent-tint/60 text-accent font-semibold'
+                    : 'border-l-2 border-transparent text-text-secondary hover:text-text-primary hover:bg-bg/60 font-medium'
+                }`}
+              >
+                Introduction
+              </a>
+            )}
 
-          {hasCodeBlock && (
+            {quizQuestions.length > 0 && (
+              <a
+                href="#quiz"
+                onClick={() => setActiveSectionId('quiz')}
+                className={`block py-2.5 px-4 text-xs transition-all -ml-[2px] truncate ${
+                  activeSectionId === 'quiz'
+                    ? 'border-l-2 border-accent bg-accent-tint/60 text-accent font-semibold'
+                    : 'border-l-2 border-transparent text-text-secondary hover:text-text-primary hover:bg-bg/60 font-medium'
+                }`}
+              >
+                Knowledge check
+              </a>
+            )}
+
             <a
-              href="#code-example"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-text-secondary hover:bg-bg hover:text-accent font-medium transition-colors"
+              href="#qa"
+              onClick={() => setActiveSectionId('qa')}
+              className={`block py-2.5 px-4 text-xs transition-all -ml-[2px] truncate ${
+                activeSectionId === 'qa'
+                  ? 'border-l-2 border-accent bg-accent-tint/60 text-accent font-semibold'
+                  : 'border-l-2 border-transparent text-text-secondary hover:text-text-primary hover:bg-bg/60 font-medium'
+              }`}
             >
-              <Code2 className="w-3.5 h-3.5 text-text-secondary" />
-              <span>Code Example</span>
+              Questions & answers
             </a>
-          )}
+          </nav>
 
-          {quizQuestions.length > 0 && (
-            <a
-              href="#quiz"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-text-secondary hover:bg-bg hover:text-accent font-medium transition-colors"
-            >
-              <Award className="w-3.5 h-3.5 text-text-secondary" />
-              <span>Check Understanding</span>
-            </a>
-          )}
-
-          <a
-            href="#qa"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-text-secondary hover:bg-bg hover:text-accent font-medium transition-colors"
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-text-secondary" />
-            <span>Questions & Answers</span>
-          </a>
-        </nav>
-
-        {/* Quick Difficulty / XP Info */}
-        <div className="pt-4 border-t border-border/80 space-y-2 text-xs text-text-secondary">
-          <div className="flex items-center justify-between">
-            <span>Difficulty</span>
-            <span className="font-semibold capitalize text-text-primary">
-              {concept.difficulty || 'Medium'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>XP Reward</span>
-            <span className="font-semibold text-accent flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              <span>
-                {concept.difficulty === 'easy'
-                  ? '10 XP'
-                  : concept.difficulty === 'hard'
-                  ? '35 XP'
-                  : '20 XP'}
+          {/* Quick Difficulty / XP Info */}
+          <div className="pt-3 border-t border-border/80 space-y-2 text-xs text-text-secondary">
+            <div className="flex items-center justify-between">
+              <span>Difficulty</span>
+              <span className="font-semibold capitalize text-text-primary">
+                {concept.difficulty || 'Medium'}
               </span>
-            </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>XP Reward</span>
+              <span className="font-semibold text-accent flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                <span>
+                  {concept.difficulty === 'easy'
+                    ? '10 XP'
+                    : concept.difficulty === 'hard'
+                    ? '35 XP'
+                    : '20 XP'}
+                </span>
+              </span>
+            </div>
           </div>
         </div>
       </aside>
