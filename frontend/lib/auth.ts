@@ -5,6 +5,13 @@ export interface User {
   role: 'student' | 'instructor' | 'admin';
   timezone?: string;
   createdAt?: string;
+  instructorProfile?: {
+    id?: string;
+    status?: 'pending' | 'approved' | 'rejected';
+    bio?: string | null;
+    createdAt?: string;
+    approvedAt?: string | null;
+  };
 }
 
 const TOKEN_KEY = 'kip_token';
