@@ -17,7 +17,8 @@ import {
   RefreshCw,
   PanelLeftClose,
   PanelLeftOpen,
-  ArrowLeftRight,
+  Menu,
+  X,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { getToken, clearAuth, User } from '@/lib/auth';
@@ -61,6 +62,13 @@ export default function InstructorAppShellLayout({
   const queryClient = useQueryClient();
   const [isTokenChecked, setIsTokenChecked] = useState(false);
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Auto-close mobile drawer on route change
+  useEffect(() => {
+    setIsMobileDrawerOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const token = getToken();
@@ -71,7 +79,7 @@ export default function InstructorAppShellLayout({
     }
   }, [router]);
 
-  // Live user profile fetch from GET /users/me (without stale initialData)
+  // Live user profile fetch from GET /users/me
   const {
     data: user,
     isLoading: userLoading,
@@ -92,8 +100,6 @@ export default function InstructorAppShellLayout({
     enabled: isTokenChecked,
     staleTime: 30000,
   });
-
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogout = () => {
     clearAuth();
@@ -123,13 +129,13 @@ export default function InstructorAppShellLayout({
   // Error state if GET /users/me fails
   if (isError || !user) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center p-6">
-        <div className="max-w-md w-full p-8 rounded-2xl bg-surface border border-border text-center shadow-sm space-y-5">
+      <div className="min-h-screen bg-bg flex items-center justify-center p-4 sm:p-6">
+        <div className="max-w-md w-full p-6 sm:p-8 rounded-2xl bg-surface border border-border text-center shadow-sm space-y-5">
           <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto shadow-2xs">
             <AlertCircle className="w-7 h-7" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-lg font-bold font-display text-text-primary">
+            <h2 className="text-base sm:text-lg font-bold font-display text-text-primary">
               Unable to load instructor profile
             </h2>
             <p className="text-xs text-text-secondary">
@@ -163,7 +169,7 @@ export default function InstructorAppShellLayout({
 
   if (!isApproved) {
     return (
-      <div className="min-h-screen bg-bg flex flex-col justify-between p-6">
+      <div className="min-h-screen bg-bg flex flex-col justify-between p-4 sm:p-6">
         <header className="max-w-6xl w-full mx-auto flex items-center justify-between">
           <Link href="/student/dashboard" className="flex items-center">
             <Image
@@ -171,7 +177,7 @@ export default function InstructorAppShellLayout({
               alt="KIP Logo"
               width={105}
               height={33}
-              className="h-[30px] w-auto object-contain"
+              className="h-[28px] sm:h-[30px] w-auto object-contain"
               priority
               unoptimized
             />
@@ -184,7 +190,7 @@ export default function InstructorAppShellLayout({
           </button>
         </header>
 
-        <main className="max-w-md w-full mx-auto p-8 bg-surface border border-border rounded-2xl shadow-sm text-center space-y-6">
+        <main className="max-w-md w-full mx-auto p-6 sm:p-8 bg-surface border border-border rounded-2xl shadow-sm text-center space-y-6 my-auto">
           <div className="w-16 h-16 rounded-2xl bg-amber-tint text-amber flex items-center justify-center mx-auto shadow-xs">
             <Clock className="w-8 h-8" />
           </div>
@@ -212,7 +218,7 @@ export default function InstructorAppShellLayout({
           </div>
         </main>
 
-        <footer className="text-center text-xs text-text-secondary">
+        <footer className="text-center text-xs text-text-secondary py-4">
           &copy; {new Date().getFullYear()} KIP. All rights reserved.
         </footer>
       </div>
@@ -220,10 +226,118 @@ export default function InstructorAppShellLayout({
   }
 
   return (
-    <div className="min-h-screen bg-bg flex relative">
-      {/* Smooth Collapsible Left Sidebar (240px) */}
+    <div className="min-h-screen bg-bg flex flex-col lg:flex-row relative">
+      {/* 1. Mobile Top Navigation Bar (< lg) */}
+      <header className="lg:hidden h-14 px-4 bg-surface border-b border-border flex items-center justify-between sticky top-0 z-30">
+        <Link href="/instructor/dashboard" className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="KIP Logo"
+            width={110}
+            height={34}
+            className="h-7 w-auto object-contain"
+            priority
+            unoptimized
+          />
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setIsMobileDrawerOpen(true)}
+          className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
+          aria-label="Open Navigation Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </header>
+
+      {/* 2. Mobile Slide-In Drawer Navigation (< lg) */}
+      {isMobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          {/* Backdrop Overlay */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => setIsMobileDrawerOpen(false)}
+          />
+
+          {/* Drawer Content */}
+          <aside className="fixed inset-y-0 left-0 w-[280px] sm:w-[320px] bg-surface z-50 shadow-2xl flex flex-col justify-between animate-in slide-in-from-left duration-200">
+            <div className="flex flex-col">
+              <div className="h-14 px-4 flex items-center justify-between border-b border-border">
+                <Link
+                  href="/instructor/dashboard"
+                  onClick={() => setIsMobileDrawerOpen(false)}
+                  className="flex items-center"
+                >
+                  <Image
+                    src="/logo.png"
+                    alt="KIP Logo"
+                    width={110}
+                    height={34}
+                    className="h-7 w-auto object-contain"
+                    priority
+                    unoptimized
+                  />
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMobileDrawerOpen(false)}
+                  className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
+                  aria-label="Close navigation"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Navigation Links */}
+              <nav className="p-4 space-y-1.5" aria-label="Instructor Mobile Navigation">
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary/70">
+                  Instructor Portal
+                </div>
+                {INSTRUCTOR_NAV_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== '/instructor/dashboard' && pathname.startsWith(item.href));
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setIsMobileDrawerOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-accent-tint text-accent font-semibold'
+                          : 'text-text-secondary hover:bg-bg hover:text-text-primary'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${isActive ? 'text-accent' : 'text-text-secondary'}`} />
+                      <span>{item.name}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Mobile Drawer Footer Profile Actions */}
+            <div className="p-4 border-t border-border bg-surface">
+              <ProfileActionsMenu
+                user={user || undefined}
+                onOpenLogoutModal={() => {
+                  setIsMobileDrawerOpen(false);
+                  setShowLogoutModal(true);
+                }}
+                currentView="instructor"
+              />
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* 3. Desktop Collapsible Left Sidebar (lg+) */}
       <aside
-        className={`w-[240px] flex-shrink-0 bg-surface border-r border-border min-h-screen flex flex-col justify-between sticky top-0 h-screen z-20 transition-all duration-300 ease-in-out ${
+        className={`hidden lg:flex w-[240px] flex-shrink-0 bg-surface border-r border-border min-h-screen flex-col justify-between sticky top-0 h-screen z-20 transition-all duration-300 ease-in-out ${
           isSidebarHidden
             ? '-ml-[240px] opacity-0 pointer-events-none -translate-x-full'
             : 'ml-0 opacity-100 translate-x-0'
@@ -284,7 +398,7 @@ export default function InstructorAppShellLayout({
           </nav>
         </div>
 
-        {/* Bottom User Profile Section (Profile Actions Menu) */}
+        {/* Bottom User Profile Section */}
         <div className="p-4 border-t border-border bg-surface">
           <ProfileActionsMenu
             user={user || undefined}
@@ -294,11 +408,11 @@ export default function InstructorAppShellLayout({
         </div>
       </aside>
 
-      {/* Main Content Viewport */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out">
-        {/* Top Header Strip when Sidebar is Collapsed */}
+      {/* 4. Main Content Viewport */}
+      <div className="flex-1 flex flex-col min-w-0 w-full transition-all duration-300 ease-in-out">
+        {/* Top Header Strip on Desktop when Sidebar is Collapsed */}
         {isSidebarHidden && (
-          <div className="h-14 px-6 lg:px-10 flex items-center border-b border-border/80 bg-surface/80 backdrop-blur-md sticky top-0 z-30 animate-in fade-in duration-200">
+          <div className="hidden lg:flex h-14 px-6 lg:px-10 items-center border-b border-border/80 bg-surface/80 backdrop-blur-md sticky top-0 z-30 animate-in fade-in duration-200">
             <button
               type="button"
               onClick={() => setIsSidebarHidden(false)}
@@ -312,7 +426,7 @@ export default function InstructorAppShellLayout({
           </div>
         )}
 
-        <main className="flex-1 py-6 lg:py-8 px-6 lg:px-8 xl:px-10 w-full transition-all duration-300 ease-in-out">
+        <main className="flex-1 py-5 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 xl:px-10 w-full transition-all duration-300 ease-in-out">
           {children}
         </main>
       </div>

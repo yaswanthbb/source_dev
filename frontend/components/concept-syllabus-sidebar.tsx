@@ -168,7 +168,7 @@ export function ConceptSyllabusSidebar({
         </div>
 
         {/* Modules Accordion List */}
-        <div className="py-2 overflow-y-auto max-h-[calc(100vh-220px)]">
+        <div className="py-2 overflow-y-auto flex-1 min-h-0">
           {roadmapLoading ? (
             <div className="p-6 space-y-4 animate-pulse">
               <div className="h-5 bg-border/60 rounded w-3/4" />
