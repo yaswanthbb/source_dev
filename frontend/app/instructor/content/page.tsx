@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Layers,
   Plus,
@@ -12,9 +12,12 @@ import {
   ExternalLink,
   FolderKanban,
   FileText,
+  Trash2,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
+import { useSnackbar } from '@/providers/snackbar-provider';
+import { ConfirmModal } from '@/components/confirm-modal';
 
 interface RoadmapItem {
   id: string;
@@ -40,16 +43,22 @@ interface ConceptItem {
 }
 
 export default function InstructorContentDirectoryPage() {
+  const queryClient = useQueryClient();
+  const { showSuccess, showError } = useSnackbar();
+
   const { data: currentUser } = useQuery<User>({
     queryKey: ['users', 'me'],
     queryFn: async () => (await apiClient.get<User>('/users/me')).data,
     initialData: () => getUser() || undefined,
   });
 
+  const isAdmin = currentUser?.role === 'admin';
+
   // 1. Fetch all roadmaps & filter to current instructor
   const {
     data: allRoadmaps = [],
     isLoading: roadmapsLoading,
+    refetch: refetchRoadmaps,
   } = useQuery<RoadmapItem[]>({
     queryKey: ['roadmaps'],
     queryFn: async () => (await apiClient.get<RoadmapItem[]>('/roadmaps')).data,
@@ -66,6 +75,7 @@ export default function InstructorContentDirectoryPage() {
   const {
     data: allConcepts = [],
     isLoading: conceptsLoading,
+    refetch: refetchConcepts,
   } = useQuery<ConceptItem[]>({
     queryKey: ['concepts'],
     queryFn: async () => (await apiClient.get<ConceptItem[]>('/concepts')).data,
@@ -76,6 +86,77 @@ export default function InstructorContentDirectoryPage() {
     if (currentUser.role === 'admin') return allConcepts;
     return allConcepts.filter((c) => c.authorId === currentUser.id);
   }, [allConcepts, currentUser]);
+
+  // Delete Roadmap (Admin only)
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    roadmapId: string;
+    title: string;
+  }>({
+    isOpen: false,
+    roadmapId: '',
+    title: '',
+  });
+
+  const deleteRoadmapMutation = useMutation({
+    mutationFn: async (roadmapId: string) => {
+      return (await apiClient.delete(`/roadmaps/${roadmapId}`)).data;
+    },
+    onSuccess: () => {
+      showSuccess('Roadmap deleted successfully');
+      setDeleteConfirm({ isOpen: false, roadmapId: '', title: '' });
+      refetchRoadmaps();
+      queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to delete roadmap.');
+    },
+  });
+
+  const handleDeleteRoadmapClick = (roadmap: RoadmapItem) => {
+    setDeleteConfirm({
+      isOpen: true,
+      roadmapId: roadmap.id,
+      title: roadmap.title,
+    });
+  };
+
+  // Delete Concept (Admin only)
+  const [deleteConceptConfirm, setDeleteConceptConfirm] = useState<{
+    isOpen: boolean;
+    conceptId: string;
+    title: string;
+  }>({
+    isOpen: false,
+    conceptId: '',
+    title: '',
+  });
+
+  const deleteConceptMutation = useMutation({
+    mutationFn: async (conceptId: string) => {
+      return (await apiClient.delete(`/concepts/${conceptId}`)).data;
+    },
+    onSuccess: () => {
+      showSuccess('Concept deleted successfully');
+      setDeleteConceptConfirm({ isOpen: false, conceptId: '', title: '' });
+      refetchConcepts();
+      queryClient.invalidateQueries({ queryKey: ['concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to delete concept.');
+    },
+  });
+
+  const handleDeleteConceptClick = (concept: ConceptItem) => {
+    setDeleteConceptConfirm({
+      isOpen: true,
+      conceptId: concept.id,
+      title: concept.title,
+    });
+  };
 
   return (
     <div className="space-y-10 pb-16">
@@ -202,6 +283,18 @@ export default function InstructorContentDirectoryPage() {
                         <Edit className="w-3.5 h-3.5" />
                         <span>Manage</span>
                       </Link>
+
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRoadmapClick(roadmap)}
+                          className="p-2 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete Roadmap (Admin only)"
+                          aria-label="Delete Roadmap"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -238,39 +331,91 @@ export default function InstructorContentDirectoryPage() {
             {myConcepts.map((concept) => (
               <div
                 key={concept.id}
-                className="p-4 rounded-xl bg-surface border border-border hover:border-accent/30 flex items-center justify-between gap-3 shadow-2xs transition-all"
+                className="p-4 rounded-xl bg-surface border border-border hover:border-accent/40 shadow-2xs transition-all flex flex-col justify-between"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                         concept.difficulty === 'easy'
                           ? 'bg-green-tint text-green'
-                          : concept.difficulty === 'medium'
-                          ? 'bg-amber-tint text-amber'
-                          : 'bg-accent-tint text-accent'
+                          : concept.difficulty === 'hard'
+                          ? 'bg-red-50 text-red-600'
+                          : 'bg-amber-tint text-amber'
                       }`}
                     >
                       {concept.difficulty}
                     </span>
+                    <span className="text-[11px] text-text-secondary">
+                      {new Date(concept.createdAt).toLocaleDateString()}
+                    </span>
                   </div>
-                  <h4 className="text-xs font-bold text-text-primary truncate">
+                  <h3 className="font-bold text-sm text-text-primary line-clamp-1">
                     {concept.title}
-                  </h4>
+                  </h3>
                 </div>
 
-                <Link
-                  href={`/instructor/concepts/${concept.id}/edit`}
-                  className="p-2 text-text-secondary hover:text-accent rounded-lg hover:bg-bg transition-colors flex-shrink-0"
-                  title="Edit concept"
-                >
-                  <Edit className="w-4 h-4" />
-                </Link>
+                <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between">
+                  <Link
+                    href={`/student/concepts/${concept.id}`}
+                    target="_blank"
+                    className="text-xs text-text-secondary hover:text-accent flex items-center gap-1"
+                  >
+                    <span>Read</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/instructor/concepts/${concept.id}/edit`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-bg text-text-primary hover:text-accent font-semibold text-xs border border-border"
+                    >
+                      <Edit className="w-3 h-3" />
+                      <span>Edit</span>
+                    </Link>
+
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteConceptClick(concept)}
+                        className="p-1 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Delete Concept (Admin only)"
+                        aria-label="Delete Concept"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {/* Delete Roadmap Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Roadmap"
+        message={`Are you sure you want to permanently delete "${deleteConfirm.title}"? All associated modules and learning pathways will be removed.`}
+        confirmText="Delete Roadmap"
+        variant="danger"
+        isLoading={deleteRoadmapMutation.isPending}
+        onConfirm={() => deleteRoadmapMutation.mutate(deleteConfirm.roadmapId)}
+        onCancel={() => setDeleteConfirm({ isOpen: false, roadmapId: '', title: '' })}
+      />
+
+      {/* Delete Concept Confirmation Modal (Admin only) */}
+      <ConfirmModal
+        isOpen={deleteConceptConfirm.isOpen}
+        title="Delete Concept"
+        message={`Are you sure you want to permanently delete concept "${deleteConceptConfirm.title}"? All associated MCQ questions and submissions will be removed.`}
+        confirmText="Delete Concept"
+        variant="danger"
+        isLoading={deleteConceptMutation.isPending}
+        onConfirm={() => deleteConceptMutation.mutate(deleteConceptConfirm.conceptId)}
+        onCancel={() => setDeleteConceptConfirm({ isOpen: false, conceptId: '', title: '' })}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { use, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -20,7 +21,9 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
+import { ConfirmModal } from '@/components/confirm-modal';
 
 interface PageProps {
   params: Promise<{ roadmapId: string }>;
@@ -62,9 +65,19 @@ interface RoadmapDetail {
 export default function RoadmapManagementPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const roadmapId = resolvedParams.roadmapId;
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const { showSuccess, showError } = useSnackbar();
+
+  // Current user query for role checks
+  const { data: currentUser } = useQuery<User>({
+    queryKey: ['users', 'me'],
+    queryFn: async () => (await apiClient.get<User>('/users/me')).data,
+    initialData: () => getUser() || undefined,
+  });
+
+  const isAdmin = currentUser?.role === 'admin';
 
   // 1. Fetch full roadmap structure
   const {
@@ -72,10 +85,12 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     isLoading,
     isError,
     refetch,
-  } = useQuery<RoadmapDetail>({
+  } = useQuery<RoadDetailWithAuthor>({
     queryKey: ['roadmaps', roadmapId],
-    queryFn: async () => (await apiClient.get<RoadmapDetail>(`/roadmaps/${roadmapId}`)).data,
+    queryFn: async () => (await apiClient.get<RoadDetailWithAuthor>(`/roadmaps/${roadmapId}`)).data,
   });
+
+  type RoadDetailWithAuthor = RoadmapDetail;
 
   // Roadmap Edit State
   const [isEditingDetails, setIsEditingDetails] = useState(false);
@@ -95,6 +110,23 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     onError: (err: unknown) => {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       showError(axiosErr.response?.data?.message || 'Failed to update roadmap details.');
+    },
+  });
+
+  // Delete Roadmap Mutation (Admin only)
+  const [isDeleteRoadmapOpen, setIsDeleteRoadmapOpen] = useState(false);
+  const deleteRoadmapMutation = useMutation({
+    mutationFn: async () => {
+      return (await apiClient.delete(`/roadmaps/${roadmapId}`)).data;
+    },
+    onSuccess: () => {
+      showSuccess('Roadmap deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
+      router.push('/instructor/content');
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to delete roadmap.');
     },
   });
 
@@ -147,13 +179,24 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     },
   });
 
-  // Delete Module Mutation
+  // Delete Module State & Mutation (Admin only)
+  const [deleteModuleConfirm, setDeleteModuleConfirm] = useState<{
+    isOpen: boolean;
+    moduleId: string;
+    title: string;
+  }>({
+    isOpen: false,
+    moduleId: '',
+    title: '',
+  });
+
   const deleteModuleMutation = useMutation({
     mutationFn: async (moduleId: string) => {
       return (await apiClient.delete(`/modules/${moduleId}`)).data;
     },
     onSuccess: () => {
-      showSuccess('Module deleted');
+      showSuccess('Module deleted successfully');
+      setDeleteModuleConfirm({ isOpen: false, moduleId: '', title: '' });
       refetch();
     },
     onError: (err: unknown) => {
@@ -162,35 +205,49 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     },
   });
 
-  const handleDeleteModule = (moduleId: string) => {
-    if (window.confirm('Are you sure you want to delete this module and detach all its concepts?')) {
-      deleteModuleMutation.mutate(moduleId);
-    }
+  const handleDeleteModuleClick = (moduleItem: RoadmapModule) => {
+    setDeleteModuleConfirm({
+      isOpen: true,
+      moduleId: moduleItem.id,
+      title: moduleItem.title,
+    });
   };
 
-  // Remove Concept from Module Mutation
+  // Detach Concept from Module State & Mutation
+  const [detachConceptConfirm, setDetachConceptConfirm] = useState<{
+    isOpen: boolean;
+    moduleId: string;
+    conceptId: string;
+    conceptTitle: string;
+  }>({
+    isOpen: false,
+    moduleId: '',
+    conceptId: '',
+    conceptTitle: '',
+  });
+
   const removeConceptMutation = useMutation({
     mutationFn: async ({ moduleId, conceptId }: { moduleId: string; conceptId: string }) => {
       return (await apiClient.delete(`/modules/${moduleId}/concepts/${conceptId}`)).data;
     },
     onSuccess: () => {
-      showSuccess('Concept removed from module');
+      showSuccess('Concept detached from module');
+      setDetachConceptConfirm({ isOpen: false, moduleId: '', conceptId: '', conceptTitle: '' });
       refetch();
     },
     onError: (err: unknown) => {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      showError(axiosErr.response?.data?.message || 'Failed to remove concept from module.');
+      showError(axiosErr.response?.data?.message || 'Failed to detach concept from module.');
     },
   });
 
-  const handleRemoveConcept = (moduleId: string, conceptId: string) => {
-    if (
-      window.confirm(
-        'Remove this concept from this module? Note: The concept itself will not be deleted from the platform.',
-      )
-    ) {
-      removeConceptMutation.mutate({ moduleId, conceptId });
-    }
+  const handleDetachConceptClick = (moduleId: string, concept: ConceptSummary) => {
+    setDetachConceptConfirm({
+      isOpen: true,
+      moduleId,
+      conceptId: concept.id,
+      conceptTitle: concept.title,
+    });
   };
 
   // Search & Attach Existing Concept
@@ -198,13 +255,10 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   const [conceptSearchQuery, setConceptSearchQuery] = useState('');
   const [selectedConceptId, setSelectedConceptId] = useState('');
 
-  const { data: searchResults = [] } = useQuery<ConceptSummary[]>({
-    queryKey: ['concepts', 'search', conceptSearchQuery],
-    queryFn: async () => {
-      const q = conceptSearchQuery.trim();
-      return (await apiClient.get<ConceptSummary[]>(`/concepts${q ? `?search=${q}` : ''}`)).data;
-    },
-    enabled: Boolean(attachingModuleId),
+  const { data: allConcepts = [] } = useQuery<ConceptSummary[]>({
+    queryKey: ['concepts'],
+    queryFn: async () => (await apiClient.get<ConceptSummary[]>('/concepts')).data,
+    enabled: attachingModuleId !== null,
   });
 
   const attachConceptMutation = useMutation({
@@ -233,17 +287,24 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     },
     onError: (err: unknown) => {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      showError(axiosErr.response?.data?.message || 'Failed to attach concept to module.');
+      showError(axiosErr.response?.data?.message || 'Failed to attach concept.');
     },
   });
+
+  const searchResults = React.useMemo(() => {
+    if (!conceptSearchQuery.trim()) return allConcepts.slice(0, 8);
+    const q = conceptSearchQuery.toLowerCase();
+    return allConcepts.filter((c) => c.title.toLowerCase().includes(q));
+  }, [allConcepts, conceptSearchQuery]);
 
   if (isLoading) {
     return (
       <div className="space-y-6 max-w-4xl animate-pulse">
-        <div className="w-32 h-5 bg-border/60 rounded" />
-        <div className="p-8 rounded-2xl bg-surface border border-border h-48" />
+        <div className="h-6 w-32 bg-surface rounded" />
+        <div className="h-40 bg-surface rounded-2xl border border-border" />
         <div className="space-y-4">
-          <div className="h-40 bg-surface border border-border rounded-2xl" />
+          <div className="h-28 bg-surface rounded-2xl border border-border" />
+          <div className="h-28 bg-surface rounded-2xl border border-border" />
         </div>
       </div>
     );
@@ -331,14 +392,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               <button
                 type="submit"
                 disabled={updateRoadmapMutation.isPending}
-                className="px-4 py-2 rounded-xl bg-accent text-white text-xs font-semibold hover:bg-accent/90"
+                className="px-4 py-2 rounded-xl bg-accent text-white text-xs font-semibold hover:bg-accent/90 cursor-pointer"
               >
                 Save Changes
               </button>
               <button
                 type="button"
                 onClick={() => setIsEditingDetails(false)}
-                className="px-4 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold hover:bg-bg"
+                className="px-4 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold hover:bg-bg cursor-pointer"
               >
                 Cancel
               </button>
@@ -361,13 +422,27 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               )}
             </div>
 
-            <button
-              onClick={handleStartEditDetails}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-surface text-text-primary hover:bg-bg text-xs font-semibold shadow-2xs transition-colors flex-shrink-0"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>Edit Details</span>
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={handleStartEditDetails}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-surface text-text-primary hover:bg-bg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit Details</span>
+              </button>
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteRoadmapOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-surface text-red-600 hover:bg-red-50 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                  title="Delete Roadmap (Admin only)"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Roadmap</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -408,7 +483,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={() => setIsAddingModule(false)}
-                className="p-1 text-text-secondary hover:text-text-primary"
+                className="p-1 text-text-secondary hover:text-text-primary cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -434,14 +509,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={() => setIsAddingModule(false)}
-                className="px-4 py-2 rounded-xl border border-border text-xs font-semibold"
+                className="px-4 py-2 rounded-xl border border-border text-xs font-semibold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!newModuleTitle.trim() || addModuleMutation.isPending}
-                className="px-4 py-2 rounded-xl bg-accent text-white text-xs font-semibold hover:bg-accent/90"
+                className="px-4 py-2 rounded-xl bg-accent text-white text-xs font-semibold hover:bg-accent/90 cursor-pointer"
               >
                 Save Module
               </button>
@@ -494,14 +569,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                         />
                         <button
                           type="submit"
-                          className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold"
+                          className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold cursor-pointer"
                         >
                           Save
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingModuleId(null)}
-                          className="px-3 py-1.5 rounded-lg border border-border text-xs"
+                          className="px-3 py-1.5 rounded-lg border border-border text-xs cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -529,18 +604,22 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                           setEditingModuleId(moduleItem.id);
                           setModEditTitle(moduleItem.title);
                         }}
-                        className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg rounded-lg transition-colors"
+                        className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg rounded-lg transition-colors cursor-pointer"
                         title="Rename module"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={() => handleDeleteModule(moduleItem.id)}
-                        className="p-1.5 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete module"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteModuleClick(moduleItem)}
+                          className="p-1.5 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete module (Admin only)"
+                          aria-label="Delete module"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -588,9 +667,10 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                               Edit Article
                             </Link>
                             <button
-                              onClick={() => handleRemoveConcept(moduleItem.id, c.id)}
-                              className="p-1 text-text-secondary hover:text-red-500 rounded-md transition-colors"
-                              title="Remove concept from module"
+                              onClick={() => handleDetachConceptClick(moduleItem.id, c)}
+                              className="p-1 text-text-secondary hover:text-red-500 rounded-md transition-colors cursor-pointer"
+                              title="Detach concept from module"
+                              aria-label="Detach concept"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -613,7 +693,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                             setAttachingModuleId(null);
                             setSelectedConceptId('');
                           }}
-                          className="p-1 text-text-secondary hover:text-text-primary"
+                          className="p-1 text-text-secondary hover:text-text-primary cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -649,7 +729,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                         <button
                           type="button"
                           onClick={() => setAttachingModuleId(null)}
-                          className="px-3 py-1.5 rounded-lg border border-border bg-surface text-xs font-semibold"
+                          className="px-3 py-1.5 rounded-lg border border-border bg-surface text-xs font-semibold cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -665,7 +745,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                               });
                             }
                           }}
-                          className="px-4 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:bg-accent/90 disabled:opacity-50"
+                          className="px-4 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
                         >
                           Attach Concept
                         </button>
@@ -702,6 +782,54 @@ export default function RoadmapManagementPage({ params }: PageProps) {
           </div>
         )}
       </div>
+
+      {/* Delete Roadmap Confirmation Modal (Admin only) */}
+      <ConfirmModal
+        isOpen={isDeleteRoadmapOpen}
+        title="Delete Roadmap"
+        message={`Are you sure you want to permanently delete roadmap "${roadmap.title}"? All its modules and structured syllabi will be removed.`}
+        confirmText="Delete Roadmap"
+        variant="danger"
+        isLoading={deleteRoadmapMutation.isPending}
+        onConfirm={() => deleteRoadmapMutation.mutate()}
+        onCancel={() => setIsDeleteRoadmapOpen(false)}
+      />
+
+      {/* Delete Module Confirmation Modal (Admin only) */}
+      <ConfirmModal
+        isOpen={deleteModuleConfirm.isOpen}
+        title="Delete Module"
+        message={`Are you sure you want to permanently delete module "${deleteModuleConfirm.title}"? All concept attachments inside this module will be detached.`}
+        confirmText="Delete Module"
+        variant="danger"
+        isLoading={deleteModuleMutation.isPending}
+        onConfirm={() => deleteModuleMutation.mutate(deleteModuleConfirm.moduleId)}
+        onCancel={() => setDeleteModuleConfirm({ isOpen: false, moduleId: '', title: '' })}
+      />
+
+      {/* Detach Concept Confirmation Modal */}
+      <ConfirmModal
+        isOpen={detachConceptConfirm.isOpen}
+        title="Detach Concept from Module"
+        message={`Are you sure you want to detach "${detachConceptConfirm.conceptTitle}" from this module? The concept itself will remain preserved in your content library.`}
+        confirmText="Detach Concept"
+        variant="warning"
+        isLoading={removeConceptMutation.isPending}
+        onConfirm={() =>
+          removeConceptMutation.mutate({
+            moduleId: detachConceptConfirm.moduleId,
+            conceptId: detachConceptConfirm.conceptId,
+          })
+        }
+        onCancel={() =>
+          setDetachConceptConfirm({
+            isOpen: false,
+            moduleId: '',
+            conceptId: '',
+            conceptTitle: '',
+          })
+        }
+      />
     </div>
   );
 }
