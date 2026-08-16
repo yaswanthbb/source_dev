@@ -4,10 +4,11 @@ import { Repository, In } from 'typeorm';
 import { UserConceptProgress } from './entities/user-concept-progress.entity';
 import { Concept } from '../content/entities/concept.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
-import { ConceptPrerequisite } from '../content/entities/concept-prerequisite.entity';
+import { ModuleConcept } from '../content/entities/module-concept.entity';
+import { ModuleConceptPrerequisite } from '../content/entities/module-concept-prerequisite.entity';
+import { GamificationService } from '../gamification/gamification.service';
 import { ProgressStatus } from '../../common/enums/progress-status.enum';
 import { XpSource } from '../../common/enums/xp-source.enum';
-import { GamificationService } from '../gamification/gamification.service';
 
 @Injectable()
 export class ProgressService {
@@ -18,61 +19,14 @@ export class ProgressService {
     private readonly conceptRepository: Repository<Concept>,
     @InjectRepository(Roadmap)
     private readonly roadmapRepository: Repository<Roadmap>,
-    @InjectRepository(ConceptPrerequisite)
-    private readonly conceptPrerequisiteRepository: Repository<ConceptPrerequisite>,
+    @InjectRepository(ModuleConcept)
+    private readonly moduleConceptRepository: Repository<ModuleConcept>,
+    @InjectRepository(ModuleConceptPrerequisite)
+    private readonly moduleConceptPrerequisiteRepository: Repository<ModuleConceptPrerequisite>,
     private readonly gamificationService: GamificationService,
   ) {}
 
   async markConceptCompleted(
-    userId: string,
-    conceptId: string,
-  ): Promise<UserConceptProgress> {
-    const concept = await this.conceptRepository.findOne({
-      where: { id: conceptId },
-    });
-    if (!concept) {
-      throw new NotFoundException('Concept not found');
-    }
-
-    let progress = await this.userConceptProgressRepository.findOne({
-      where: { userId, conceptId },
-    });
-
-    const isNewCompletion =
-      !progress || progress.status !== ProgressStatus.COMPLETED;
-
-    if (progress) {
-      if (progress.status === ProgressStatus.COMPLETED) {
-        return progress;
-      }
-      progress.status = ProgressStatus.COMPLETED;
-      progress.completedAt = new Date();
-    } else {
-      progress = this.userConceptProgressRepository.create({
-        userId,
-        conceptId,
-        status: ProgressStatus.COMPLETED,
-        completedAt: new Date(),
-      });
-    }
-
-    const savedProgress =
-      await this.userConceptProgressRepository.save(progress);
-
-    if (isNewCompletion) {
-      await this.gamificationService.awardXpForConceptCompletion(
-        userId,
-        conceptId,
-        XpSource.CONCEPT_COMPLETED,
-      );
-      await this.gamificationService.updateStreak(userId);
-      await this.gamificationService.checkAndAwardBadges(userId);
-    }
-
-    return savedProgress;
-  }
-
-  async markConceptCompletedFromAssignment(
     userId: string,
     conceptId: string,
   ): Promise<UserConceptProgress> {
@@ -119,6 +73,13 @@ export class ProgressService {
     }
 
     return savedProgress;
+  }
+
+  async markConceptCompletedFromAssignment(
+    userId: string,
+    conceptId: string,
+  ): Promise<UserConceptProgress> {
+    return this.markConceptCompleted(userId, conceptId);
   }
 
   async markConceptStarted(
@@ -172,6 +133,9 @@ export class ProgressService {
         'modules',
         'modules.moduleConcepts',
         'modules.moduleConcepts.concept',
+        'modules.moduleConcepts.prerequisites',
+        'modules.moduleConcepts.prerequisites.prerequisiteModuleConcept',
+        'modules.moduleConcepts.prerequisites.prerequisiteModuleConcept.concept',
       ],
     });
 
@@ -179,21 +143,24 @@ export class ProgressService {
       throw new NotFoundException('Roadmap not found');
     }
 
-    const conceptsMap = new Map<string, Concept>();
+    const moduleConceptsList: ModuleConcept[] = [];
     if (roadmap.modules) {
-      roadmap.modules.forEach((mod) => {
+      const sortedModules = [...roadmap.modules].sort(
+        (a, b) => a.orderIndex - b.orderIndex,
+      );
+      sortedModules.forEach((mod) => {
         if (mod.moduleConcepts) {
-          mod.moduleConcepts.forEach((mc) => {
-            if (mc.concept) {
-              conceptsMap.set(mc.concept.id, mc.concept);
-            }
-          });
+          const sortedConcepts = [...mod.moduleConcepts].sort(
+            (a, b) => a.orderIndex - b.orderIndex,
+          );
+          moduleConceptsList.push(...sortedConcepts);
         }
       });
     }
 
-    const conceptList = Array.from(conceptsMap.values());
-    const conceptIds = conceptList.map((c) => c.id);
+    const conceptIds = Array.from(
+      new Set(moduleConceptsList.map((mc) => mc.conceptId)),
+    );
 
     if (conceptIds.length === 0) {
       return {
@@ -213,69 +180,47 @@ export class ProgressService {
     });
 
     const userProgressMap = new Map<string, UserConceptProgress>();
-    userProgressRows.forEach((row) => userProgressMap.set(row.conceptId, row));
+    const completedConceptIds = new Set<string>();
 
-    const prerequisiteRows = await this.conceptPrerequisiteRepository.find({
-      where: { conceptId: In(conceptIds) },
-      relations: ['prerequisiteConcept'],
-    });
-
-    const prereqConceptIds = Array.from(
-      new Set(prerequisiteRows.map((p) => p.prerequisiteConceptId)),
-    );
-
-    let completedPrereqIds = new Set<string>();
-    if (prereqConceptIds.length > 0) {
-      const userPrereqProgressRows =
-        await this.userConceptProgressRepository.find({
-          where: {
-            userId,
-            conceptId: In(prereqConceptIds),
-            status: ProgressStatus.COMPLETED,
-          },
-        });
-      completedPrereqIds = new Set(
-        userPrereqProgressRows.map((r) => r.conceptId),
-      );
-    }
-
-    const prereqMap = new Map<string, ConceptPrerequisite[]>();
-    prerequisiteRows.forEach((prereq) => {
-      if (!prereqMap.has(prereq.conceptId)) {
-        prereqMap.set(prereq.conceptId, []);
+    userProgressRows.forEach((row) => {
+      userProgressMap.set(row.conceptId, row);
+      if (row.status === ProgressStatus.COMPLETED) {
+        completedConceptIds.add(row.conceptId);
       }
-      prereqMap.get(prereq.conceptId)!.push(prereq);
     });
 
     let completedCount = 0;
-    const resultConcepts = conceptList.map((concept) => {
-      const progress = userProgressMap.get(concept.id);
+    const resultConcepts = moduleConceptsList.map((mc) => {
+      const progress = userProgressMap.get(mc.conceptId);
       const status = progress ? progress.status : ProgressStatus.NOT_STARTED;
       if (status === ProgressStatus.COMPLETED) {
         completedCount++;
       }
 
-      const conceptPrereqs = prereqMap.get(concept.id) || [];
-      const formattedPrereqs = conceptPrereqs.map((prereq) => ({
-        prerequisiteConceptId: prereq.prerequisiteConceptId,
-        title: prereq.prerequisiteConcept?.title,
-        slug: prereq.prerequisiteConcept?.slug,
-        isCompletedByCurrentUser: completedPrereqIds.has(
-          prereq.prerequisiteConceptId,
-        ),
-      }));
+      const formattedPrereqs = (mc.prerequisites || []).map((p) => {
+        const prereqConcept = p.prerequisiteModuleConcept?.concept;
+        const prereqConceptId =
+          p.prerequisiteModuleConcept?.conceptId || '';
+        return {
+          prerequisiteConceptId: prereqConceptId,
+          title: prereqConcept?.title || 'Prerequisite concept',
+          slug: prereqConcept?.slug,
+          orderIndex: p.prerequisiteModuleConcept?.orderIndex,
+          isCompletedByCurrentUser: completedConceptIds.has(prereqConceptId),
+        };
+      });
 
       return {
-        conceptId: concept.id,
-        conceptTitle: concept.title,
-        conceptSlug: concept.slug,
+        conceptId: mc.conceptId,
+        conceptTitle: mc.concept?.title || '',
+        conceptSlug: mc.concept?.slug || '',
         status,
         completedAt: progress?.completedAt || null,
         prerequisites: formattedPrereqs,
       };
     });
 
-    const totalConcepts = conceptList.length;
+    const totalConcepts = moduleConceptsList.length;
     const percentage =
       totalConcepts > 0
         ? Math.round((completedCount / totalConcepts) * 100)
