@@ -107,6 +107,19 @@ export default function StudentDashboardPage() {
       (await apiClient.get<GamificationData>('/gamification/me')).data,
   });
 
+  // 2.1. Activity Heatmap Query (Source of truth from /gamification/activity)
+  const { data: rawActivityList = [], isLoading: activityLoading } = useQuery<
+    Array<{ date: string; active: boolean }>
+  >({
+    queryKey: ['gamification', 'activity', 14],
+    queryFn: async () =>
+      (
+        await apiClient.get<Array<{ date: string; active: boolean }>>(
+          '/gamification/activity?days=14',
+        )
+      ).data,
+  });
+
   // 3. User Concept Progress List
   const {
     data: progressList = [],
@@ -163,43 +176,37 @@ export default function StudentDashboardPage() {
     })[0];
   }, [progressList]);
 
-  // Last 14 Days Activity Heatmap
+  // Last 14 Days Activity Heatmap (derived from /gamification/activity)
   const activityHeatmap = useMemo(() => {
+    if (rawActivityList && rawActivityList.length > 0) {
+      return rawActivityList.map((item, index) => {
+        const parts = item.date.split('-').map(Number);
+        const dayNumber = parts.length === 3 ? parts[2] : index + 1;
+        return {
+          isoDate: item.date,
+          dayNumber,
+          hasActivity: item.active,
+          isToday: index === rawActivityList.length - 1,
+        };
+      });
+    }
+
     const days = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    // Build completion map by UTC/Local YYYY-MM-DD
-    const completionDateMap = new Map<string, number>();
-    progressList.forEach((p) => {
-      if (p.status === 'completed' && p.completedAt) {
-        const dateStr = p.completedAt.slice(0, 10);
-        completionDateMap.set(
-          dateStr,
-          (completionDateMap.get(dateStr) || 0) + 1,
-        );
-      }
-    });
-
     for (let i = 13; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       const isoStr = d.toISOString().slice(0, 10);
-      const count = completionDateMap.get(isoStr) || 0;
-
       days.push({
-        date: d,
         isoDate: isoStr,
-        dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
         dayNumber: d.getDate(),
-        hasActivity: count > 0,
-        count,
+        hasActivity: false,
         isToday: i === 0,
       });
     }
-
     return days;
-  }, [progressList]);
+  }, [rawActivityList]);
 
   // Set of Earned Badge IDs
   const earnedBadgeMap = useMemo(() => {
@@ -400,7 +407,7 @@ export default function StudentDashboardPage() {
           </div>
 
           <div className="my-5">
-            {progressLoading ? (
+            {activityLoading || progressLoading ? (
               <div className="grid grid-cols-7 gap-2 animate-pulse">
                 {Array.from({ length: 14 }).map((_, i) => (
                   <div key={i} className="h-8 rounded-lg bg-border/40" />
@@ -408,19 +415,24 @@ export default function StudentDashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-7 gap-2">
-                {activityHeatmap.map((item) => (
-                  <div
-                    key={item.isoDate}
-                    title={`${item.isoDate}: ${item.count} concept(s) completed`}
-                    className={`h-8 rounded-lg flex flex-col items-center justify-center text-[10px] font-semibold transition-all ${
-                      item.hasActivity
-                        ? 'bg-accent text-white shadow-xs'
-                        : 'bg-bg border border-border text-text-secondary/70'
-                    } ${item.isToday ? 'ring-2 ring-accent ring-offset-1' : ''}`}
-                  >
-                    <span>{item.dayNumber}</span>
-                  </div>
-                ))}
+                {activityHeatmap.map((item) => {
+                  let boxStyle = 'bg-bg border border-border text-text-secondary/70';
+                  if (item.hasActivity) {
+                    boxStyle = 'bg-accent text-white font-bold shadow-xs';
+                  } else if (item.isToday) {
+                    boxStyle = 'bg-accent-tint/50 text-accent font-semibold border border-accent/30';
+                  }
+
+                  return (
+                    <div
+                      key={item.isoDate}
+                      title={`${item.isoDate}: ${item.hasActivity ? 'Active' : 'No activity'}`}
+                      className={`h-8 rounded-lg flex flex-col items-center justify-center text-[10px] transition-all ${boxStyle}`}
+                    >
+                      <span>{item.dayNumber}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <div className="flex items-center justify-between text-[11px] text-text-secondary mt-2">
