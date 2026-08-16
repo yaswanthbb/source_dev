@@ -41,18 +41,19 @@ interface ConceptDetail {
   content: string;
   difficulty?: 'easy' | 'medium' | 'hard';
   authorId?: string;
-  prerequisites?: Array<{
-    id: string;
-    conceptId: string;
-    prerequisiteConceptId: string;
-    prerequisiteConcept?: { id: string; title: string; slug?: string };
-  }>;
   appearsIn?: Array<{
+    moduleConceptId?: string;
     moduleId: string;
     moduleTitle: string;
     roadmapId: string;
     roadmapTitle: string;
     orderIndex: number;
+    prerequisites?: Array<{
+      prerequisiteConceptId: string;
+      title: string;
+      slug?: string;
+      orderIndex?: number;
+    }>;
   }>;
 }
 
@@ -208,6 +209,18 @@ export default function ConceptReadingPage({ params }: PageProps) {
   // 2. Roadmap Tree & Progress for Curriculum Sidebar
   const { data: roadmap } = useRoadmapDetail(effectiveRoadmapId);
   const { data: roadmapProgress } = useRoadmapProgress(effectiveRoadmapId);
+
+  // Unmet module-scoped prerequisites for current student from roadmap progress
+  const unmetPrerequisites = useMemo(() => {
+    if (!roadmapProgress?.concepts) return [];
+    const currentProgress = roadmapProgress.concepts.find(
+      (c) => c.conceptId === conceptId,
+    );
+    if (!currentProgress || !currentProgress.prerequisites) return [];
+    return currentProgress.prerequisites.filter(
+      (p) => !p.isCompletedByCurrentUser,
+    );
+  }, [roadmapProgress, conceptId]);
 
   // 3. Quiz Questions
   const {
@@ -524,21 +537,21 @@ export default function ConceptReadingPage({ params }: PageProps) {
             {concept.title}
           </h1>
 
-          {/* Unmet Prerequisites Warning Callout */}
-          {concept.prerequisites && concept.prerequisites.length > 0 && (
+          {/* Unmet Module Prerequisites Warning Callout */}
+          {unmetPrerequisites.length > 0 && (
             <div className="p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-xs space-y-1">
               <div className="flex items-center gap-2 font-semibold">
                 <Info className="w-4 h-4 flex-shrink-0" />
-                <span>Prerequisites for this concept:</span>
+                <span>Recommended module prerequisites before studying this concept:</span>
               </div>
               <ul className="list-disc list-inside pl-1 space-y-0.5 text-text-secondary">
-                {concept.prerequisites.map((prereq) => (
-                  <li key={prereq.id}>
+                {unmetPrerequisites.map((prereq) => (
+                  <li key={prereq.prerequisiteConceptId}>
                     <Link
-                      href={`/student/concepts/${prereq.prerequisiteConceptId}`}
+                      href={`/student/concepts/${prereq.prerequisiteConceptId}${effectiveRoadmapId ? `?roadmapId=${effectiveRoadmapId}` : ''}`}
                       className="text-accent hover:underline font-medium"
                     >
-                      {prereq.prerequisiteConcept?.title || 'Prerequisite concept'}
+                      {prereq.title || 'Prerequisite concept'}
                     </Link>
                   </li>
                 ))}
