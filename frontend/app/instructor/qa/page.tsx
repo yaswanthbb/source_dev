@@ -42,6 +42,7 @@ interface QaQuestion {
   userId: string;
   body: string;
   createdAt: string;
+  updatedAt?: string;
   user?: {
     id: string;
     name: string;
@@ -290,6 +291,20 @@ export default function InstructorQaPage() {
                           minute: '2-digit',
                         })}
                       </span>
+                      {q.updatedAt &&
+                        new Date(q.updatedAt).getTime() - new Date(q.createdAt).getTime() > 1000 && (
+                          <span
+                            className="text-text-secondary/70 italic text-[9px] bg-bg px-1.5 py-0.5 rounded border border-border/60 ml-1.5"
+                            title={`Edited on ${new Date(q.updatedAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}`}
+                          >
+                            (edited)
+                          </span>
+                        )}
                     </div>
                   </div>
 

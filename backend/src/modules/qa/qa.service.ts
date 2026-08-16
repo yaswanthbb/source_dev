@@ -131,11 +131,22 @@ export class QaService {
   ): Promise<Question> {
     const question = await this.questionRepository.findOne({
       where: { id },
+      relations: ['answers'],
     });
     if (!question) {
       throw new NotFoundException('Question not found');
     }
     this.checkOwnership(question.studentId, user);
+
+    if (
+      user.role !== UserRole.ADMIN &&
+      question.answers &&
+      question.answers.length > 0
+    ) {
+      throw new ForbiddenException(
+        'Questions that have already been answered by an instructor cannot be edited',
+      );
+    }
 
     question.body = dto.body;
     return this.questionRepository.save(question);

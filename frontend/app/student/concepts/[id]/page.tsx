@@ -118,6 +118,7 @@ interface QaQuestion {
   userId: string;
   body: string;
   createdAt: string;
+  updatedAt?: string;
   user?: { id: string; name: string; email: string; role: string };
   answers?: QaAnswer[];
 }
@@ -918,13 +919,29 @@ export default function ConceptReadingPage({ params }: PageProps) {
                         <p className="text-xs font-bold text-text-primary">
                           {q.user?.name || 'Student'}
                         </p>
-                        <p className="text-[10px] text-text-secondary">
-                          {new Date(q.createdAt).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                        <p className="text-[10px] text-text-secondary flex items-center gap-1.5 flex-wrap">
+                          <span>
+                            {new Date(q.createdAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {q.updatedAt &&
+                            new Date(q.updatedAt).getTime() - new Date(q.createdAt).getTime() > 1000 && (
+                              <span
+                                className="text-text-secondary/70 italic text-[9px] bg-bg px-1.5 py-0.5 rounded border border-border/60"
+                                title={`Edited on ${new Date(q.updatedAt).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}`}
+                              >
+                                (edited)
+                              </span>
+                            )}
                         </p>
                       </div>
                     </div>
