@@ -773,7 +773,7 @@ export default function ConceptReadingPage({ params }: PageProps) {
                         return (
                           <label
                             key={option.id}
-                            className={`flex items-center gap-3 p-3.5 rounded-xl border text-xs sm:text-sm cursor-pointer transition-all ${optionStyle} ${
+                            className={`flex items-center gap-3 p-3.5 sm:p-4 min-h-[44px] rounded-xl border text-xs sm:text-sm cursor-pointer transition-all ${optionStyle} ${
                               isResolved ? 'cursor-default pointer-events-none' : ''
                             }`}
                           >
@@ -974,9 +974,9 @@ export default function ConceptReadingPage({ params }: PageProps) {
       </div>
 
       {/* ========================================================================= */}
-      {/* RIGHT SIDEBAR (LESSON CONTENTS) */}
+      {/* RIGHT SIDEBAR (LESSON CONTENTS) - Displayed only at xl+ */}
       {/* ========================================================================= */}
-      <aside className="w-full lg:w-[260px] xl:w-[280px] flex-shrink-0 space-y-4 lg:sticky lg:top-8 self-start">
+      <aside className="hidden xl:block w-[260px] 2xl:w-[280px] flex-shrink-0 space-y-4 sticky top-8 self-start">
         {/* CARD: LESSON CONTENTS */}
         <div className="bg-surface border border-border rounded-2xl p-5 shadow-xs space-y-4">
           <h4 className="text-sm font-bold font-display text-text-primary tracking-tight">
