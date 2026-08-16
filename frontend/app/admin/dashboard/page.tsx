@@ -100,7 +100,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Top Stats Row (5 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* Total Students */}
         <div className="p-5 rounded-2xl bg-surface border border-border shadow-xs">
           <div className="flex items-center justify-between mb-2">

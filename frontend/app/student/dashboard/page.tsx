@@ -406,15 +406,15 @@ export default function StudentDashboardPage() {
             </p>
           </div>
 
-          <div className="my-5">
+          <div className="my-5 overflow-x-auto pb-1">
             {activityLoading || progressLoading ? (
-              <div className="grid grid-cols-7 gap-2 animate-pulse">
+              <div className="grid grid-cols-7 gap-2 min-w-[240px] animate-pulse">
                 {Array.from({ length: 14 }).map((_, i) => (
                   <div key={i} className="h-8 rounded-lg bg-border/40" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-7 gap-2 min-w-[240px]">
                 {activityHeatmap.map((item) => {
                   let boxStyle = 'bg-bg border border-border text-text-secondary/70';
                   if (item.hasActivity) {
@@ -435,7 +435,7 @@ export default function StudentDashboardPage() {
                 })}
               </div>
             )}
-            <div className="flex items-center justify-between text-[11px] text-text-secondary mt-2">
+            <div className="flex items-center justify-between text-[11px] text-text-secondary mt-2 min-w-[240px]">
               <span>14 days ago</span>
               <span>Today</span>
             </div>
@@ -607,7 +607,7 @@ export default function StudentDashboardPage() {
             No system badges configured yet.
           </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
             {allBadges.map((badge) => {
               const earnedInfo = earnedBadgeMap.get(badge.id);
               const isEarned = Boolean(earnedInfo);

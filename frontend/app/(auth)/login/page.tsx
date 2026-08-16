@@ -91,23 +91,23 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-bg flex flex-col justify-between">
       {/* Top Navigation */}
-      <header className="w-full border-b border-border bg-surface px-6 py-4 flex items-center justify-between">
+      <header className="w-full border-b border-border bg-surface px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
         <Link href="/" className="flex items-center py-1">
           <Image
             src="/logo.png"
             alt="KIP Logo"
-            width={150}
-            height={48}
-            className="h-9 sm:h-10.5 w-auto object-contain"
+            width={130}
+            height={40}
+            className="h-8 sm:h-10 w-auto object-contain"
             priority
             unoptimized
           />
         </Link>
-        <div className="flex items-center gap-2 text-sm text-text-secondary">
-          <span>Don&apos;t have an account?</span>
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-text-secondary text-right">
+          <span className="hidden xs:inline">Don&apos;t have an account?</span>
           <Link
             href="/register"
-            className="text-accent font-medium hover:underline transition-colors"
+            className="text-accent font-medium hover:underline transition-colors whitespace-nowrap"
           >
             Create account
           </Link>
@@ -115,13 +115,13 @@ export default function LoginPage() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-surface border border-border rounded-2xl shadow-sm p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold font-display text-text-primary tracking-tight">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 w-full">
+        <div className="w-full max-w-md bg-surface border border-border rounded-2xl shadow-sm p-6 sm:p-8">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold font-display text-text-primary tracking-tight">
               Welcome back
             </h1>
-            <p className="text-sm text-text-secondary mt-1">
+            <p className="text-xs sm:text-sm text-text-secondary mt-1">
               Sign in to your account to continue your learning path
             </p>
           </div>

@@ -188,7 +188,7 @@ export default function StudentRoadmapDetailPage({ params }: PageProps) {
             return (
               <div
                 key={moduleItem.id}
-                className="p-6 sm:p-7 rounded-2xl bg-surface border border-border shadow-xs space-y-2"
+                className="p-4 sm:p-7 rounded-2xl bg-surface border border-border shadow-xs space-y-2"
               >
                 {/* Module Heading */}
                 <div className="border-b border-border pb-4">

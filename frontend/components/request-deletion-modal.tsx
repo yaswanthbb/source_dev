@@ -115,7 +115,7 @@ export function RequestDeletionModal({
       onClick={handleClose}
     >
       <div
-        className="bg-surface border border-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
+        className="bg-surface border border-border rounded-2xl max-w-lg w-full p-5 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
