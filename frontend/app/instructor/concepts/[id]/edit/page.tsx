@@ -769,7 +769,7 @@ export default function EditConceptPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={() => setActiveTab('split')}
-                className={`hidden md:flex px-3 py-1.5 rounded-lg text-xs font-semibold items-center gap-1.5 transition-all ${
+                className={`hidden lg:flex px-3 py-1.5 rounded-lg text-xs font-semibold items-center gap-1.5 transition-all ${
                   activeTab === 'split' ? 'bg-surface text-accent shadow-xs' : 'text-text-secondary'
                 }`}
               >

@@ -633,7 +633,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                       conceptsInModule.map((c, cIdx) => (
                         <div
                           key={c.id}
-                          className="p-3.5 rounded-xl border border-border bg-bg flex items-center justify-between gap-3 text-xs"
+                          className="p-3.5 rounded-xl border border-border bg-bg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <span className="w-5 h-5 rounded-full bg-surface border border-border text-[10px] font-bold text-text-secondary flex items-center justify-center flex-shrink-0">
@@ -645,7 +645,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                                   {c.title}
                                 </h4>
                                 <span
-                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider flex-shrink-0 ${
                                     c.difficulty === 'easy'
                                       ? 'bg-green-tint text-green'
                                       : c.difficulty === 'medium'
@@ -659,7 +659,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
                             <Link
                               href={`/instructor/concepts/${c.id}/edit`}
                               className="px-2.5 py-1 rounded-lg border border-border bg-surface text-text-primary hover:bg-bg font-semibold text-[11px]"

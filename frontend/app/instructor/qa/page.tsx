@@ -190,7 +190,7 @@ export default function InstructorQaPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-border pb-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
         <button
           type="button"
           onClick={() => setFilterMode('all')}

@@ -272,7 +272,7 @@ export default function CreateConceptPage() {
             <button
               type="button"
               onClick={() => setActiveTab('split')}
-              className={`hidden md:flex px-3 py-1.5 rounded-lg text-xs font-semibold items-center gap-1.5 transition-all cursor-pointer ${
+              className={`hidden lg:flex px-3 py-1.5 rounded-lg text-xs font-semibold items-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'split' ? 'bg-surface text-accent shadow-xs' : 'text-text-secondary'
               }`}
             >
@@ -367,7 +367,7 @@ export default function CreateConceptPage() {
                   <select
                     value={selectedPrerequisiteId}
                     onChange={(e) => setSelectedPrerequisiteId(e.target.value)}
-                    className="w-full sm:w-auto min-w-[320px] px-4 py-2.5 rounded-xl border border-border bg-surface text-xs font-medium text-text-primary focus:outline-none focus:border-accent cursor-pointer"
+                    className="w-full max-w-lg px-4 py-2.5 rounded-xl border border-border bg-surface text-xs font-medium text-text-primary focus:outline-none focus:border-accent cursor-pointer"
                   >
                     <option value="">None (No prerequisite for this concept)</option>
                     {conceptsInCurrentModule.map((c, idx) => (
