@@ -210,7 +210,7 @@ export default function AdminInstructorsApprovalPage() {
             {pendingInstructors.map((inst) => (
               <div
                 key={inst.id}
-                className="p-6 rounded-2xl bg-surface border border-amber/30 ring-1 ring-amber/20 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6"
+                className="p-5 sm:p-6 rounded-2xl bg-surface border border-amber/30 ring-1 ring-amber/20 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6"
               >
                 <div className="space-y-2 flex-1">
                   <div className="flex items-center gap-3">
@@ -254,7 +254,7 @@ export default function AdminInstructorsApprovalPage() {
                 </div>
 
                 {/* Approve / Reject Actions */}
-                <div className="flex items-center gap-3 self-end md:self-center flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 self-stretch sm:self-end md:self-center justify-end flex-shrink-0">
                   <button
                     type="button"
                     disabled={rejectMutation.isPending || approveMutation.isPending}
@@ -300,32 +300,78 @@ export default function AdminInstructorsApprovalPage() {
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
-                  <th className="p-4 font-semibold">Instructor</th>
-                  <th className="p-4 font-semibold">Email</th>
-                  <th className="p-4 font-semibold">Status</th>
-                  <th className="p-4 font-semibold">Approved Date</th>
-                  <th className="p-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {approvedInstructors.map((inst) => (
-                  <tr key={inst.id} className="hover:bg-bg/40 transition-colors">
-                    <td className="p-4 font-bold text-text-primary">
-                      {inst.name}
-                    </td>
-                    <td className="p-4 text-text-secondary font-mono text-[11px]">
-                      {inst.email}
-                    </td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-green-tint text-green font-bold text-[10px] uppercase tracking-wider">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>Approved</span>
-                      </span>
-                    </td>
-                    <td className="p-4 text-text-secondary text-[11px]">
+            {/* Desktop / Tablet Table (md+) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
+                    <th className="p-4 font-semibold">Instructor</th>
+                    <th className="p-4 font-semibold">Email</th>
+                    <th className="p-4 font-semibold">Status</th>
+                    <th className="p-4 font-semibold">Approved Date</th>
+                    <th className="p-4 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {approvedInstructors.map((inst) => (
+                    <tr key={inst.id} className="hover:bg-bg/40 transition-colors">
+                      <td className="p-4 font-bold text-text-primary">
+                        {inst.name}
+                      </td>
+                      <td className="p-4 text-text-secondary font-mono text-[11px]">
+                        {inst.email}
+                      </td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-green-tint text-green font-bold text-[10px] uppercase tracking-wider">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Approved</span>
+                        </span>
+                      </td>
+                      <td className="p-4 text-text-secondary text-[11px]">
+                        {inst.instructorProfile?.approvedAt
+                          ? new Date(inst.instructorProfile.approvedAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="p-4 text-right">
+                        <button
+                          type="button"
+                          disabled={demoteMutation.isPending}
+                          onClick={() => handleDemote(inst.id, inst.name)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-[11px] font-semibold transition-all cursor-pointer"
+                          title="Revoke instructor status and degrade back to student"
+                        >
+                          <X className="w-3 h-3" />
+                          <span>Degrade to Student</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card Stack (< md) */}
+            <div className="md:hidden divide-y divide-border/60">
+              {approvedInstructors.map((inst) => (
+                <div key={inst.id} className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm text-text-primary truncate">{inst.name}</p>
+                      <p className="text-[11px] font-mono text-text-secondary truncate">{inst.email}</p>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-tint text-green font-bold text-[10px] uppercase tracking-wider flex-shrink-0">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Approved</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1 border-t border-border/50">
+                    <span>
+                      Approved:{' '}
                       {inst.instructorProfile?.approvedAt
                         ? new Date(inst.instructorProfile.approvedAt).toLocaleDateString('en-US', {
                             month: 'short',
@@ -333,23 +379,20 @@ export default function AdminInstructorsApprovalPage() {
                             year: 'numeric',
                           })
                         : '—'}
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        type="button"
-                        disabled={demoteMutation.isPending}
-                        onClick={() => handleDemote(inst.id, inst.name)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-[11px] font-semibold transition-all cursor-pointer"
-                        title="Revoke instructor status and degrade back to student"
-                      >
-                        <X className="w-3 h-3" />
-                        <span>Degrade to Student</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={demoteMutation.isPending}
+                      onClick={() => handleDemote(inst.id, inst.name)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 bg-red-50 text-red-600 text-[11px] font-semibold"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>Degrade</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>
@@ -367,33 +410,52 @@ export default function AdminInstructorsApprovalPage() {
           </div>
 
           <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
-                  <th className="p-4 font-semibold">Instructor</th>
-                  <th className="p-4 font-semibold">Email</th>
-                  <th className="p-4 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {rejectedInstructors.map((inst) => (
-                  <tr key={inst.id} className="hover:bg-bg/40 transition-colors">
-                    <td className="p-4 font-medium text-text-primary">
-                      {inst.name}
-                    </td>
-                    <td className="p-4 text-text-secondary font-mono text-[11px]">
-                      {inst.email}
-                    </td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-50 text-red-600 font-bold text-[10px] uppercase tracking-wider">
-                        <XCircle className="w-3 h-3" />
-                        <span>Rejected</span>
-                      </span>
-                    </td>
+            {/* Desktop / Tablet Table (md+) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
+                    <th className="p-4 font-semibold">Instructor</th>
+                    <th className="p-4 font-semibold">Email</th>
+                    <th className="p-4 font-semibold">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {rejectedInstructors.map((inst) => (
+                    <tr key={inst.id} className="hover:bg-bg/40 transition-colors">
+                      <td className="p-4 font-medium text-text-primary">
+                        {inst.name}
+                      </td>
+                      <td className="p-4 text-text-secondary font-mono text-[11px]">
+                        {inst.email}
+                      </td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-50 text-red-600 font-bold text-[10px] uppercase tracking-wider">
+                          <XCircle className="w-3 h-3" />
+                          <span>Rejected</span>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card Stack (< md) */}
+            <div className="md:hidden divide-y divide-border/60">
+              {rejectedInstructors.map((inst) => (
+                <div key={inst.id} className="p-4 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-text-primary truncate">{inst.name}</p>
+                    <p className="text-[11px] font-mono text-text-secondary truncate">{inst.email}</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 font-bold text-[10px] uppercase tracking-wider flex-shrink-0">
+                    <XCircle className="w-3 h-3" />
+                    <span>Rejected</span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}

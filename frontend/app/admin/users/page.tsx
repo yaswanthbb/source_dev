@@ -386,108 +386,192 @@ export default function AdminUsersDirectoryPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
-                      <th className="p-4 font-semibold">User</th>
-                      <th className="p-4 font-semibold">Email</th>
-                      <th className="p-4 font-semibold">Role</th>
-                      <th className="p-4 font-semibold">Joined Date</th>
-                      <th className="p-4 text-right font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {users.map((u) => {
-                      let rolePillStyle = 'bg-bg text-text-secondary border border-border';
-                      if (u.role === 'admin') {
-                        rolePillStyle = 'bg-purple-50 text-purple-700 font-bold border border-purple-200';
-                      } else if (u.role === 'instructor') {
-                        rolePillStyle = 'bg-accent-tint text-accent font-bold';
-                      } else if (u.role === 'student') {
-                        rolePillStyle = 'bg-green-tint text-green font-semibold';
-                      }
+              <>
+                {/* Desktop / Tablet Table View (md+) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
+                        <th className="p-4 font-semibold">User</th>
+                        <th className="p-4 font-semibold">Email</th>
+                        <th className="p-4 font-semibold">Role</th>
+                        <th className="p-4 font-semibold">Joined Date</th>
+                        <th className="p-4 text-right font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {users.map((u) => {
+                        let rolePillStyle = 'bg-bg text-text-secondary border border-border';
+                        if (u.role === 'admin') {
+                          rolePillStyle = 'bg-purple-50 text-purple-700 font-bold border border-purple-200';
+                        } else if (u.role === 'instructor') {
+                          rolePillStyle = 'bg-accent-tint text-accent font-bold';
+                        } else if (u.role === 'student') {
+                          rolePillStyle = 'bg-green-tint text-green font-semibold';
+                        }
 
-                      return (
-                        <tr key={u.id} className="hover:bg-bg/40 transition-colors">
-                          <td className="p-4 font-bold text-text-primary">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-full bg-accent-tint text-accent font-bold text-xs flex items-center justify-center flex-shrink-0">
-                                {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                        return (
+                          <tr key={u.id} className="hover:bg-bg/40 transition-colors">
+                            <td className="p-4 font-bold text-text-primary">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-accent-tint text-accent font-bold text-xs flex items-center justify-center flex-shrink-0">
+                                  {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                                </div>
+                                <span className="truncate max-w-[200px]">{u.name}</span>
                               </div>
-                              <span className="truncate max-w-[200px]">{u.name}</span>
+                            </td>
+
+                            <td className="p-4 text-text-secondary font-mono text-[11px]">
+                              {u.email}
+                            </td>
+
+                            <td className="p-4">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] uppercase tracking-wider capitalize ${rolePillStyle}`}
+                              >
+                                {u.role}
+                              </span>
+                            </td>
+
+                            <td className="p-4 text-text-secondary text-[11px]">
+                              {new Date(u.createdAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </td>
+
+                            <td className="p-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {u.role === 'student' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePromote(u.id, u.name)}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent-tint text-accent hover:bg-accent hover:text-white text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
+                                    title="Directly promote to Instructor"
+                                  >
+                                    <ArrowUpRight className="w-3 h-3" />
+                                    <span>Promote</span>
+                                  </button>
+                                )}
+
+                                {u.role === 'instructor' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDemote(u.id, u.name)}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 text-[11px] font-semibold transition-all cursor-pointer"
+                                    title="Revoke instructor status and degrade back to student"
+                                  >
+                                    <ArrowDownRight className="w-3 h-3" />
+                                    <span>Degrade</span>
+                                  </button>
+                                )}
+
+                                {u.role !== 'admin' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteUser(u)}
+                                    className="p-1.5 rounded-lg text-text-secondary hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                    title="Permanently Delete User"
+                                    aria-label="Delete User"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <span className="text-text-secondary/40 text-[11px] italic px-2">
+                                    Protected
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card-Stacked View (< md) */}
+                <div className="md:hidden divide-y divide-border/60">
+                  {users.map((u) => {
+                    let rolePillStyle = 'bg-bg text-text-secondary border border-border';
+                    if (u.role === 'admin') {
+                      rolePillStyle = 'bg-purple-50 text-purple-700 font-bold border border-purple-200';
+                    } else if (u.role === 'instructor') {
+                      rolePillStyle = 'bg-accent-tint text-accent font-bold';
+                    } else if (u.role === 'student') {
+                      rolePillStyle = 'bg-green-tint text-green font-semibold';
+                    }
+
+                    return (
+                      <div key={u.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-accent-tint text-accent font-bold text-xs flex items-center justify-center flex-shrink-0">
+                              {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
                             </div>
-                          </td>
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-text-primary truncate">{u.name}</p>
+                              <p className="text-[11px] font-mono text-text-secondary truncate">{u.email}</p>
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider capitalize flex-shrink-0 ${rolePillStyle}`}>
+                            {u.role}
+                          </span>
+                        </div>
 
-                          <td className="p-4 text-text-secondary font-mono text-[11px]">
-                            {u.email}
-                          </td>
-
-                          <td className="p-4">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] uppercase tracking-wider capitalize ${rolePillStyle}`}
-                            >
-                              {u.role}
-                            </span>
-                          </td>
-
-                          <td className="p-4 text-text-secondary text-[11px]">
+                        <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1 border-t border-border/50">
+                          <span>
+                            Joined:{' '}
                             {new Date(u.createdAt).toLocaleDateString('en-US', {
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric',
                             })}
-                          </td>
+                          </span>
 
-                          <td className="p-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {u.role === 'student' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handlePromote(u.id, u.name)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent-tint text-accent hover:bg-accent hover:text-white text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
-                                  title="Directly promote to Instructor"
-                                >
-                                  <ArrowUpRight className="w-3 h-3" />
-                                  <span>Promote</span>
-                                </button>
-                              )}
+                          <div className="flex items-center gap-2">
+                            {u.role === 'student' && (
+                              <button
+                                type="button"
+                                onClick={() => handlePromote(u.id, u.name)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-accent/30 bg-accent-tint text-accent text-[11px] font-semibold"
+                              >
+                                <ArrowUpRight className="w-3 h-3" />
+                                <span>Promote</span>
+                              </button>
+                            )}
 
-                              {u.role === 'instructor' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDemote(u.id, u.name)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 text-[11px] font-semibold transition-all cursor-pointer"
-                                  title="Revoke instructor status and degrade back to student"
-                                >
-                                  <ArrowDownRight className="w-3 h-3" />
-                                  <span>Degrade</span>
-                                </button>
-                              )}
+                            {u.role === 'instructor' && (
+                              <button
+                                type="button"
+                                onClick={() => handleDemote(u.id, u.name)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-semibold"
+                              >
+                                <ArrowDownRight className="w-3 h-3" />
+                                <span>Degrade</span>
+                              </button>
+                            )}
 
-                              {u.role !== 'admin' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteUser(u)}
-                                  className="p-1.5 rounded-lg text-text-secondary hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                  title="Permanently Delete User"
-                                  aria-label="Delete User"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              ) : (
-                                <span className="text-text-secondary/40 text-[11px] italic px-2">
-                                  Protected
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            {u.role !== 'admin' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(u)}
+                                className="p-1 rounded-lg text-text-secondary hover:text-red-600 hover:bg-red-50"
+                                aria-label="Delete user"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <span className="text-text-secondary/40 text-[10px] italic">Protected</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -514,113 +598,202 @@ export default function AdminUsersDirectoryPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
-                      <th className="p-4 font-semibold">User</th>
-                      <th className="p-4 font-semibold">Email & Role</th>
-                      <th className="p-4 font-semibold">Reason</th>
-                      <th className="p-4 font-semibold">Requested At</th>
-                      <th className="p-4 font-semibold">Status</th>
-                      <th className="p-4 text-right font-semibold">Review Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {deletionRequests.map((req) => {
-                      const isPending = req.status === 'pending';
-                      const isApproved = req.status === 'approved';
-                      const isRejected = req.status === 'rejected';
+              <>
+                {/* Desktop / Tablet Table View (md+) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-bg/50 text-text-secondary font-semibold">
+                        <th className="p-4 font-semibold">User</th>
+                        <th className="p-4 font-semibold">Email & Role</th>
+                        <th className="p-4 font-semibold">Reason</th>
+                        <th className="p-4 font-semibold">Requested At</th>
+                        <th className="p-4 font-semibold">Status</th>
+                        <th className="p-4 text-right font-semibold">Review Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {deletionRequests.map((req) => {
+                        const isPending = req.status === 'pending';
+                        const isApproved = req.status === 'approved';
+                        const isRejected = req.status === 'rejected';
 
-                      return (
-                        <tr key={req.id} className="hover:bg-bg/40 transition-colors">
-                          <td className="p-4 font-bold text-text-primary">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-accent-tint text-accent font-bold text-xs flex items-center justify-center flex-shrink-0">
-                                {req.user?.name ? req.user.name.charAt(0).toUpperCase() : 'U'}
+                        return (
+                          <tr key={req.id} className="hover:bg-bg/40 transition-colors">
+                            <td className="p-4 font-bold text-text-primary">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-accent-tint text-accent font-bold text-xs flex items-center justify-center flex-shrink-0">
+                                  {req.user?.name ? req.user.name.charAt(0).toUpperCase() : 'U'}
+                                </div>
+                                <span className="truncate max-w-[160px]">
+                                  {req.user?.name || 'Deleted Account'}
+                                </span>
                               </div>
-                              <span className="truncate max-w-[160px]">
-                                {req.user?.name || 'Deleted Account'}
-                              </span>
+                            </td>
+
+                            <td className="p-4 text-text-secondary">
+                              <div className="font-mono text-[11px]">
+                                {req.user?.email || 'N/A'}
+                              </div>
+                              <div className="text-[10px] capitalize text-text-secondary/70">
+                                {req.user?.role || 'User'}
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-text-secondary max-w-xs">
+                              <p className="truncate text-xs text-text-primary">
+                                {req.reason || <span className="italic text-text-secondary/50">No reason provided</span>}
+                              </p>
+                            </td>
+
+                            <td className="p-4 text-text-secondary text-[11px]">
+                              {new Date(req.createdAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </td>
+
+                            <td className="p-4">
+                              {isPending && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-tint text-amber">
+                                  <Clock className="w-3 h-3" />
+                                  <span>Pending</span>
+                                </span>
+                              )}
+                              {isApproved && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-50 text-red-600">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>Approved & Deleted</span>
+                                </span>
+                              )}
+                              {isRejected && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-bg text-text-secondary border border-border">
+                                  <XCircle className="w-3 h-3" />
+                                  <span>Rejected</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="p-4 text-right">
+                              {isPending ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectDeletion(req)}
+                                    className="px-3 py-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-text-primary text-[11px] font-semibold transition-colors cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveDeletion(req)}
+                                    className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                                  >
+                                    Approve & Delete
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-text-secondary/50 text-[11px]">
+                                  {req.reviewedAt
+                                    ? `Reviewed ${new Date(req.reviewedAt).toLocaleDateString()}`
+                                    : 'Reviewed'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card-Stacked View (< md) */}
+                <div className="md:hidden divide-y divide-border/60">
+                  {deletionRequests.map((req) => {
+                    const isPending = req.status === 'pending';
+                    const isApproved = req.status === 'approved';
+                    const isRejected = req.status === 'rejected';
+
+                    return (
+                      <div key={req.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-accent-tint text-accent font-bold text-xs flex items-center justify-center flex-shrink-0">
+                              {req.user?.name ? req.user.name.charAt(0).toUpperCase() : 'U'}
                             </div>
-                          </td>
-
-                          <td className="p-4 text-text-secondary">
-                            <div className="font-mono text-[11px]">
-                              {req.user?.email || 'N/A'}
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-text-primary truncate">{req.user?.name || 'Deleted Account'}</p>
+                              <p className="text-[11px] font-mono text-text-secondary truncate">{req.user?.email || 'N/A'}</p>
                             </div>
-                            <div className="text-[10px] capitalize text-text-secondary/70">
-                              {req.user?.role || 'User'}
-                            </div>
-                          </td>
-
-                          <td className="p-4 text-text-secondary max-w-xs">
-                            <p className="truncate text-xs text-text-primary">
-                              {req.reason || <span className="italic text-text-secondary/50">No reason provided</span>}
-                            </p>
-                          </td>
-
-                          <td className="p-4 text-text-secondary text-[11px]">
-                            {new Date(req.createdAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
-                          </td>
-
-                          <td className="p-4">
+                          </div>
+                          <div>
                             {isPending && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-tint text-amber">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-tint text-amber">
                                 <Clock className="w-3 h-3" />
                                 <span>Pending</span>
                               </span>
                             )}
                             {isApproved && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-50 text-red-600">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-50 text-red-600">
                                 <CheckCircle2 className="w-3 h-3" />
-                                <span>Approved & Deleted</span>
+                                <span>Approved</span>
                               </span>
                             )}
                             {isRejected && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-bg text-text-secondary border border-border">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-bg text-text-secondary border border-border">
                                 <XCircle className="w-3 h-3" />
                                 <span>Rejected</span>
                               </span>
                             )}
-                          </td>
+                          </div>
+                        </div>
 
-                          <td className="p-4 text-right">
-                            {isPending ? (
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRejectDeletion(req)}
-                                  className="px-3 py-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-text-primary text-[11px] font-semibold transition-colors cursor-pointer"
-                                >
-                                  Reject
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleApproveDeletion(req)}
-                                  className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
-                                >
-                                  Approve & Delete
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-text-secondary/50 text-[11px]">
-                                {req.reviewedAt
-                                  ? `Reviewed ${new Date(req.reviewedAt).toLocaleDateString()}`
-                                  : 'Reviewed'}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        {req.reason && (
+                          <div className="p-2.5 rounded-lg bg-bg border border-border/80 text-xs text-text-primary italic">
+                            &ldquo;{req.reason}&rdquo;
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1 border-t border-border/50">
+                          <span>
+                            {new Date(req.createdAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </span>
+
+                          {isPending ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleRejectDeletion(req)}
+                                className="px-2.5 py-1 rounded-lg border border-border bg-surface text-text-secondary hover:text-text-primary text-[11px] font-semibold"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveDeletion(req)}
+                                className="px-2.5 py-1 rounded-lg bg-red-600 text-white text-[11px] font-bold"
+                              >
+                                Approve
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-text-secondary/50 text-[10px]">
+                              {req.reviewedAt
+                                ? `Reviewed ${new Date(req.reviewedAt).toLocaleDateString()}`
+                                : 'Reviewed'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
