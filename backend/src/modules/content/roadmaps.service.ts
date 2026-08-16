@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,6 +10,7 @@ import { Roadmap } from './entities/roadmap.entity';
 import { Module as ModuleEntity } from './entities/module.entity';
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
+import { ModuleConceptPrerequisite } from './entities/module-concept-prerequisite.entity';
 import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { InstructorStatus } from '../../common/enums/instructor-status.enum';
@@ -32,6 +34,8 @@ export class RoadmapsService {
     private readonly conceptRepository: Repository<Concept>,
     @InjectRepository(ModuleConcept)
     private readonly moduleConceptRepository: Repository<ModuleConcept>,
+    @InjectRepository(ModuleConceptPrerequisite)
+    private readonly moduleConceptPrerequisiteRepository: Repository<ModuleConceptPrerequisite>,
     @InjectRepository(InstructorProfile)
     private readonly instructorProfileRepository: Repository<InstructorProfile>,
   ) {}
@@ -98,7 +102,7 @@ export class RoadmapsService {
     return this.roadmapRepository.save(roadmap);
   }
 
-  async findAllRoadmaps(): Promise<any[]> {
+  async findAllRoadmaps(): Promise<Roadmap[]> {
     const roadmaps = await this.roadmapRepository
       .createQueryBuilder('roadmap')
       .leftJoinAndSelect('roadmap.modules', 'module')
@@ -115,6 +119,9 @@ export class RoadmapsService {
         'modules',
         'modules.moduleConcepts',
         'modules.moduleConcepts.concept',
+        'modules.moduleConcepts.prerequisites',
+        'modules.moduleConcepts.prerequisites.prerequisiteModuleConcept',
+        'modules.moduleConcepts.prerequisites.prerequisiteModuleConcept.concept',
       ],
     });
 
@@ -124,11 +131,20 @@ export class RoadmapsService {
 
     if (roadmap.modules) {
       roadmap.modules.sort((a, b) => a.orderIndex - b.orderIndex);
-      roadmap.modules.forEach((mod) => {
-        if (mod.moduleConcepts) {
+      for (const mod of roadmap.modules) {
+        if (mod.moduleConcepts && mod.moduleConcepts.length > 0) {
           mod.moduleConcepts.sort((a, b) => a.orderIndex - b.orderIndex);
+          for (const mc of mod.moduleConcepts) {
+            (mc as any).prerequisites = (mc.prerequisites || []).map((p) => ({
+              moduleConceptId: p.moduleConceptId,
+              prerequisiteConceptId: p.prerequisiteModuleConcept?.conceptId,
+              title: p.prerequisiteModuleConcept?.concept?.title,
+              slug: p.prerequisiteModuleConcept?.concept?.slug,
+              orderIndex: p.prerequisiteModuleConcept?.orderIndex,
+            }));
+          }
         }
-      });
+      }
     }
 
     return roadmap;
@@ -159,11 +175,13 @@ export class RoadmapsService {
     id: string,
     user: Omit<User, 'passwordHash'>,
   ): Promise<void> {
+    if (user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only administrators can delete roadmaps');
+    }
     const roadmap = await this.roadmapRepository.findOne({ where: { id } });
     if (!roadmap) {
       throw new NotFoundException('Roadmap not found');
     }
-    this.checkOwnership(roadmap.createdById, user);
     await this.roadmapRepository.remove(roadmap);
   }
 
@@ -215,6 +233,9 @@ export class RoadmapsService {
     id: string,
     user: Omit<User, 'passwordHash'>,
   ): Promise<void> {
+    if (user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only administrators can delete modules');
+    }
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id },
       relations: ['roadmap'],
@@ -222,8 +243,46 @@ export class RoadmapsService {
     if (!moduleEntity) {
       throw new NotFoundException('Module not found');
     }
-    this.checkOwnership(moduleEntity.roadmap.createdById, user);
     await this.moduleRepository.remove(moduleEntity);
+  }
+
+  /**
+   * Shared order-index assignment logic used by both "attach existing"
+   * and "create new concept + auto-attach" flows.
+   */
+  async calculateAndReserveOrderIndex(
+    moduleId: string,
+    requestedOrderIndex?: number,
+  ): Promise<number> {
+    const maxRecord = await this.moduleConceptRepository
+      .createQueryBuilder('mc')
+      .select('MAX(mc.order_index)', 'max')
+      .where('mc.module_id = :moduleId', { moduleId })
+      .getRawOne<{ max: number | null }>();
+
+    const currentMax = maxRecord?.max ? Number(maxRecord.max) : 0;
+
+    if (
+      requestedOrderIndex === undefined ||
+      requestedOrderIndex === null ||
+      requestedOrderIndex <= 0 ||
+      requestedOrderIndex > currentMax
+    ) {
+      return currentMax + 1;
+    }
+
+    // Explicit order index provided inserting at/before currentMax: shift existing items up
+    await this.moduleConceptRepository
+      .createQueryBuilder()
+      .update(ModuleConcept)
+      .set({ orderIndex: () => 'order_index + 1' })
+      .where('module_id = :moduleId AND order_index >= :targetIndex', {
+        moduleId,
+        targetIndex: requestedOrderIndex,
+      })
+      .execute();
+
+    return requestedOrderIndex;
   }
 
   async attachConceptToModule(
@@ -247,17 +306,22 @@ export class RoadmapsService {
       throw new NotFoundException('Concept not found');
     }
 
+    const targetOrderIndex = await this.calculateAndReserveOrderIndex(
+      moduleId,
+      dto.orderIndex,
+    );
+
     let moduleConcept = await this.moduleConceptRepository.findOne({
       where: { moduleId, conceptId: dto.conceptId },
     });
 
     if (moduleConcept) {
-      moduleConcept.orderIndex = dto.orderIndex;
+      moduleConcept.orderIndex = targetOrderIndex;
     } else {
       moduleConcept = this.moduleConceptRepository.create({
         moduleId,
         conceptId: dto.conceptId,
-        orderIndex: dto.orderIndex,
+        orderIndex: targetOrderIndex,
       });
     }
 
@@ -286,6 +350,19 @@ export class RoadmapsService {
     }
 
     await this.moduleConceptRepository.remove(moduleConcept);
+
+    // Resequence remaining concepts sequentially in this module
+    const remaining = await this.moduleConceptRepository.find({
+      where: { moduleId },
+      order: { orderIndex: 'ASC' },
+    });
+
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].orderIndex !== i + 1) {
+        remaining[i].orderIndex = i + 1;
+        await this.moduleConceptRepository.save(remaining[i]);
+      }
+    }
   }
 
   async updateModuleConceptOrder(
@@ -303,14 +380,158 @@ export class RoadmapsService {
     }
     this.checkOwnership(moduleEntity.roadmap.createdById, user);
 
-    const moduleConcept = await this.moduleConceptRepository.findOne({
-      where: { moduleId, conceptId },
+    const moduleConcepts = await this.moduleConceptRepository.find({
+      where: { moduleId },
+      order: { orderIndex: 'ASC' },
     });
-    if (!moduleConcept) {
+
+    const targetIndex = moduleConcepts.findIndex(
+      (mc) => mc.conceptId === conceptId,
+    );
+    if (targetIndex === -1) {
       throw new NotFoundException('Concept is not attached to this module');
     }
 
-    moduleConcept.orderIndex = dto.orderIndex;
-    return this.moduleConceptRepository.save(moduleConcept);
+    const [movedItem] = moduleConcepts.splice(targetIndex, 1);
+    const desiredIndex =
+      Math.max(1, Math.min(dto.orderIndex, moduleConcepts.length + 1)) - 1;
+    moduleConcepts.splice(desiredIndex, 0, movedItem);
+
+    // Two-pass transaction update prevents unique constraint collisions
+    await this.moduleConceptRepository.manager.transaction(async (em) => {
+      for (let i = 0; i < moduleConcepts.length; i++) {
+        await em.update(
+          ModuleConcept,
+          { id: moduleConcepts[i].id },
+          { orderIndex: -(i + 1) },
+        );
+      }
+      for (let i = 0; i < moduleConcepts.length; i++) {
+        await em.update(
+          ModuleConcept,
+          { id: moduleConcepts[i].id },
+          { orderIndex: i + 1 },
+        );
+      }
+    });
+
+    movedItem.orderIndex = desiredIndex + 1;
+    return movedItem;
+  }
+
+  // --- Module-Scoped Prerequisites Methods ---
+
+  async attachPrerequisiteToModuleConcept(
+    moduleId: string,
+    conceptId: string,
+    prerequisiteConceptId: string,
+    user: Omit<User, 'passwordHash'>,
+  ): Promise<ModuleConceptPrerequisite> {
+    const moduleEntity = await this.moduleRepository.findOne({
+      where: { id: moduleId },
+      relations: ['roadmap'],
+    });
+    if (!moduleEntity) {
+      throw new NotFoundException('Module not found');
+    }
+    this.checkOwnership(moduleEntity.roadmap.createdById, user);
+
+    if (conceptId === prerequisiteConceptId) {
+      throw new BadRequestException('A concept cannot be its own prerequisite');
+    }
+
+    const targetModuleConcept = await this.moduleConceptRepository.findOne({
+      where: { moduleId, conceptId },
+    });
+    if (!targetModuleConcept) {
+      throw new NotFoundException('Concept is not attached to this module');
+    }
+
+    const prereqModuleConcept = await this.moduleConceptRepository.findOne({
+      where: { moduleId, conceptId: prerequisiteConceptId },
+    });
+    if (!prereqModuleConcept) {
+      throw new BadRequestException(
+        'Prerequisite concept must be attached to the same module',
+      );
+    }
+
+    // Check direct circular prerequisite reference in this module
+    const directCircular =
+      await this.moduleConceptPrerequisiteRepository.findOne({
+        where: {
+          moduleConceptId: prereqModuleConcept.id,
+          prerequisiteModuleConceptId: targetModuleConcept.id,
+        },
+      });
+    if (directCircular) {
+      throw new BadRequestException(
+        'Direct circular prerequisite reference detected within this module',
+      );
+    }
+
+    let link = await this.moduleConceptPrerequisiteRepository.findOne({
+      where: {
+        moduleConceptId: targetModuleConcept.id,
+        prerequisiteModuleConceptId: prereqModuleConcept.id,
+      },
+    });
+
+    if (!link) {
+      link = this.moduleConceptPrerequisiteRepository.create({
+        moduleConceptId: targetModuleConcept.id,
+        prerequisiteModuleConceptId: prereqModuleConcept.id,
+      });
+      link = await this.moduleConceptPrerequisiteRepository.save(link);
+    }
+
+    return link;
+  }
+
+  async detachPrerequisiteFromModuleConcept(
+    moduleId: string,
+    conceptId: string,
+    prerequisiteConceptId: string,
+    user: Omit<User, 'passwordHash'>,
+  ): Promise<void> {
+    const moduleEntity = await this.moduleRepository.findOne({
+      where: { id: moduleId },
+      relations: ['roadmap'],
+    });
+    if (!moduleEntity) {
+      throw new NotFoundException('Module not found');
+    }
+    this.checkOwnership(moduleEntity.roadmap.createdById, user);
+
+    const targetModuleConcept = await this.moduleConceptRepository.findOne({
+      where: { moduleId, conceptId },
+    });
+    if (!targetModuleConcept) {
+      throw new NotFoundException('Concept is not attached to this module');
+    }
+
+    const prereqModuleConcept = await this.moduleConceptRepository.findOne({
+      where: { moduleId, conceptId: prerequisiteConceptId },
+    });
+    if (!prereqModuleConcept) {
+      throw new BadRequestException(
+        'Prerequisite concept is not attached to this module',
+      );
+    }
+
+    const link = await this.moduleConceptPrerequisiteRepository.findOne({
+      where: {
+        moduleConceptId: targetModuleConcept.id,
+        prerequisiteModuleConceptId: prereqModuleConcept.id,
+      },
+    });
+
+    if (!link) {
+      throw new NotFoundException(
+        'Prerequisite link does not exist in this module',
+      );
+    }
+
+    await this.moduleConceptPrerequisiteRepository.remove(link);
   }
 }
