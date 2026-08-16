@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import {
   Zap,
@@ -25,17 +26,58 @@ import {
 } from '@/lib/hooks/use-roadmap-progress';
 
 // Types matching backend models
+interface EarnedBadgeItem {
+  id: string;
+  name: string;
+  description: string;
+  criteriaKey: string;
+  earnedAt: string;
+}
+
 interface GamificationData {
   totalXp: number;
   currentStreak: number;
   longestStreak: number;
   lastActivityDate: string | null;
-  userBadges: Array<{
-    userId: string;
-    badgeId: string;
+  earnedBadges?: EarnedBadgeItem[];
+  userBadges?: Array<{
+    userId?: string;
+    badgeId?: string;
     earnedAt: string;
-    badge: Badge;
+    badge?: Badge;
   }>;
+}
+
+const BADGE_IMAGE_MAP: Record<string, string> = {
+  first_concept: '/badges/first_concept.png',
+  five_concepts: '/badges/five_concepts.png',
+  twenty_concepts: '/badges/twenty_concepts.png',
+  three_day_streak: '/badges/three_day_streak.png',
+  seven_day_streak: '/badges/seven_day_streak.png',
+  hundred_xp: '/badges/hundred_xp.png',
+  five_hundred_xp: '/badges/five_hundred_xp.png',
+};
+
+const BADGE_NAME_MAP: Record<string, string> = {
+  'first steps': '/badges/first_concept.png',
+  'getting serious': '/badges/five_concepts.png',
+  'dedicated learner': '/badges/twenty_concepts.png',
+  '3-day streak': '/badges/three_day_streak.png',
+  'week warrior': '/badges/seven_day_streak.png',
+  'xp rookie': '/badges/hundred_xp.png',
+  'xp grinder': '/badges/five_hundred_xp.png',
+};
+
+function getBadgeImage(badge: Badge): string {
+  if (badge.iconUrl && badge.iconUrl.trim()) return badge.iconUrl;
+  if (badge.criteriaKey && BADGE_IMAGE_MAP[badge.criteriaKey]) {
+    return BADGE_IMAGE_MAP[badge.criteriaKey];
+  }
+  const nameKey = badge.name?.toLowerCase().trim();
+  if (nameKey && BADGE_NAME_MAP[nameKey]) {
+    return BADGE_NAME_MAP[nameKey];
+  }
+  return '/badges/first_concept.png';
 }
 
 interface UserConceptProgress {
@@ -208,16 +250,38 @@ export default function StudentDashboardPage() {
     return days;
   }, [rawActivityList]);
 
-  // Set of Earned Badge IDs
+  // Set of Earned Badge IDs / Criteria Keys with earnedAt timestamp
   const earnedBadgeMap = useMemo(() => {
     const map = new Map<string, { earnedAt: string }>();
-    if (gamification?.userBadges) {
+    if (gamification?.earnedBadges && Array.isArray(gamification.earnedBadges)) {
+      gamification.earnedBadges.forEach((eb) => {
+        if (eb.id) map.set(eb.id, { earnedAt: eb.earnedAt });
+        if (eb.criteriaKey) map.set(eb.criteriaKey, { earnedAt: eb.earnedAt });
+        if (eb.name) map.set(eb.name.toLowerCase().trim(), { earnedAt: eb.earnedAt });
+      });
+    }
+    if (gamification?.userBadges && Array.isArray(gamification.userBadges)) {
       gamification.userBadges.forEach((ub) => {
-        map.set(ub.badgeId, { earnedAt: ub.earnedAt });
+        const id = ub.badgeId || ub.badge?.id;
+        const criteriaKey = ub.badge?.criteriaKey;
+        const name = ub.badge?.name;
+        if (id) map.set(id, { earnedAt: ub.earnedAt });
+        if (criteriaKey) map.set(criteriaKey, { earnedAt: ub.earnedAt });
+        if (name) map.set(name.toLowerCase().trim(), { earnedAt: ub.earnedAt });
       });
     }
     return map;
   }, [gamification]);
+
+  // Total Badges Unlocked Count
+  const unlockedBadgesCount = useMemo(() => {
+    return allBadges.filter(
+      (b) =>
+        earnedBadgeMap.has(b.id) ||
+        earnedBadgeMap.has(b.criteriaKey) ||
+        earnedBadgeMap.has(b.name.toLowerCase().trim()),
+    ).length;
+  }, [allBadges, earnedBadgeMap]);
 
   return (
     <div className="space-y-8 pb-12">
@@ -581,19 +645,20 @@ export default function StudentDashboardPage() {
             </p>
           </div>
           <div className="text-xs font-semibold text-text-secondary">
-            {earnedBadgeMap.size} of {allBadges.length} unlocked
+            {unlockedBadgesCount} of {allBadges.length} unlocked
           </div>
         </div>
 
         {badgesLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="p-4 rounded-xl border border-border bg-bg animate-pulse space-y-3"
+                className="p-4 sm:p-5 rounded-2xl border border-border bg-bg animate-pulse space-y-3 flex flex-col items-center"
               >
-                <div className="w-10 h-10 rounded-xl bg-border/60 mx-auto" />
-                <div className="w-3/4 h-4 bg-border/50 rounded mx-auto" />
+                <div className="w-16 h-16 rounded-2xl bg-border/60" />
+                <div className="w-3/4 h-4 bg-border/50 rounded" />
+                <div className="w-1/2 h-3 bg-border/40 rounded" />
               </div>
             ))}
           </div>
@@ -609,36 +674,56 @@ export default function StudentDashboardPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
             {allBadges.map((badge) => {
-              const earnedInfo = earnedBadgeMap.get(badge.id);
+              const earnedInfo =
+                earnedBadgeMap.get(badge.id) ||
+                earnedBadgeMap.get(badge.criteriaKey) ||
+                earnedBadgeMap.get(badge.name.toLowerCase().trim());
               const isEarned = Boolean(earnedInfo);
+              const badgeImgSrc = getBadgeImage(badge);
 
               return (
                 <div
                   key={badge.id}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col items-center text-center justify-between ${
+                  className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 flex flex-col items-center text-center justify-between group ${
                     isEarned
-                      ? 'bg-surface border-amber/40 shadow-xs'
-                      : 'bg-bg/60 border-border/80 opacity-60'
+                      ? 'bg-surface border-amber/40 shadow-xs hover:shadow-md hover:border-amber/70'
+                      : 'bg-bg/40 border-border/70 opacity-70 hover:opacity-90'
                   }`}
                 >
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 transition-colors ${
-                        isEarned
-                          ? 'bg-amber-tint text-amber shadow-xs'
-                          : 'bg-border/60 text-text-secondary/60'
-                      }`}
-                    >
-                      {isEarned ? (
-                        <Award className="w-6 h-6" />
-                      ) : (
-                        <Lock className="w-5 h-5" />
+                  <div className="flex flex-col items-center w-full">
+                    {/* Badge Icon / Image */}
+                    <div className="relative mb-3 flex items-center justify-center">
+                      <div
+                        className={`w-16 h-18 sm:w-20 sm:h-22 relative transition-all duration-300 flex items-center justify-center ${
+                          isEarned
+                            ? 'drop-shadow-[0_4px_14px_rgba(245,158,11,0.25)] group-hover:scale-105'
+                            : 'grayscale contrast-75 opacity-40 group-hover:opacity-60'
+                        }`}
+                      >
+                        <Image
+                          src={badgeImgSrc}
+                          alt={badge.name}
+                          width={160}
+                          height={180}
+                          className="w-full h-full object-contain"
+                          unoptimized
+                        />
+                      </div>
+
+                      {/* Locked Overlay */}
+                      {!isEarned && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-7 h-7 rounded-full bg-surface/90 border border-border shadow-xs flex items-center justify-center text-text-secondary">
+                            <Lock className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <h3 className="font-bold text-xs sm:text-sm text-text-primary">
+
+                    <h3 className="font-bold text-xs sm:text-sm text-text-primary tracking-tight">
                       {badge.name}
                     </h3>
-                    <p className="text-[11px] text-text-secondary mt-1 line-clamp-2">
+                    <p className="text-[11px] text-text-secondary mt-1 line-clamp-2 leading-relaxed">
                       {badge.description}
                     </p>
                   </div>
@@ -646,18 +731,19 @@ export default function StudentDashboardPage() {
                   <div className="mt-4 pt-3 border-t border-border/60 w-full text-center">
                     {isEarned ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green">
-                        <CheckCircle2 className="w-3 h-3" />
+                        <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>
                           Earned{' '}
                           {new Date(earnedInfo!.earnedAt).toLocaleDateString(
                             'en-US',
-                            { month: 'short', day: 'numeric' },
+                            { month: 'short', day: 'numeric', year: 'numeric' },
                           )}
                         </span>
                       </span>
                     ) : (
-                      <span className="text-[10px] font-medium text-text-secondary/70">
-                        Locked
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-text-secondary/70">
+                        <Lock className="w-3 h-3" />
+                        <span>Locked</span>
                       </span>
                     )}
                   </div>
