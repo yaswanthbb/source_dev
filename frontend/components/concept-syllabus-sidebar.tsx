@@ -22,6 +22,7 @@ import {
   useRoadmapDetail,
   useRoadmapProgress,
 } from "@/lib/hooks/use-roadmap-progress";
+import { ProfileActionsMenu } from "./profile-actions-menu";
 
 interface ConceptSyllabusSidebarProps {
   conceptId: string;
@@ -273,46 +274,13 @@ export function ConceptSyllabusSidebar({
         </div>
       </div>
 
-      {/* Sidebar Footer Section (Role Switcher + Profile Card & Logout Trigger) */}
-      <div className="p-4 border-t border-border bg-surface space-y-3">
-        {(user?.role === "instructor" || user?.role === "admin") && (
-          <Link
-            href="/instructor/dashboard"
-            className="w-full px-3 py-2 rounded-xl border border-accent/30 bg-accent-tint/60 hover:bg-accent hover:text-white text-accent text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-2xs group cursor-pointer"
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5 transition-transform group-hover:rotate-180" />
-            <span>Switch to Instructor View</span>
-          </Link>
-        )}
-
-        <div className="p-3 rounded-xl bg-bg border border-border/80 flex items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-full bg-accent-tint text-accent flex items-center justify-center font-semibold text-xs flex-shrink-0">
-              {user?.name ? (
-                user.name.charAt(0).toUpperCase()
-              ) : (
-                <UserIcon className="w-4 h-4" />
-              )}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-text-primary truncate">
-                {user?.name || "Student"}
-              </p>
-              <p className="text-[10px] text-text-secondary capitalize truncate">
-                {user?.role || "Student"}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenLogoutModal}
-            title="Sign out"
-            aria-label="Sign out"
-            className="p-1.5 text-text-secondary hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer flex-shrink-0"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+      {/* Sidebar Footer Section (Profile Actions Menu) */}
+      <div className="p-4 border-t border-border bg-surface">
+        <ProfileActionsMenu
+          user={user}
+          onOpenLogoutModal={onOpenLogoutModal || (() => {})}
+          currentView="student"
+        />
       </div>
     </div>
   );

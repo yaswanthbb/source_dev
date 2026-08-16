@@ -22,6 +22,7 @@ import {
 import apiClient from '@/lib/api-client';
 import { getToken, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
+import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 
 interface FullUser extends User {
   instructorProfile?: {
@@ -283,40 +284,13 @@ export default function InstructorAppShellLayout({
           </nav>
         </div>
 
-        {/* Bottom User Profile Section */}
-        <div className="p-4 border-t border-border bg-surface space-y-3">
-          {/* Switch to Student View Button */}
-          <Link
-            href="/student/dashboard"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg hover:border-accent/40 hover:bg-accent-tint/50 text-text-primary hover:text-accent text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-2xs group cursor-pointer"
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5 text-accent transition-transform group-hover:rotate-180" />
-            <span>Switch to Student View</span>
-          </Link>
-
-          <div className="p-3 rounded-xl bg-bg border border-border/80 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-accent-tint text-accent flex items-center justify-center font-semibold text-xs flex-shrink-0">
-                {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-xs font-semibold text-text-primary truncate">
-                  {user?.name || 'Instructor'}
-                </p>
-                <p className="text-[10px] text-accent font-medium capitalize truncate">
-                  Instructor
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowLogoutModal(true)}
-              title="Sign out"
-              aria-label="Sign out"
-              className="p-1.5 text-text-secondary hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer flex-shrink-0"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+        {/* Bottom User Profile Section (Profile Actions Menu) */}
+        <div className="p-4 border-t border-border bg-surface">
+          <ProfileActionsMenu
+            user={user || undefined}
+            onOpenLogoutModal={() => setShowLogoutModal(true)}
+            currentView="instructor"
+          />
         </div>
       </aside>
 
