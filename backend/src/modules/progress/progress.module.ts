@@ -3,7 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserConceptProgress } from './entities/user-concept-progress.entity';
 import { Concept } from '../content/entities/concept.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
-import { ConceptPrerequisite } from '../content/entities/concept-prerequisite.entity';
+import { ModuleConcept } from '../content/entities/module-concept.entity';
+import { ModuleConceptPrerequisite } from '../content/entities/module-concept-prerequisite.entity';
 import { GamificationModule } from '../gamification/gamification.module';
 import { ProgressService } from './progress.service';
 import { ProgressController } from './progress.controller';
@@ -15,7 +16,8 @@ import { ProgressController } from './progress.controller';
       UserConceptProgress,
       Concept,
       Roadmap,
-      ConceptPrerequisite,
+      ModuleConcept,
+      ModuleConceptPrerequisite,
     ]),
   ],
   controllers: [ProgressController],

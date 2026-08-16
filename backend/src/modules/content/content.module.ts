@@ -4,7 +4,7 @@ import { Roadmap } from './entities/roadmap.entity';
 import { Module as ModuleEntity } from './entities/module.entity';
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
-import { ConceptPrerequisite } from './entities/concept-prerequisite.entity';
+import { ModuleConceptPrerequisite } from './entities/module-concept-prerequisite.entity';
 import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { RoadmapsService } from './roadmaps.service';
 import { RoadmapsController } from './roadmaps.controller';
@@ -18,7 +18,7 @@ import { ConceptsController } from './concepts.controller';
       ModuleEntity,
       Concept,
       ModuleConcept,
-      ConceptPrerequisite,
+      ModuleConceptPrerequisite,
       InstructorProfile,
     ]),
   ],
