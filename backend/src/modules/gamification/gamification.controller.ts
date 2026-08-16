@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -8,6 +8,7 @@ import {
 import { GamificationService } from './gamification.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
+import { GetActivityQueryDto } from './dto/get-activity-query.dto';
 
 @ApiTags('Gamification')
 @ApiBearerAuth('bearer-auth')
@@ -24,6 +25,24 @@ export class GamificationController {
     @CurrentUser() user: User,
   ): Promise<Record<string, unknown>> {
     return this.gamificationService.getSelfGamification(user.id);
+  }
+
+  @Get('gamification/activity')
+  @ApiOperation({
+    summary: 'Get activity heatmap array for the last N days (UTC-based)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Activity heatmap array retrieved successfully.',
+  })
+  async getActivityHeatmap(
+    @CurrentUser() user: User,
+    @Query() query: GetActivityQueryDto,
+  ) {
+    return this.gamificationService.getActivityHeatmap(
+      user.id,
+      query.days ?? 14,
+    );
   }
 
   @Get('badges')

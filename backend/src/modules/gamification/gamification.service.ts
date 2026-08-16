@@ -208,4 +208,42 @@ export class GamificationService {
   async getAllBadges(): Promise<Badge[]> {
     return this.badgeRepository.find({ order: { createdAt: 'ASC' } });
   }
+
+  async getActivityHeatmap(
+    userId: string,
+    days: number = 14,
+  ): Promise<Array<{ date: string; active: boolean }>> {
+    const numDays = Math.min(Math.max(days || 14, 1), 90);
+
+    const startDate = new Date();
+    startDate.setUTCHours(0, 0, 0, 0);
+    startDate.setUTCDate(startDate.getUTCDate() - (numDays - 1));
+
+    // Single query grouping by DATE(created_at) in UTC
+    const rawDates = await this.xpEventRepository
+      .createQueryBuilder('xp')
+      .select("TO_CHAR(xp.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')", 'date')
+      .where('xp.user_id = :userId', { userId })
+      .andWhere('xp.created_at >= :startDate', { startDate })
+      .groupBy("TO_CHAR(xp.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')")
+      .getRawMany<{ date: string }>();
+
+    const activeDateSet = new Set(rawDates.map((r) => r.date));
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const result: Array<{ date: string; active: boolean }> = [];
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCDate(today.getUTCDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      result.push({
+        date: dateStr,
+        active: activeDateSet.has(dateStr),
+      });
+    }
+
+    return result;
+  }
 }
