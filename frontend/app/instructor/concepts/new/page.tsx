@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -14,9 +14,41 @@ import {
   Edit3,
   Code2,
   AlertCircle,
+  GitMerge,
+  Layers,
+  CheckCircle2,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { useSnackbar } from '@/providers/snackbar-provider';
+
+interface ConceptSummary {
+  id: string;
+  title: string;
+  slug?: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+interface ModuleConceptItem {
+  id: string;
+  moduleId: string;
+  conceptId: string;
+  orderIndex: number;
+  concept: ConceptSummary;
+}
+
+interface RoadmapModuleItem {
+  id: string;
+  roadmapId: string;
+  title: string;
+  orderIndex: number;
+  moduleConcepts?: ModuleConceptItem[];
+}
+
+interface RoadmapData {
+  id: string;
+  title: string;
+  modules?: RoadmapModuleItem[];
+}
 
 export default function CreateConceptPage() {
   const router = useRouter();
@@ -25,7 +57,7 @@ export default function CreateConceptPage() {
   const { showSuccess, showError } = useSnackbar();
 
   const moduleId = searchParams.get('moduleId');
-  const roadmapId = searchParams.get('roadmapId');
+  const roadmapIdParam = searchParams.get('roadmapId');
 
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
@@ -33,36 +65,133 @@ export default function CreateConceptPage() {
   const [activeTab, setActiveTab] = useState<'write' | 'preview' | 'split'>('split');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Module-Scoped Prerequisite State
+  const [selectedPrerequisiteId, setSelectedPrerequisiteId] = useState<string>('');
+  const [hasInitializedAutoPrereq, setHasInitializedAutoPrereq] = useState(false);
+
+  // 1. Resolve roadmapId: directly from query param or fallback lookup
+  const [inferredRoadmapId, setInferredRoadmapId] = useState<string | null>(roadmapIdParam);
+
+  useEffect(() => {
+    if (roadmapIdParam) {
+      setInferredRoadmapId(roadmapIdParam);
+    } else if (moduleId && !inferredRoadmapId) {
+      apiClient
+        .get<RoadmapData[]>('/roadmaps')
+        .then((res) => {
+          const found = res.data.find((r) =>
+            (r.modules || []).some((m) => m.id === moduleId),
+          );
+          if (found) {
+            setInferredRoadmapId(found.id);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [roadmapIdParam, moduleId, inferredRoadmapId]);
+
+  // 2. Fetch full Roadmap DETAIL directly by ID (GET /roadmaps/:id includes moduleConcepts and concepts)
+  const { data: roadmapDetail } = useQuery<RoadmapData>({
+    queryKey: ['roadmaps', inferredRoadmapId, 'detail'],
+    queryFn: async () => {
+      if (!inferredRoadmapId) throw new Error('No roadmap ID');
+      return (await apiClient.get<RoadmapData>(`/roadmaps/${inferredRoadmapId}`)).data;
+    },
+    enabled: Boolean(inferredRoadmapId),
+  });
+
+  // Target module and its existing concepts (strictly in the same module)
+  const { targetModule, conceptsInCurrentModule, targetModuleName, targetModuleOrderIndex } = useMemo(() => {
+    if (!roadmapDetail || !moduleId) {
+      return {
+        targetModule: null,
+        conceptsInCurrentModule: [],
+        targetModuleName: '',
+        targetModuleOrderIndex: 1,
+      };
+    }
+
+    const mod = (roadmapDetail.modules || []).find((m) => m.id === moduleId);
+    if (!mod) {
+      return {
+        targetModule: null,
+        conceptsInCurrentModule: [],
+        targetModuleName: '',
+        targetModuleOrderIndex: 1,
+      };
+    }
+
+    const concepts = [...(mod.moduleConcepts || [])]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((mc) => mc.concept)
+      .filter(Boolean);
+
+    return {
+      targetModule: mod,
+      conceptsInCurrentModule: concepts,
+      targetModuleName: mod.title,
+      targetModuleOrderIndex: concepts.length + 1,
+    };
+  }, [roadmapDetail, moduleId]);
+
+  // Single immediately-preceding concept in this module
+  const immediatelyPrecedingConcept = useMemo(() => {
+    if (conceptsInCurrentModule.length === 0) return null;
+    return conceptsInCurrentModule[conceptsInCurrentModule.length - 1];
+  }, [conceptsInCurrentModule]);
+
+  // Auto-suggest ONLY the single immediately-preceding concept by default
+  useEffect(() => {
+    if (!hasInitializedAutoPrereq && immediatelyPrecedingConcept) {
+      setSelectedPrerequisiteId(immediatelyPrecedingConcept.id);
+      setHasInitializedAutoPrereq(true);
+    }
+  }, [immediatelyPrecedingConcept, hasInitializedAutoPrereq]);
+
   const createConceptMutation = useMutation({
     mutationFn: async (payload: {
       title: string;
       content: string;
       difficulty: 'easy' | 'medium' | 'hard';
+      prerequisiteConceptId: string | null;
     }) => {
       // 1. Create concept
-      const res = await apiClient.post<{ id: string }>('/concepts', payload);
+      const res = await apiClient.post<{ id: string }>('/concepts', {
+        title: payload.title,
+        content: payload.content,
+        difficulty: payload.difficulty,
+      });
       const newConcept = res.data;
 
       // 2. Auto-attach to module if moduleId was passed
       if (moduleId) {
-        try {
-          await apiClient.post(`/modules/${moduleId}/concepts`, {
-            conceptId: newConcept.id,
-            orderIndex: 99,
-          });
-        } catch {
-          // If attachment fails, concept was still created
+        await apiClient.post(`/modules/${moduleId}/concepts`, {
+          conceptId: newConcept.id,
+        });
+
+        // 3. Link module-scoped prerequisite if selected
+        if (payload.prerequisiteConceptId) {
+          try {
+            await apiClient.post(
+              `/modules/${moduleId}/concepts/${newConcept.id}/prerequisites`,
+              {
+                prerequisiteConceptId: payload.prerequisiteConceptId,
+              },
+            );
+          } catch {
+            // Non-blocking if prerequisite linking encounters an issue
+          }
         }
       }
 
       return newConcept;
     },
     onSuccess: (newConcept) => {
-      showSuccess('Concept created');
+      showSuccess('Concept created and attached successfully');
       queryClient.invalidateQueries({ queryKey: ['concepts'] });
       queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
-      if (roadmapId) {
-        router.push(`/instructor/content/${roadmapId}`);
+      if (inferredRoadmapId) {
+        router.push(`/instructor/content/${inferredRoadmapId}`);
       } else {
         router.push(`/instructor/concepts/${newConcept.id}/edit`);
       }
@@ -84,6 +213,7 @@ export default function CreateConceptPage() {
       title: title.trim(),
       difficulty,
       content: content.trim(),
+      prerequisiteConceptId: selectedPrerequisiteId ? selectedPrerequisiteId : null,
     });
   };
 
@@ -92,11 +222,17 @@ export default function CreateConceptPage() {
       {/* Back Navigation */}
       <div>
         <Link
-          href={roadmapId ? `/instructor/content/${roadmapId}` : '/instructor/content'}
+          href={
+            inferredRoadmapId
+              ? `/instructor/content/${inferredRoadmapId}`
+              : '/instructor/content'
+          }
           className="inline-flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-accent transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>{roadmapId ? 'Back to Roadmap' : 'Back to Content Studio'}</span>
+          <span>
+            {inferredRoadmapId ? 'Back to Roadmap' : 'Back to Content Studio'}
+          </span>
         </Link>
       </div>
 
@@ -111,9 +247,12 @@ export default function CreateConceptPage() {
             <h1 className="text-2xl sm:text-3xl font-bold font-display text-text-primary tracking-tight">
               Create New Concept Article
             </h1>
-            {moduleId && (
-              <p className="text-xs text-accent font-medium mt-1">
-                Will be attached to active module upon publishing.
+            {targetModuleName && (
+              <p className="text-xs text-accent font-medium mt-1 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" />
+                <span>
+                  Adding concept #{targetModuleOrderIndex} into module &ldquo;{targetModuleName}&rdquo;
+                </span>
               </p>
             )}
           </div>
@@ -123,7 +262,7 @@ export default function CreateConceptPage() {
             <button
               type="button"
               onClick={() => setActiveTab('write')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'write' ? 'bg-surface text-accent shadow-xs' : 'text-text-secondary'
               }`}
             >
@@ -133,7 +272,7 @@ export default function CreateConceptPage() {
             <button
               type="button"
               onClick={() => setActiveTab('split')}
-              className={`hidden md:flex px-3 py-1.5 rounded-lg text-xs font-semibold items-center gap-1.5 transition-all ${
+              className={`hidden md:flex px-3 py-1.5 rounded-lg text-xs font-semibold items-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'split' ? 'bg-surface text-accent shadow-xs' : 'text-text-secondary'
               }`}
             >
@@ -143,7 +282,7 @@ export default function CreateConceptPage() {
             <button
               type="button"
               onClick={() => setActiveTab('preview')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'preview' ? 'bg-surface text-accent shadow-xs' : 'text-text-secondary'
               }`}
             >
@@ -172,7 +311,7 @@ export default function CreateConceptPage() {
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Dependency Injection & Lifecycle in NestJS"
+                placeholder="e.g., Working with Git Branches & Merge Workflows"
                 className="w-full px-4 py-2.5 rounded-xl border border-border bg-bg text-sm focus:outline-none focus:border-accent transition-all"
               />
             </div>
@@ -184,7 +323,7 @@ export default function CreateConceptPage() {
               <select
                 value={difficulty}
                 onChange={(e) => setDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-bg text-sm focus:outline-none focus:border-accent transition-all"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-bg text-sm focus:outline-none focus:border-accent transition-all cursor-pointer"
               >
                 <option value="easy">Easy (10 XP)</option>
                 <option value="medium">Medium (20 XP)</option>
@@ -192,6 +331,69 @@ export default function CreateConceptPage() {
               </select>
             </div>
           </div>
+
+          {/* Module-Scoped Prerequisite Configuration Section */}
+          {moduleId && targetModule && (
+            <div className="p-5 sm:p-6 rounded-2xl bg-bg border border-border space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <GitMerge className="w-4 h-4 text-accent" />
+                    <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                      Module Prerequisite
+                    </h3>
+                  </div>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    Select an immediately preceding concept in &ldquo;{targetModuleName}&rdquo; that students should study before this one.
+                  </p>
+                </div>
+
+                {immediatelyPrecedingConcept && selectedPrerequisiteId === immediatelyPrecedingConcept.id && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-tint/50 text-amber border border-amber/30 text-[11px] font-semibold">
+                    <Sparkles className="w-3.5 h-3.5 text-amber" />
+                    <span>Auto-suggested Preceding Concept</span>
+                  </div>
+                )}
+              </div>
+
+              {conceptsInCurrentModule.length === 0 ? (
+                <div className="p-4 rounded-xl border border-dashed border-border bg-surface text-center">
+                  <p className="text-xs text-text-secondary">
+                    This is the 1st concept in module &ldquo;{targetModuleName}&rdquo;. No prerequisite is needed.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <select
+                    value={selectedPrerequisiteId}
+                    onChange={(e) => setSelectedPrerequisiteId(e.target.value)}
+                    className="w-full sm:w-auto min-w-[320px] px-4 py-2.5 rounded-xl border border-border bg-surface text-xs font-medium text-text-primary focus:outline-none focus:border-accent cursor-pointer"
+                  >
+                    <option value="">None (No prerequisite for this concept)</option>
+                    {conceptsInCurrentModule.map((c, idx) => (
+                      <option key={c.id} value={c.id}>
+                        Concept #{idx + 1}: {c.title} ({c.difficulty})
+                        {c.id === immediatelyPrecedingConcept?.id ? ' — [Suggested]' : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedPrerequisiteId && (
+                    <div className="flex items-center gap-2 text-xs text-text-secondary">
+                      <CheckCircle2 className="w-4 h-4 text-green" />
+                      <span>
+                        Students will be advised to complete{' '}
+                        <strong className="text-text-primary">
+                          {conceptsInCurrentModule.find((c) => c.id === selectedPrerequisiteId)?.title}
+                        </strong>{' '}
+                        first within this module.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Markdown Content Area */}
           <div className="space-y-1.5">
@@ -212,7 +414,7 @@ export default function CreateConceptPage() {
                     rows={18}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    placeholder={`## Introduction\nExplain the concept here...\n\n### Code Example\n\`\`\`typescript\n@Injectable()\nexport class ExampleService {\n  // your code\n}\n\`\`\`\n\n### Key Takeaways\n- Point 1\n- Point 2`}
+                    placeholder={`## Introduction\nExplain the concept here...\n\n### Code Example\n\`\`\`bash\ngit checkout -b feature/login\n\`\`\`\n\n### Key Takeaways\n- Point 1\n- Point 2`}
                     className="w-full p-4 rounded-xl border border-border bg-bg font-mono text-xs sm:text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent transition-all resize-y"
                   />
                 </div>
@@ -259,8 +461,12 @@ export default function CreateConceptPage() {
           {/* Form Actions */}
           <div className="pt-4 border-t border-border flex items-center justify-end gap-3">
             <Link
-              href={roadmapId ? `/instructor/content/${roadmapId}` : '/instructor/content'}
-              className="px-5 py-2.5 rounded-xl border border-border bg-surface text-text-primary font-semibold text-xs hover:bg-bg transition-all"
+              href={
+                inferredRoadmapId
+                  ? `/instructor/content/${inferredRoadmapId}`
+                  : '/instructor/content'
+              }
+              className="px-5 py-2.5 rounded-xl border border-border bg-surface text-text-primary font-semibold text-xs hover:bg-bg transition-all cursor-pointer"
             >
               Cancel
             </Link>
