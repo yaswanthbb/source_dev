@@ -14,7 +14,7 @@ import { Roadmap } from '../modules/content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../modules/content/entities/module.entity';
 import { Concept } from '../modules/content/entities/concept.entity';
 import { ModuleConcept } from '../modules/content/entities/module-concept.entity';
-import { ConceptPrerequisite } from '../modules/content/entities/concept-prerequisite.entity';
+import { ModuleConceptPrerequisite } from '../modules/content/entities/module-concept-prerequisite.entity';
 import { UserConceptProgress } from '../modules/progress/entities/user-concept-progress.entity';
 import { Assignment } from '../modules/assignments/entities/assignment.entity';
 import { Submission } from '../modules/assignments/entities/submission.entity';
@@ -27,15 +27,17 @@ import { UserBadge } from '../modules/gamification/entities/user-badge.entity';
 import { McqQuestion } from '../modules/quiz/entities/mcq-question.entity';
 import { McqOption } from '../modules/quiz/entities/mcq-option.entity';
 import { McqAttempt } from '../modules/quiz/entities/mcq-attempt.entity';
+import { AccountDeletionRequest } from '../modules/users/entities/account-deletion-request.entity';
 
 export const entities = [
   User,
   InstructorProfile,
+  AccountDeletionRequest,
   Roadmap,
   ModuleEntity,
   Concept,
   ModuleConcept,
-  ConceptPrerequisite,
+  ModuleConceptPrerequisite,
   UserConceptProgress,
   Assignment,
   Submission,
