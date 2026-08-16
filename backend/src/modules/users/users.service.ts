@@ -7,11 +7,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { InstructorProfile } from './entities/instructor-profile.entity';
+import {
+  AccountDeletionRequest,
+  DeletionRequestStatus,
+} from './entities/account-deletion-request.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { ApplyInstructorDto } from './dto/apply-instructor.dto';
+import { RequestDeletionDto } from './dto/request-deletion.dto';
 
 @Injectable()
 export class UsersService {
@@ -20,6 +25,8 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(InstructorProfile)
     private readonly instructorProfileRepository: Repository<InstructorProfile>,
+    @InjectRepository(AccountDeletionRequest)
+    private readonly deletionRequestRepository: Repository<AccountDeletionRequest>,
   ) {}
 
   private sanitizeUser(user: User): Omit<User, 'passwordHash'> {
@@ -317,5 +324,134 @@ export class UsersService {
       user: this.sanitizeUser(updatedUser),
       instructorProfile: profile,
     };
+  }
+
+  // 6. Direct User Deletion (Admin only)
+  // Cascade deletes student personal data; preserves authored roadmaps/concepts/QA answers with author SET NULL
+  async deleteUser(targetUserId: string, adminUserId?: string) {
+    if (adminUserId && targetUserId === adminUserId) {
+      throw new BadRequestException('Administrators cannot delete their own account');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: targetUserId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role === UserRole.ADMIN) {
+      throw new BadRequestException('Cannot delete an administrator account');
+    }
+
+    await this.userRepository.delete(targetUserId);
+
+    return {
+      success: true,
+      message: `User ${user.name} (${user.email}) deleted successfully`,
+    };
+  }
+
+  // 7. User submits an account deletion request
+  async requestAccountDeletion(userId: string, dto: RequestDeletionDto) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role === UserRole.ADMIN) {
+      throw new BadRequestException('Administrators cannot request account deletion');
+    }
+
+    const existingPending = await this.deletionRequestRepository.findOne({
+      where: { userId, status: DeletionRequestStatus.PENDING },
+    });
+
+    if (existingPending) {
+      if (dto.reason !== undefined) {
+        existingPending.reason = dto.reason;
+        return this.deletionRequestRepository.save(existingPending);
+      }
+      return existingPending;
+    }
+
+    const request = this.deletionRequestRepository.create({
+      userId,
+      reason: dto.reason || null,
+      status: DeletionRequestStatus.PENDING,
+    });
+
+    return this.deletionRequestRepository.save(request);
+  }
+
+  // 8. Get current user's deletion request status
+  async getMyDeletionRequest(userId: string) {
+    return this.deletionRequestRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  // 9. Admin lists all account deletion requests
+  async getAllDeletionRequests() {
+    const requests = await this.deletionRequestRepository.find({
+      relations: ['user', 'reviewedByAdmin'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return requests.map((req) => ({
+      ...req,
+      user: req.user ? this.sanitizeUser(req.user) : null,
+      reviewedByAdmin: req.reviewedByAdmin ? this.sanitizeUser(req.reviewedByAdmin) : null,
+    }));
+  }
+
+  // 10. Admin approves account deletion request
+  async approveDeletionRequest(requestId: string, adminUserId: string) {
+    const request = await this.deletionRequestRepository.findOne({
+      where: { id: requestId },
+      relations: ['user'],
+    });
+
+    if (!request) {
+      throw new NotFoundException('Deletion request not found');
+    }
+
+    if (request.status !== DeletionRequestStatus.PENDING) {
+      throw new BadRequestException(`Request is already ${request.status}`);
+    }
+
+    const targetUserId = request.userId;
+    request.status = DeletionRequestStatus.APPROVED;
+    request.reviewedByAdminId = adminUserId;
+    request.reviewedAt = new Date();
+    await this.deletionRequestRepository.save(request);
+
+    // Perform the user deletion
+    await this.deleteUser(targetUserId, adminUserId);
+
+    return {
+      success: true,
+      message: 'Account deletion approved and user data deleted',
+    };
+  }
+
+  // 11. Admin rejects account deletion request
+  async rejectDeletionRequest(requestId: string, adminUserId: string) {
+    const request = await this.deletionRequestRepository.findOne({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Deletion request not found');
+    }
+
+    if (request.status !== DeletionRequestStatus.PENDING) {
+      throw new BadRequestException(`Request is already ${request.status}`);
+    }
+
+    request.status = DeletionRequestStatus.REJECTED;
+    request.reviewedByAdminId = adminUserId;
+    request.reviewedAt = new Date();
+
+    return this.deletionRequestRepository.save(request);
   }
 }

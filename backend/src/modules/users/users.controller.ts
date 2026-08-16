@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Query,
   Body,
@@ -23,6 +24,7 @@ import { User } from './entities/user.entity';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { ApplyInstructorDto } from './dto/apply-instructor.dto';
+import { RequestDeletionDto } from './dto/request-deletion.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth('bearer-auth')
@@ -161,5 +163,74 @@ export class UsersController {
   })
   async rejectInstructor(@Param('id') id: string) {
     return this.usersService.rejectInstructor(id);
+  }
+
+  @Post('request-deletion')
+  @ApiOperation({ summary: 'User submits an account deletion request' })
+  @ApiResponse({
+    status: 201,
+    description: 'Account deletion request submitted.',
+  })
+  async requestAccountDeletion(
+    @CurrentUser() user: User,
+    @Body() dto: RequestDeletionDto,
+  ) {
+    return this.usersService.requestAccountDeletion(user.id, dto);
+  }
+
+  @Get('me/deletion-request')
+  @ApiOperation({ summary: 'Get current user account deletion request status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Account deletion request retrieved.',
+  })
+  async getMyDeletionRequest(@CurrentUser() user: User) {
+    return this.usersService.getMyDeletionRequest(user.id);
+  }
+
+  @Get('deletion-requests')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'List all account deletion requests (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of account deletion requests.',
+  })
+  async getAllDeletionRequests() {
+    return this.usersService.getAllDeletionRequests();
+  }
+
+  @Patch('deletion-requests/:id/approve')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Approve account deletion and delete user (Admin only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deletion request approved and user deleted.',
+  })
+  async approveDeletionRequest(
+    @Param('id') id: string,
+    @CurrentUser() adminUser: User,
+  ) {
+    return this.usersService.approveDeletionRequest(id, adminUser.id);
+  }
+
+  @Patch('deletion-requests/:id/reject')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Reject account deletion request (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Deletion request rejected.' })
+  async rejectDeletionRequest(
+    @Param('id') id: string,
+    @CurrentUser() adminUser: User,
+  ) {
+    return this.usersService.rejectDeletionRequest(id, adminUser.id);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Directly delete user (Admin only)' })
+  @ApiResponse({ status: 200, description: 'User deleted successfully.' })
+  async deleteUser(@Param('id') id: string, @CurrentUser() adminUser: User) {
+    return this.usersService.deleteUser(id, adminUser.id);
   }
 }
