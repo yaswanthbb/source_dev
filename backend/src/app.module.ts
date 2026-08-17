@@ -13,6 +13,7 @@ import { GamificationModule } from './modules/gamification/gamification.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { InstructorAnalyticsModule } from './modules/instructor-analytics/instructor-analytics.module';
 import { ReviewModule } from './modules/review/review.module';
+import { AiGenerateModule } from './modules/ai-generate/ai-generate.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -33,6 +34,7 @@ import { AppService } from './app.service';
     AnalyticsModule,
     InstructorAnalyticsModule,
     ReviewModule,
+    AiGenerateModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -29,6 +29,7 @@ import { McqOption } from '../modules/quiz/entities/mcq-option.entity';
 import { McqAttempt } from '../modules/quiz/entities/mcq-attempt.entity';
 import { AccountDeletionRequest } from '../modules/users/entities/account-deletion-request.entity';
 import { ReviewItem } from '../modules/review/entities/review-item.entity';
+import { AiGenerationLog } from '../modules/ai-generate/entities/ai-generation-log.entity';
 
 export const entities = [
   User,
@@ -52,6 +53,7 @@ export const entities = [
   McqOption,
   McqAttempt,
   ReviewItem,
+  AiGenerationLog,
 ];
 
 export const getTypeOrmConfig = (
