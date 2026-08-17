@@ -32,10 +32,7 @@ export class ModuleConcept extends BaseEntity {
   @Column({ type: 'int', name: 'order_index' })
   orderIndex: number;
 
-  @OneToMany(
-    () => ModuleConceptPrerequisite,
-    (mcp) => mcp.moduleConcept,
-  )
+  @OneToMany(() => ModuleConceptPrerequisite, (mcp) => mcp.moduleConcept)
   prerequisites: ModuleConceptPrerequisite[];
 
   @OneToMany(

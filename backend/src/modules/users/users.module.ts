@@ -8,11 +8,7 @@ import { UsersController } from './users.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      User,
-      InstructorProfile,
-      AccountDeletionRequest,
-    ]),
+    TypeOrmModule.forFeature([User, InstructorProfile, AccountDeletionRequest]),
   ],
   controllers: [UsersController],
   providers: [UsersService],

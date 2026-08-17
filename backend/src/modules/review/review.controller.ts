@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  Body,
-} from '@nestjs/common';
+import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -48,7 +42,8 @@ export class ReviewController {
 
   @Post(':reviewItemId/answer')
   @ApiOperation({
-    summary: 'Submit an answer for a due review item with anti-farming validation',
+    summary:
+      'Submit an answer for a due review item with anti-farming validation',
   })
   @ApiResponse({
     status: 200,

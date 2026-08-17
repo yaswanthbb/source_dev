@@ -31,6 +31,8 @@ export class AddAccountDeletionRequests1786630000000 implements MigrationInterfa
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE IF EXISTS "account_deletion_requests"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."account_deletion_requests_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."account_deletion_requests_status_enum"`,
+    );
   }
 }

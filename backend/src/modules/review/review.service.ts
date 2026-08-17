@@ -128,7 +128,9 @@ export class ReviewService {
   /**
    * Returns total count of review items due today or overdue.
    */
-  async getDueCount(userId: string): Promise<{ count: number; dueCount: number }> {
+  async getDueCount(
+    userId: string,
+  ): Promise<{ count: number; dueCount: number }> {
     const todayStr = this.getTodayDateString();
     const count = await this.reviewItemRepository.count({
       where: {
@@ -158,7 +160,9 @@ export class ReviewService {
     }
 
     if (item.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this review item');
+      throw new ForbiddenException(
+        'You do not have access to this review item',
+      );
     }
 
     const todayStr = this.getTodayDateString();
@@ -172,7 +176,9 @@ export class ReviewService {
 
     const options = item.mcqQuestion.options || [];
     const correctOption = options.find((opt) => opt.isCorrect);
-    const selectedOption = options.find((opt) => opt.id === dto.selectedOptionId);
+    const selectedOption = options.find(
+      (opt) => opt.id === dto.selectedOptionId,
+    );
 
     if (!selectedOption) {
       throw new BadRequestException('Invalid option selected');

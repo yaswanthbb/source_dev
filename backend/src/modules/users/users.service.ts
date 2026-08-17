@@ -128,7 +128,9 @@ export class UsersService {
     return users.map((user) => this.sanitizeUser(user));
   }
 
-  async getAllInstructorsAndApplicants(): Promise<Omit<User, 'passwordHash'>[]> {
+  async getAllInstructorsAndApplicants(): Promise<
+    Omit<User, 'passwordHash'>[]
+  > {
     const users = await this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.instructorProfile', 'instructorProfile')
@@ -330,10 +332,14 @@ export class UsersService {
   // Cascade deletes student personal data; preserves authored roadmaps/concepts/QA answers with author SET NULL
   async deleteUser(targetUserId: string, adminUserId?: string) {
     if (adminUserId && targetUserId === adminUserId) {
-      throw new BadRequestException('Administrators cannot delete their own account');
+      throw new BadRequestException(
+        'Administrators cannot delete their own account',
+      );
     }
 
-    const user = await this.userRepository.findOne({ where: { id: targetUserId } });
+    const user = await this.userRepository.findOne({
+      where: { id: targetUserId },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -358,7 +364,9 @@ export class UsersService {
     }
 
     if (user.role === UserRole.ADMIN) {
-      throw new BadRequestException('Administrators cannot request account deletion');
+      throw new BadRequestException(
+        'Administrators cannot request account deletion',
+      );
     }
 
     const existingPending = await this.deletionRequestRepository.findOne({
@@ -400,7 +408,9 @@ export class UsersService {
     return requests.map((req) => ({
       ...req,
       user: req.user ? this.sanitizeUser(req.user) : null,
-      reviewedByAdmin: req.reviewedByAdmin ? this.sanitizeUser(req.reviewedByAdmin) : null,
+      reviewedByAdmin: req.reviewedByAdmin
+        ? this.sanitizeUser(req.reviewedByAdmin)
+        : null,
     }));
   }
 

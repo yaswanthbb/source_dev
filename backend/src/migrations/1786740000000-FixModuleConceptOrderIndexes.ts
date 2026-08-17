@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class FixModuleConceptOrderIndexes1786740000000
-  implements MigrationInterface
-{
+export class FixModuleConceptOrderIndexes1786740000000 implements MigrationInterface {
   name = 'FixModuleConceptOrderIndexes1786740000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

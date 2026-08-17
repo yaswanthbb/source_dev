@@ -202,8 +202,7 @@ export class ProgressService {
 
       const formattedPrereqs = (mc.prerequisites || []).map((p) => {
         const prereqConcept = p.prerequisiteModuleConcept?.concept;
-        const prereqConceptId =
-          p.prerequisiteModuleConcept?.conceptId || '';
+        const prereqConceptId = p.prerequisiteModuleConcept?.conceptId || '';
         return {
           prerequisiteConceptId: prereqConceptId,
           title: prereqConcept?.title || 'Prerequisite concept',
