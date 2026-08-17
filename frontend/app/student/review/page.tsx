@@ -178,7 +178,7 @@ export default function StudentReviewPage() {
   if (isError) {
     return (
       <div className="max-w-md mx-auto py-16 text-center space-y-4">
-        <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+        <div className="w-14 h-14 rounded-2xl bg-red-tint text-red flex items-center justify-center mx-auto">
           <XCircle className="w-7 h-7" />
         </div>
         <h2 className="text-lg font-bold font-display text-text-primary">
@@ -374,7 +374,7 @@ export default function StudentReviewPage() {
                   "border-green bg-green-tint text-green font-semibold ring-1 ring-green";
               } else if (isSelectedIncorrect) {
                 optionStyle =
-                  "border-red-300 bg-red-50 text-red-700 font-medium opacity-90";
+                  "border-red/40 bg-red-tint/60 text-red font-medium opacity-90";
               } else {
                 optionStyle = "border-border bg-bg opacity-50";
               }
@@ -404,7 +404,7 @@ export default function StudentReviewPage() {
                   <Check className="w-4 h-4 text-green stroke-[3] flex-shrink-0" />
                 )}
                 {isAnswered && isSelectedIncorrect && (
-                  <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <XCircle className="w-4 h-4 text-red flex-shrink-0" />
                 )}
               </label>
             );
@@ -417,7 +417,7 @@ export default function StudentReviewPage() {
             className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-150 ${
               activeResult.isCorrect
                 ? "bg-green-tint/50 border-green/30 text-green"
-                : "bg-red-50/70 border-red-200 text-red-800"
+                : "bg-red-tint/50 border-red/30 text-red"
             }`}
           >
             <div className="flex items-center gap-2.5">
@@ -426,7 +426,7 @@ export default function StudentReviewPage() {
                   <Check className="w-4 h-4 stroke-[3]" />
                 </div>
               ) : (
-                <div className="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-red text-white flex items-center justify-center flex-shrink-0">
                   <XCircle className="w-4 h-4" />
                 </div>
               )}

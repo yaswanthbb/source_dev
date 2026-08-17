@@ -274,7 +274,7 @@ export function ConceptSyllabusSidebar({
         </div>
       </div>
 
-      {/* Sidebar Footer Section (Profile Actions Menu) */}
+      {/* Sidebar Footer Section (Profile Actions Menu with Integrated Theme Toggle) */}
       <div className="p-4 border-t border-border bg-surface">
         <ProfileActionsMenu
           user={user}

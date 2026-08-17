@@ -13,11 +13,11 @@ import {
   ArrowRight,
   Sparkles,
   Lock,
-  Award,
   AlertCircle,
   Clock,
   Layers,
   RotateCcw,
+  ChevronRight,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User } from '@/lib/auth';
@@ -26,7 +26,8 @@ import {
   RoadmapProgressData,
 } from '@/lib/hooks/use-roadmap-progress';
 
-// Types matching backend models
+// ─── Types matching backend models ──────────────────────────────────────────
+
 interface EarnedBadgeItem {
   id: string;
   name: string;
@@ -116,14 +117,6 @@ interface Roadmap {
   }>;
 }
 
-interface RoadmapProgress {
-  roadmapId: string;
-  title: string;
-  totalConcepts: number;
-  completedConceptsCount: number;
-  completionPercentage: number;
-}
-
 interface Badge {
   id: string;
   name: string;
@@ -131,6 +124,12 @@ interface Badge {
   iconUrl: string | null;
   criteriaKey: string;
 }
+
+const DIFF_COLORS: Record<string, string> = {
+  easy: 'bg-green-tint text-green ring-1 ring-green/30',
+  medium: 'bg-amber-tint text-amber ring-1 ring-amber/30',
+  hard: 'bg-red-tint text-red ring-1 ring-red/30',
+};
 
 export default function StudentDashboardPage() {
   // 1. Current User
@@ -150,7 +149,7 @@ export default function StudentDashboardPage() {
       (await apiClient.get<GamificationData>('/gamification/me')).data,
   });
 
-  // 2.1. Activity Heatmap Query (Source of truth from /gamification/activity)
+  // 2.1 Activity Heatmap (Source of truth from /gamification/activity)
   const { data: rawActivityList = [], isLoading: activityLoading } = useQuery<
     Array<{ date: string; active: boolean }>
   >({
@@ -184,7 +183,7 @@ export default function StudentDashboardPage() {
     queryFn: async () => (await apiClient.get<Roadmap[]>('/roadmaps')).data,
   });
 
-  // 5. Progress per Roadmap (using normalized bulk progress hook)
+  // 5. Progress per Roadmap (using bulk hook)
   const roadmapIds = useMemo(() => roadmaps.map((r) => r.id), [roadmaps]);
   const { data: roadmapsProgressMap = {}, isLoading: roadmapsProgressLoading } =
     useAllRoadmapsProgress(roadmapIds);
@@ -210,12 +209,10 @@ export default function StudentDashboardPage() {
   });
 
   // Derived Calculations
-  // Total Concepts Completed
   const completedConceptsCount = useMemo(() => {
     return progressList.filter((p) => p.status === 'completed').length;
   }, [progressList]);
 
-  // Most recently updated in_progress concept
   const mostRecentInProgress = useMemo(() => {
     const inProgressItems = progressList.filter(
       (p) => p.status === 'in_progress',
@@ -229,7 +226,6 @@ export default function StudentDashboardPage() {
     })[0];
   }, [progressList]);
 
-  // Last 14 Days Activity Heatmap (derived from /gamification/activity)
   const activityHeatmap = useMemo(() => {
     if (rawActivityList && rawActivityList.length > 0) {
       return rawActivityList.map((item, index) => {
@@ -261,7 +257,6 @@ export default function StudentDashboardPage() {
     return days;
   }, [rawActivityList]);
 
-  // Set of Earned Badge IDs / Criteria Keys with earnedAt timestamp
   const earnedBadgeMap = useMemo(() => {
     const map = new Map<string, { earnedAt: string }>();
     if (gamification?.earnedBadges && Array.isArray(gamification.earnedBadges)) {
@@ -284,7 +279,6 @@ export default function StudentDashboardPage() {
     return map;
   }, [gamification]);
 
-  // Total Badges Unlocked Count
   const unlockedBadgesCount = useMemo(() => {
     return allBadges.filter(
       (b) =>
@@ -294,10 +288,12 @@ export default function StudentDashboardPage() {
     ).length;
   }, [allBadges, earnedBadgeMap]);
 
+  const reviewDueCount = reviewDueData?.dueCount ?? 0;
+
   return (
     <div className="space-y-8 pb-12">
-      {/* 1. Header Welcome Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* ── 1. Header Welcome Section ─────────────────────────────────── */}
+      <div className="stagger-item flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold font-display text-text-primary tracking-tight">
             {userLoading ? (
@@ -313,19 +309,19 @@ export default function StudentDashboardPage() {
 
         <Link
           href="/student/roadmaps"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white font-medium text-sm hover:bg-accent/90 transition-colors shadow-sm self-start sm:self-auto cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white font-medium text-sm hover:bg-accent/90 transition-colors duration-150 shadow-sm self-start sm:self-auto cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          <BookOpen className="w-4 h-4" />
+          <BookOpen className="w-4 h-4" aria-hidden="true" />
           <span>Explore Roadmaps</span>
         </Link>
       </div>
 
-      {/* 2. Stats Grid (5 Cards) */}
+      {/* ── 2. Stats Grid (5 Cards) ───────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* Total XP */}
-        <div className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex items-center gap-4">
+        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-accent/40 dark:hover:shadow-[0_0_24px_rgba(99,102,241,0.18)] transition-all duration-200 cursor-default">
           <div className="w-12 h-12 rounded-xl bg-accent-tint text-accent flex items-center justify-center flex-shrink-0">
-            <Zap className="w-6 h-6" />
+            <Zap className="w-6 h-6" aria-hidden="true" />
           </div>
           <div>
             <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
@@ -342,9 +338,9 @@ export default function StudentDashboardPage() {
         </div>
 
         {/* Current Streak */}
-        <div className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex items-center gap-4">
+        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-amber/40 dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)] transition-all duration-200 cursor-default">
           <div className="w-12 h-12 rounded-xl bg-amber-tint text-amber flex items-center justify-center flex-shrink-0">
-            <Flame className="w-6 h-6" />
+            <Flame className="w-6 h-6" aria-hidden="true" />
           </div>
           <div>
             <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
@@ -361,9 +357,9 @@ export default function StudentDashboardPage() {
         </div>
 
         {/* Longest Streak */}
-        <div className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex items-center gap-4">
+        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-amber/40 dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)] transition-all duration-200 cursor-default">
           <div className="w-12 h-12 rounded-xl bg-amber-tint text-amber flex items-center justify-center flex-shrink-0">
-            <Trophy className="w-6 h-6" />
+            <Trophy className="w-6 h-6" aria-hidden="true" />
           </div>
           <div>
             <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
@@ -380,9 +376,9 @@ export default function StudentDashboardPage() {
         </div>
 
         {/* Concepts Completed */}
-        <div className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex items-center gap-4">
+        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-green/40 dark:hover:shadow-[0_0_24px_rgba(52,211,153,0.18)] transition-all duration-200 cursor-default">
           <div className="w-12 h-12 rounded-xl bg-green-tint text-green flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 className="w-6 h-6" />
+            <CheckCircle2 className="w-6 h-6" aria-hidden="true" />
           </div>
           <div>
             <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
@@ -401,16 +397,21 @@ export default function StudentDashboardPage() {
         {/* Spaced Reviews Due Card */}
         <Link
           href="/student/review"
-          className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex items-center gap-4 hover:border-accent/60 transition-all group cursor-pointer"
+          aria-label={`Reviews Due: ${reviewDueCount > 0 ? `${reviewDueCount} reviews due` : 'All caught up'}. Go to review queue.`}
+          className={`stagger-item p-5 rounded-2xl bg-surface border shadow-xs flex items-center gap-4 transition-all duration-200 group cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+            reviewDueCount > 0
+              ? 'border-amber/50 hover:border-amber dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)]'
+              : 'border-border hover:border-accent/60 dark:hover:shadow-[0_0_24px_rgba(99,102,241,0.18)]'
+          }`}
         >
           <div
             className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105 ${
-              (reviewDueData?.dueCount ?? 0) > 0
+              reviewDueCount > 0
                 ? 'bg-amber-tint text-amber ring-2 ring-amber/20'
                 : 'bg-accent-tint text-accent'
             }`}
           >
-            <RotateCcw className="w-6 h-6" />
+            <RotateCcw className="w-6 h-6" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider truncate">
@@ -420,13 +421,13 @@ export default function StudentDashboardPage() {
               <p className="text-lg font-bold font-display text-text-primary truncate">
                 {reviewDueLoading ? (
                   <span className="inline-block w-12 h-6 bg-border/40 rounded animate-pulse" />
-                ) : (reviewDueData?.dueCount ?? 0) > 0 ? (
+                ) : reviewDueCount > 0 ? (
                   <span className="text-amber">
-                    {reviewDueData?.dueCount} due
+                    {reviewDueCount} due
                   </span>
                 ) : (
                   <span className="text-text-secondary text-sm font-medium flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-green" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green" aria-hidden="true" />
                     <span>Caught up</span>
                   </span>
                 )}
@@ -436,11 +437,13 @@ export default function StudentDashboardPage() {
         </Link>
       </div>
 
-      {/* 3. Middle Section: Continue Learning & 14-Day Heatmap */}
+      {/* ── 3. Middle Section: Continue Learning & 14-Day Heatmap ─────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Continue Learning Banner (2 Cols) */}
-        <div className="lg:col-span-2 rounded-2xl bg-accent text-white p-6 sm:p-8 flex flex-col justify-between shadow-sm relative overflow-hidden">
-          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="stagger-item lg:col-span-2 rounded-2xl bg-accent dark:bg-gradient-to-br dark:from-indigo-600 dark:via-indigo-700 dark:to-violet-800 text-white p-6 sm:p-8 flex flex-col justify-between shadow-sm relative overflow-hidden">
+          {/* Ambient light source inside card */}
+          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" aria-hidden="true" />
+          <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.06] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)', backgroundSize: '24px 24px' }} aria-hidden="true" />
 
           {progressLoading ? (
             <div className="space-y-4 animate-pulse">
@@ -449,9 +452,9 @@ export default function StudentDashboardPage() {
               <div className="w-1/2 h-4 bg-white/20 rounded" />
             </div>
           ) : mostRecentInProgress ? (
-            <div>
+            <div className="relative z-10">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold uppercase tracking-wider backdrop-blur-sm mb-3">
-                <Clock className="w-3.5 h-3.5" />
+                <Clock className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Continue Learning</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold font-display tracking-tight text-white mt-1">
@@ -461,13 +464,13 @@ export default function StudentDashboardPage() {
                 Pick up right where you left off and keep your momentum going.
               </p>
 
-              <div className="mt-6 flex items-center gap-3">
+              <div className="mt-6 flex items-center gap-3 flex-wrap">
                 <Link
                   href={`/student/concepts/${mostRecentInProgress.conceptId}`}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-accent font-semibold text-sm hover:bg-white/95 transition-all shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-accent dark:text-indigo-700 font-bold text-sm hover:bg-white/95 transition-all shadow-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   <span>Resume Concept</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
                 </Link>
                 {mostRecentInProgress.concept?.difficulty && (
                   <span className="px-3 py-1 rounded-lg bg-black/20 text-white/90 text-xs font-medium capitalize">
@@ -477,9 +480,9 @@ export default function StudentDashboardPage() {
               </div>
             </div>
           ) : (
-            <div>
+            <div className="relative z-10">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold uppercase tracking-wider backdrop-blur-sm mb-3">
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Get Started</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold font-display tracking-tight text-white mt-1">
@@ -492,10 +495,10 @@ export default function StudentDashboardPage() {
               <div className="mt-6">
                 <Link
                   href="/student/roadmaps"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-accent font-semibold text-sm hover:bg-white/95 transition-all shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-accent dark:text-indigo-700 font-bold text-sm hover:bg-white/95 transition-all shadow-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   <span>Browse Roadmaps</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
                 </Link>
               </div>
             </div>
@@ -503,14 +506,21 @@ export default function StudentDashboardPage() {
         </div>
 
         {/* 4. Last 14 Days Activity Heatmap (1 Col) */}
-        <div className="p-6 rounded-2xl bg-surface border border-border shadow-sm flex flex-col justify-between">
+        <div className="stagger-item p-6 rounded-2xl bg-surface border border-border shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-bold font-display text-text-primary uppercase tracking-wider">
                 Last 14 Days Activity
               </h3>
-              <span className="text-xs text-text-secondary font-medium">
-                {gamification?.currentStreak ? `${gamification.currentStreak}d Streak 🔥` : 'Daily Streak'}
+              <span className="text-xs text-text-secondary font-medium flex items-center gap-1">
+                {gamification?.currentStreak ? (
+                  <>
+                    <Flame className="w-3.5 h-3.5 text-amber" aria-hidden="true" />
+                    <span>{gamification.currentStreak}d Streak</span>
+                  </>
+                ) : (
+                  <span>Daily Streak</span>
+                )}
               </span>
             </div>
             <p className="text-xs text-text-secondary">
@@ -530,9 +540,9 @@ export default function StudentDashboardPage() {
                 {activityHeatmap.map((item) => {
                   let boxStyle = 'bg-bg border border-border text-text-secondary/70';
                   if (item.hasActivity) {
-                    boxStyle = 'bg-accent text-white font-bold shadow-xs';
+                    boxStyle = 'bg-accent text-white font-bold shadow-xs dark:shadow-lg dark:shadow-accent/30';
                   } else if (item.isToday) {
-                    boxStyle = 'bg-accent-tint/50 text-accent font-semibold border border-accent/30';
+                    boxStyle = 'bg-accent-tint/50 text-accent font-semibold border border-accent/30 dark:ring-1 dark:ring-accent/50';
                   }
 
                   return (
@@ -564,8 +574,8 @@ export default function StudentDashboardPage() {
         </div>
       </div>
 
-      {/* 5. Your Roadmaps Section */}
-      <div className="p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-sm">
+      {/* ── 5. Your Roadmaps Section ──────────────────────────────────── */}
+      <div className="stagger-item p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg sm:text-xl font-bold font-display text-text-primary tracking-tight">
@@ -578,10 +588,10 @@ export default function StudentDashboardPage() {
 
           <Link
             href="/student/roadmaps"
-            className="text-xs sm:text-sm font-semibold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+            className="text-xs sm:text-sm font-semibold text-accent hover:underline flex items-center gap-1 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <span>View all</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </Link>
         </div>
 
@@ -598,13 +608,13 @@ export default function StudentDashboardPage() {
             ))}
           </div>
         ) : roadmapsError ? (
-          <div className="p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <div className="p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-xs flex items-center gap-2" role="alert">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             <span>Unable to load roadmaps. Please refresh the page.</span>
           </div>
         ) : roadmaps.length === 0 ? (
           <div className="p-8 text-center border border-dashed border-border rounded-xl bg-bg">
-            <Layers className="w-8 h-8 text-text-secondary mx-auto mb-2 opacity-50" />
+            <Layers className="w-8 h-8 text-text-secondary mx-auto mb-2 opacity-50" aria-hidden="true" />
             <p className="text-sm font-semibold text-text-primary">
               No roadmaps available yet
             </p>
@@ -622,15 +632,15 @@ export default function StudentDashboardPage() {
               };
 
               const completedCount =
-                progress.completedConceptsCount ?? progress.completedConcepts ?? 0;
+                progress.completedConceptsCount ?? (progress as any).completedConcepts ?? 0;
               const totalCount = progress.totalConcepts ?? 0;
               const completionPct =
-                progress.completionPercentage ?? progress.percentage ?? 0;
+                progress.completionPercentage ?? (progress as any).percentage ?? 0;
 
               return (
                 <div
                   key={roadmap.id}
-                  className="p-4 sm:p-5 rounded-xl border border-border bg-bg hover:border-accent/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  className="p-4 sm:p-5 rounded-xl border border-border bg-bg/50 hover:bg-surface-hover hover:border-accent/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                   <div className="space-y-1.5 flex-1 max-w-xl">
                     <div className="flex items-center gap-2">
@@ -649,7 +659,7 @@ export default function StudentDashboardPage() {
 
                     {/* Progress Bar */}
                     <div className="pt-2 flex items-center gap-3">
-                      <div className="flex-1 h-2 rounded-full bg-border overflow-hidden">
+                      <div className="flex-1 h-2 rounded-full bg-accent-tint overflow-hidden">
                         <div
                           className="h-full bg-accent transition-all duration-300 rounded-full"
                           style={{
@@ -669,7 +679,7 @@ export default function StudentDashboardPage() {
                     </span>
                     <Link
                       href={`/student/roadmaps/${roadmap.id}`}
-                      className="px-3.5 py-1.5 rounded-lg border border-border bg-surface text-text-primary hover:bg-accent hover:text-white hover:border-accent text-xs font-semibold transition-all cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-lg border border-border bg-surface text-text-primary hover:bg-accent hover:text-white hover:border-accent text-xs font-semibold transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     >
                       Continue
                     </Link>
@@ -681,8 +691,8 @@ export default function StudentDashboardPage() {
         )}
       </div>
 
-      {/* 6. Badges & Achievements Gallery */}
-      <div className="p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-sm">
+      {/* ── 6. Badges & Achievements Gallery ──────────────────────────── */}
+      <div className="stagger-item p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg sm:text-xl font-bold font-display text-text-primary tracking-tight">
@@ -692,7 +702,7 @@ export default function StudentDashboardPage() {
               Earn badges by completing concepts and maintaining consistent streaks
             </p>
           </div>
-          <div className="text-xs font-semibold text-text-secondary">
+          <div className="text-xs font-semibold text-accent bg-accent-tint px-3 py-1 rounded-full border border-accent/20">
             {unlockedBadgesCount} of {allBadges.length} unlocked
           </div>
         </div>
@@ -711,8 +721,8 @@ export default function StudentDashboardPage() {
             ))}
           </div>
         ) : badgesError ? (
-          <div className="p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <div className="p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-xs flex items-center gap-2" role="alert">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             <span>Unable to load achievements. Please refresh the page.</span>
           </div>
         ) : allBadges.length === 0 ? (
@@ -734,8 +744,8 @@ export default function StudentDashboardPage() {
                   key={badge.id}
                   className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 flex flex-col items-center text-center justify-between group ${
                     isEarned
-                      ? 'bg-surface border-amber/40 shadow-xs hover:shadow-md hover:border-amber/70'
-                      : 'bg-bg/40 border-border/70 opacity-70 hover:opacity-90'
+                      ? 'bg-surface border-amber/40 shadow-xs hover:border-amber/70 dark:bg-amber-500/5 dark:border-amber-500/30 dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)]'
+                      : 'bg-bg/40 border-border/70 opacity-70 hover:opacity-90 dark:bg-surface/20 dark:border-border/40'
                   }`}
                 >
                   <div className="flex flex-col items-center w-full">
@@ -760,8 +770,8 @@ export default function StudentDashboardPage() {
 
                       {/* Locked Overlay */}
                       {!isEarned && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-7 h-7 rounded-full bg-surface/90 border border-border shadow-xs flex items-center justify-center text-text-secondary">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+                          <div className="w-7 h-7 rounded-full bg-surface/90 dark:bg-black/60 border border-border shadow-xs flex items-center justify-center text-text-secondary">
                             <Lock className="w-3.5 h-3.5" />
                           </div>
                         </div>
@@ -778,8 +788,8 @@ export default function StudentDashboardPage() {
 
                   <div className="mt-4 pt-3 border-t border-border/60 w-full text-center">
                     {isEarned ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green dark:text-amber-300">
+                        <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>
                           Earned{' '}
                           {new Date(earnedInfo!.earnedAt).toLocaleDateString(
@@ -790,7 +800,7 @@ export default function StudentDashboardPage() {
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-text-secondary/70">
-                        <Lock className="w-3 h-3" />
+                        <Lock className="w-3 h-3" aria-hidden="true" />
                         <span>Locked</span>
                       </span>
                     )}
