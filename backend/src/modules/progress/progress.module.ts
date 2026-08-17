@@ -6,12 +6,14 @@ import { Roadmap } from '../content/entities/roadmap.entity';
 import { ModuleConcept } from '../content/entities/module-concept.entity';
 import { ModuleConceptPrerequisite } from '../content/entities/module-concept-prerequisite.entity';
 import { GamificationModule } from '../gamification/gamification.module';
+import { ReviewModule } from '../review/review.module';
 import { ProgressService } from './progress.service';
 import { ProgressController } from './progress.controller';
 
 @Module({
   imports: [
     GamificationModule,
+    ReviewModule,
     TypeOrmModule.forFeature([
       UserConceptProgress,
       Concept,

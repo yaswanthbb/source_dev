@@ -17,6 +17,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  RotateCcw,
 } from "lucide-react";
 import apiClient from "@/lib/api-client";
 import { getToken, clearAuth, getUser, User } from "@/lib/auth";
@@ -35,6 +36,11 @@ const NAV_ITEMS = [
     name: "Roadmaps",
     href: "/student/roadmaps",
     icon: Map,
+  },
+  {
+    name: "Review",
+    href: "/student/review",
+    icon: RotateCcw,
   },
   {
     name: "Q&A",

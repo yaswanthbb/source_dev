@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Clock,
   Layers,
+  RotateCcw,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User } from '@/lib/auth';
@@ -198,6 +199,16 @@ export default function StudentDashboardPage() {
     queryFn: async () => (await apiClient.get<Badge[]>('/badges')).data,
   });
 
+  // 7. Spaced Repetition Due Count
+  const { data: reviewDueData, isLoading: reviewDueLoading } = useQuery<{
+    count: number;
+    dueCount: number;
+  }>({
+    queryKey: ['review', 'due-count'],
+    queryFn: async () =>
+      (await apiClient.get<{ count: number; dueCount: number }>('/review/due-count')).data,
+  });
+
   // Derived Calculations
   // Total Concepts Completed
   const completedConceptsCount = useMemo(() => {
@@ -309,8 +320,8 @@ export default function StudentDashboardPage() {
         </Link>
       </div>
 
-      {/* 2. Stats Grid (4 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 2. Stats Grid (5 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* Total XP */}
         <div className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-accent-tint text-accent flex items-center justify-center flex-shrink-0">
@@ -386,6 +397,43 @@ export default function StudentDashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* Spaced Reviews Due Card */}
+        <Link
+          href="/student/review"
+          className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex items-center gap-4 hover:border-accent/60 transition-all group cursor-pointer"
+        >
+          <div
+            className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105 ${
+              (reviewDueData?.dueCount ?? 0) > 0
+                ? 'bg-amber-tint text-amber ring-2 ring-amber/20'
+                : 'bg-accent-tint text-accent'
+            }`}
+          >
+            <RotateCcw className="w-6 h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider truncate">
+              Reviews Due
+            </p>
+            <div className="mt-0.5 flex items-center justify-between gap-1">
+              <p className="text-lg font-bold font-display text-text-primary truncate">
+                {reviewDueLoading ? (
+                  <span className="inline-block w-12 h-6 bg-border/40 rounded animate-pulse" />
+                ) : (reviewDueData?.dueCount ?? 0) > 0 ? (
+                  <span className="text-amber">
+                    {reviewDueData?.dueCount} due
+                  </span>
+                ) : (
+                  <span className="text-text-secondary text-sm font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green" />
+                    <span>Caught up</span>
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* 3. Middle Section: Continue Learning & 14-Day Heatmap */}

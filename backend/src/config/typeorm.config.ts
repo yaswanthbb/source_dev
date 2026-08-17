@@ -28,6 +28,7 @@ import { McqQuestion } from '../modules/quiz/entities/mcq-question.entity';
 import { McqOption } from '../modules/quiz/entities/mcq-option.entity';
 import { McqAttempt } from '../modules/quiz/entities/mcq-attempt.entity';
 import { AccountDeletionRequest } from '../modules/users/entities/account-deletion-request.entity';
+import { ReviewItem } from '../modules/review/entities/review-item.entity';
 
 export const entities = [
   User,
@@ -50,6 +51,7 @@ export const entities = [
   McqQuestion,
   McqOption,
   McqAttempt,
+  ReviewItem,
 ];
 
 export const getTypeOrmConfig = (

@@ -7,6 +7,7 @@ import { Roadmap } from '../content/entities/roadmap.entity';
 import { ModuleConcept } from '../content/entities/module-concept.entity';
 import { ModuleConceptPrerequisite } from '../content/entities/module-concept-prerequisite.entity';
 import { GamificationService } from '../gamification/gamification.service';
+import { ReviewService } from '../review/review.service';
 import { ProgressStatus } from '../../common/enums/progress-status.enum';
 import { XpSource } from '../../common/enums/xp-source.enum';
 
@@ -24,6 +25,7 @@ export class ProgressService {
     @InjectRepository(ModuleConceptPrerequisite)
     private readonly moduleConceptPrerequisiteRepository: Repository<ModuleConceptPrerequisite>,
     private readonly gamificationService: GamificationService,
+    private readonly reviewService: ReviewService,
   ) {}
 
   async markConceptCompleted(
@@ -70,6 +72,7 @@ export class ProgressService {
       );
       await this.gamificationService.updateStreak(userId);
       await this.gamificationService.checkAndAwardBadges(userId);
+      await this.reviewService.populateReviewItemsForConcept(userId, conceptId);
     }
 
     return savedProgress;

@@ -12,6 +12,7 @@ import { QaModule } from './modules/qa/qa.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { InstructorAnalyticsModule } from './modules/instructor-analytics/instructor-analytics.module';
+import { ReviewModule } from './modules/review/review.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -31,6 +32,7 @@ import { AppService } from './app.service';
     GamificationModule,
     AnalyticsModule,
     InstructorAnalyticsModule,
+    ReviewModule,
   ],
   controllers: [AppController],
   providers: [AppService],
