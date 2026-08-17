@@ -19,6 +19,8 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { useAiStream } from '@/hooks/use-ai-stream';
+import { AiGenerateButton } from '@/components/ai-generate-button';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface ConceptSummary {
@@ -47,6 +49,7 @@ interface RoadmapModuleItem {
 interface RoadmapData {
   id: string;
   title: string;
+  description?: string | null;
   modules?: RoadmapModuleItem[];
 }
 
@@ -64,6 +67,12 @@ export default function CreateConceptPage() {
   const [content, setContent] = useState('');
   const [activeTab, setActiveTab] = useState<'write' | 'preview' | 'split'>('split');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const {
+    isStreaming: isStreamingContent,
+    startStream: startContentStream,
+    abortStream: abortContentStream,
+  } = useAiStream();
 
   // Module-Scoped Prerequisite State
   const [selectedPrerequisiteId, setSelectedPrerequisiteId] = useState<string>('');
@@ -217,8 +226,34 @@ export default function CreateConceptPage() {
     });
   };
 
+  const handleGenerateContent = () => {
+    if (!title.trim()) {
+      showError('Please enter a concept title first.');
+      return;
+    }
+    startContentStream(
+      '/ai-generate/concept-content',
+      {
+        title: title.trim(),
+        difficulty,
+        roadmapTitle: roadmapDetail?.title,
+        roadmapDescription: roadmapDetail?.description || undefined,
+        moduleTitle: targetModuleName || undefined,
+        siblingConceptTitles: conceptsInCurrentModule.map((c) => c.title),
+      },
+      {
+        onChunk: (_delta, accumulated) => {
+          setContent(accumulated);
+        },
+        onError: (err) => {
+          showError(err);
+        },
+      },
+    );
+  };
+
   return (
-    <div className="space-y-6 max-w-6xl pb-16">
+    <div className="max-w-4xl mx-auto space-y-6 pb-16">
       {/* Back Navigation */}
       <div>
         <Link
@@ -397,9 +432,25 @@ export default function CreateConceptPage() {
 
           {/* Markdown Content Area */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-              Article Content (Markdown) <span className="text-red">*</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
+                Article Content (Markdown) <span className="text-red">*</span>
+              </label>
+              {(content.trim() === '' || isStreamingContent) && (
+                <AiGenerateButton
+                  onClick={handleGenerateContent}
+                  isStreaming={isStreamingContent}
+                  onAbort={abortContentStream}
+                  disabled={!title.trim()}
+                  title={
+                    !title.trim()
+                      ? 'Enter a concept title first'
+                      : 'Generate concept article with AI'
+                  }
+                  label="AI Generate Article"
+                />
+              )}
+            </div>
 
             <div
               className={`grid gap-4 ${

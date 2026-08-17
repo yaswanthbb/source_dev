@@ -24,6 +24,8 @@ import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
 import { ConfirmModal } from '@/components/confirm-modal';
+import { useAiStream } from '@/hooks/use-ai-stream';
+import { AiGenerateButton } from '@/components/ai-generate-button';
 
 interface PageProps {
   params: Promise<{ roadmapId: string }>;
@@ -96,6 +98,31 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
+
+  const {
+    isStreaming: isStreamingRoadmapDesc,
+    startStream: startRoadmapDescStream,
+    abortStream: abortRoadmapDescStream,
+  } = useAiStream();
+
+  const handleGenerateEditDescription = () => {
+    if (!editTitle.trim()) {
+      showError('Please enter a roadmap title first.');
+      return;
+    }
+    startRoadmapDescStream(
+      '/ai-generate/roadmap-description',
+      { title: editTitle.trim() },
+      {
+        onChunk: (_delta, accumulated) => {
+          setEditDescription(accumulated);
+        },
+        onError: (err) => {
+          showError(err);
+        },
+      },
+    );
+  };
 
   const updateRoadmapMutation = useMutation({
     mutationFn: async (payload: { title: string; description?: string }) => {
@@ -378,9 +405,25 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-text-primary uppercase tracking-wider">
-                Description
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                  Description
+                </label>
+                {(editDescription.trim() === '' || isStreamingRoadmapDesc) && (
+                  <AiGenerateButton
+                    onClick={handleGenerateEditDescription}
+                    isStreaming={isStreamingRoadmapDesc}
+                    onAbort={abortRoadmapDescStream}
+                    disabled={!editTitle.trim()}
+                    title={
+                      !editTitle.trim()
+                        ? 'Enter a title first'
+                        : 'Generate description with AI'
+                    }
+                    label="AI Generate"
+                  />
+                )}
+              </div>
               <textarea
                 rows={3}
                 value={editDescription}

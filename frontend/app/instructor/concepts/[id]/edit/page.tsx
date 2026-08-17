@@ -31,10 +31,21 @@ import {
   Terminal,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { useAiStream } from '@/hooks/use-ai-stream';
+import { AiGenerateButton } from '@/components/ai-generate-button';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+interface ConceptAppearsIn {
+  moduleConceptId: string;
+  moduleId: string;
+  moduleTitle?: string;
+  roadmapId?: string;
+  roadmapTitle?: string;
+  orderIndex: number;
 }
 
 interface ConceptDetail {
@@ -44,6 +55,7 @@ interface ConceptDetail {
   content: string;
   difficulty: 'easy' | 'medium' | 'hard';
   authorId: string;
+  appearsIn?: ConceptAppearsIn[];
 }
 
 interface McqOption {
@@ -312,6 +324,99 @@ export default function EditConceptPage({ params }: PageProps) {
     queryKey: ['concepts', conceptId],
     queryFn: async () => (await apiClient.get<ConceptDetail>(`/concepts/${conceptId}`)).data,
   });
+
+  const firstAppearsIn = concept?.appearsIn?.[0];
+  const parentRoadmapId = firstAppearsIn?.roadmapId;
+
+  const { data: roadmapDetail } = useQuery<{
+    id: string;
+    title: string;
+    description?: string | null;
+    modules?: Array<{
+      id: string;
+      title: string;
+      moduleConcepts?: Array<{
+        conceptId: string;
+        concept?: { title: string };
+      }>;
+    }>;
+  }>({
+    queryKey: ['roadmaps', parentRoadmapId, 'detail'],
+    queryFn: async () => (await apiClient.get(`/roadmaps/${parentRoadmapId}`)).data,
+    enabled: Boolean(parentRoadmapId),
+  });
+
+  const siblingConceptTitles = React.useMemo(() => {
+    if (!roadmapDetail || !firstAppearsIn?.moduleId) return [];
+    const currentMod = (roadmapDetail.modules || []).find(
+      (m) => m.id === firstAppearsIn.moduleId,
+    );
+    if (!currentMod) return [];
+    return (currentMod.moduleConcepts || [])
+      .map((mc) => mc.concept?.title)
+      .filter((t): t is string => Boolean(t) && t !== title);
+  }, [roadmapDetail, firstAppearsIn?.moduleId, title]);
+
+  const {
+    isStreaming: isStreamingContent,
+    startStream: startContentStream,
+    abortStream: abortContentStream,
+  } = useAiStream();
+
+  const {
+    isStreaming: isStreamingMcqs,
+    startStream: startMcqStream,
+    abortStream: abortMcqStream,
+  } = useAiStream();
+
+  const handleGenerateContent = () => {
+    if (!title.trim()) {
+      showError('Please enter a concept title first.');
+      return;
+    }
+    startContentStream(
+      '/ai-generate/concept-content',
+      {
+        title: title.trim(),
+        difficulty,
+        roadmapTitle: firstAppearsIn?.roadmapTitle || roadmapDetail?.title,
+        roadmapDescription: roadmapDetail?.description || undefined,
+        moduleTitle: firstAppearsIn?.moduleTitle,
+        siblingConceptTitles,
+      },
+      {
+        onChunk: (_delta, accumulated) => {
+          setContent(accumulated);
+        },
+        onError: (err) => {
+          showError(err);
+        },
+      },
+    );
+  };
+
+  const handleGenerateMcqs = () => {
+    const targetTitle = title.trim() || concept?.title;
+    if (!targetTitle) {
+      showError('Concept title is required.');
+      return;
+    }
+    startMcqStream(
+      '/ai-generate/concept-mcqs',
+      {
+        title: targetTitle,
+        content: content.trim() || concept?.content || undefined,
+      },
+      {
+        onChunk: (_delta, accumulated) => {
+          setBulkText(accumulated);
+        },
+        onError: (err) => {
+          showError(err);
+        },
+      },
+    );
+  };
 
   // Seed form state on fetch
   useEffect(() => {
@@ -834,9 +939,25 @@ export default function EditConceptPage({ params }: PageProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                Article Content (Markdown) <span className="text-red">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
+                  Article Content (Markdown) <span className="text-red">*</span>
+                </label>
+                {(content.trim() === '' || isStreamingContent) && (
+                  <AiGenerateButton
+                    onClick={handleGenerateContent}
+                    isStreaming={isStreamingContent}
+                    onAbort={abortContentStream}
+                    disabled={!title.trim()}
+                    title={
+                      !title.trim()
+                        ? 'Enter a concept title first'
+                        : 'Generate concept article with AI'
+                    }
+                    label="AI Generate Article"
+                  />
+                )}
+              </div>
 
               <div
                 className={`grid gap-4 ${
@@ -1143,6 +1264,16 @@ export default function EditConceptPage({ params }: PageProps) {
                           </>
                         )}
                       </button>
+
+                      {/* AI Generate MCQs Button */}
+                      <AiGenerateButton
+                        onClick={handleGenerateMcqs}
+                        isStreaming={isStreamingMcqs}
+                        onAbort={abortMcqStream}
+                        label="AI Generate MCQs"
+                        streamingLabel="Generating MCQs..."
+                        title="Generate 5 assessment MCQs from concept article with AI"
+                      />
 
                       {/* Insert Template Button */}
                       <button

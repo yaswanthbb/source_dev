@@ -6,13 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Layers, Sparkles } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-
+import { useAiStream } from '@/hooks/use-ai-stream';
+import { AiGenerateButton } from '@/components/ai-generate-button';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
 export default function CreateRoadmapPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useSnackbar();
+  const { isStreaming, startStream, abortStream } = useAiStream();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -35,6 +37,25 @@ export default function CreateRoadmapPage() {
       showError(msg);
     },
   });
+
+  const handleGenerateDescription = () => {
+    if (!title.trim()) {
+      showError('Please enter a roadmap title first.');
+      return;
+    }
+    startStream(
+      '/ai-generate/roadmap-description',
+      { title: title.trim() },
+      {
+        onChunk: (_delta, accumulated) => {
+          setDescription(accumulated);
+        },
+        onError: (err) => {
+          showError(err);
+        },
+      },
+    );
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,9 +117,25 @@ export default function CreateRoadmapPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-              Description (Optional)
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
+                Description (Optional)
+              </label>
+              {(description.trim() === '' || isStreaming) && (
+                <AiGenerateButton
+                  onClick={handleGenerateDescription}
+                  isStreaming={isStreaming}
+                  onAbort={abortStream}
+                  disabled={!title.trim()}
+                  title={
+                    !title.trim()
+                      ? 'Enter a roadmap title first'
+                      : 'Generate description with AI'
+                  }
+                  label="AI Generate"
+                />
+              )}
+            </div>
             <textarea
               rows={4}
               value={description}
