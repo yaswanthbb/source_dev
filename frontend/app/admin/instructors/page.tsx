@@ -259,7 +259,7 @@ export default function AdminInstructorsApprovalPage() {
                     type="button"
                     disabled={rejectMutation.isPending || approveMutation.isPending}
                     onClick={() => handleReject(inst.id, inst.name)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red/30 bg-red-tint/50 text-red hover:bg-red-tint text-xs font-semibold transition-all cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                     <span>Reject</span>
@@ -341,7 +341,7 @@ export default function AdminInstructorsApprovalPage() {
                           type="button"
                           disabled={demoteMutation.isPending}
                           onClick={() => handleDemote(inst.id, inst.name)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-[11px] font-semibold transition-all cursor-pointer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red/30 bg-red-tint/50 text-red hover:bg-red-tint text-[11px] font-semibold transition-all cursor-pointer"
                           title="Revoke instructor status and degrade back to student"
                         >
                           <X className="w-3 h-3" />
@@ -384,7 +384,7 @@ export default function AdminInstructorsApprovalPage() {
                       type="button"
                       disabled={demoteMutation.isPending}
                       onClick={() => handleDemote(inst.id, inst.name)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 bg-red-50 text-red-600 text-[11px] font-semibold"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red/30 bg-red-tint/50 text-red text-[11px] font-semibold"
                     >
                       <X className="w-3 h-3" />
                       <span>Degrade</span>
@@ -401,7 +401,7 @@ export default function AdminInstructorsApprovalPage() {
       {rejectedInstructors.length > 0 && (
         <section className="space-y-4 pt-4 border-t border-border/80">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs">
+            <div className="w-6 h-6 rounded-full bg-red-tint text-red flex items-center justify-center font-bold text-xs">
               <XCircle className="w-3.5 h-3.5" />
             </div>
             <h2 className="text-lg font-bold font-display text-text-primary">
@@ -430,7 +430,7 @@ export default function AdminInstructorsApprovalPage() {
                         {inst.email}
                       </td>
                       <td className="p-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-50 text-red-600 font-bold text-[10px] uppercase tracking-wider">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-tint text-red font-bold text-[10px] uppercase tracking-wider">
                           <XCircle className="w-3 h-3" />
                           <span>Rejected</span>
                         </span>
@@ -449,7 +449,7 @@ export default function AdminInstructorsApprovalPage() {
                     <p className="font-bold text-sm text-text-primary truncate">{inst.name}</p>
                     <p className="text-[11px] font-mono text-text-secondary truncate">{inst.email}</p>
                   </div>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 font-bold text-[10px] uppercase tracking-wider flex-shrink-0">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-tint text-red font-bold text-[10px] uppercase tracking-wider flex-shrink-0">
                     <XCircle className="w-3 h-3" />
                     <span>Rejected</span>
                   </span>

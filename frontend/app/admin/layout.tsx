@@ -114,7 +114,7 @@ export default function AdminAppShellLayout({
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-4 sm:p-6">
         <div className="max-w-md w-full p-6 sm:p-8 rounded-2xl bg-surface border border-border text-center shadow-sm space-y-5">
-          <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto shadow-2xs">
+          <div className="w-14 h-14 rounded-2xl bg-red-tint text-red flex items-center justify-center mx-auto shadow-2xs">
             <AlertCircle className="w-7 h-7" />
           </div>
           <div className="space-y-1.5">
@@ -147,6 +147,13 @@ export default function AdminAppShellLayout({
 
   return (
     <div className="min-h-screen bg-bg flex flex-col lg:flex-row relative">
+      {/* Ambient Dark Mode Glow Orbs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10 hidden dark:block" aria-hidden="true">
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-purple-600/15 blur-[120px]" />
+        <div className="absolute top-1/3 right-0 w-[500px] h-[500px] rounded-full bg-indigo-600/10 blur-[100px]" />
+        <div className="absolute bottom-0 left-1/2 w-[400px] h-[400px] rounded-full bg-blue-600/10 blur-[90px]" />
+      </div>
+
       {/* 1. Mobile Top Navigation Bar (< lg) */}
       <header className="lg:hidden h-14 px-4 bg-surface border-b border-border flex items-center justify-between sticky top-0 z-30">
         <Link href="/admin/dashboard" className="flex items-center">
@@ -212,7 +219,7 @@ export default function AdminAppShellLayout({
 
               {/* Navigation Links */}
               <nav className="p-4 space-y-1.5" aria-label="Admin Mobile Navigation">
-                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
                   Admin Console
                 </div>
                 {ADMIN_NAV_ITEMS.map((item) => {
@@ -228,11 +235,11 @@ export default function AdminAppShellLayout({
                       onClick={() => setIsMobileDrawerOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-purple-50 text-purple-700 font-semibold'
+                          ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 font-semibold'
                           : 'text-text-secondary hover:bg-bg hover:text-text-primary'
                       }`}
                     >
-                      <Icon className={`w-5 h-5 ${isActive ? 'text-purple-700' : 'text-text-secondary'}`} />
+                      <Icon className={`w-5 h-5 ${isActive ? 'text-purple-600 dark:text-purple-300' : 'text-text-secondary'}`} />
                       <span>{item.name}</span>
                     </Link>
                   );
@@ -291,7 +298,7 @@ export default function AdminAppShellLayout({
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1.5" aria-label="Admin Navigation">
-            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">
+            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
               Admin Console
             </div>
             {ADMIN_NAV_ITEMS.map((item) => {
@@ -306,11 +313,11 @@ export default function AdminAppShellLayout({
                   href={item.href}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-purple-50 text-purple-700 font-semibold'
+                      ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 font-semibold'
                       : 'text-text-secondary hover:bg-bg hover:text-text-primary'
                   }`}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-purple-700' : 'text-text-secondary'}`} />
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-purple-600 dark:text-purple-300' : 'text-text-secondary'}`} />
                   <span>{item.name}</span>
                 </Link>
               );
@@ -318,7 +325,7 @@ export default function AdminAppShellLayout({
           </nav>
         </div>
 
-        {/* Bottom User Profile Section */}
+        {/* Bottom User Profile Section with Integrated Theme Toggle */}
         <div className="p-4 border-t border-border bg-surface">
           <ProfileActionsMenu
             user={user || undefined}
