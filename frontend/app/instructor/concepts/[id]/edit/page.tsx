@@ -790,7 +790,7 @@ export default function EditConceptPage({ params }: PageProps) {
           </div>
 
           {errorMessage && (
-            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-red-tint border border-red/30 text-red text-xs font-medium flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{errorMessage}</span>
             </div>
@@ -806,7 +806,7 @@ export default function EditConceptPage({ params }: PageProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="sm:col-span-2 space-y-1.5">
                 <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                  Concept Title <span className="text-red-500">*</span>
+                  Concept Title <span className="text-red">*</span>
                 </label>
                 <input
                   type="text"
@@ -835,7 +835,7 @@ export default function EditConceptPage({ params }: PageProps) {
 
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                Article Content (Markdown) <span className="text-red-500">*</span>
+                Article Content (Markdown) <span className="text-red">*</span>
               </label>
 
               <div
@@ -1002,7 +1002,7 @@ export default function EditConceptPage({ params }: PageProps) {
               {questionMode === 'manual' && (
                 <form onSubmit={handleCreateQuestionSubmit} className="space-y-5">
                   {quizFormError && (
-                    <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+                    <div className="p-3.5 rounded-xl bg-red-tint border border-red/30 text-red text-xs font-medium flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
                       <span>{quizFormError}</span>
                     </div>
@@ -1011,7 +1011,7 @@ export default function EditConceptPage({ params }: PageProps) {
                   {/* Question Text */}
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                      Question Text <span className="text-red-500">*</span>
+                      Question Text <span className="text-red">*</span>
                     </label>
                     <input
                       type="text"
@@ -1080,7 +1080,7 @@ export default function EditConceptPage({ params }: PageProps) {
                             <button
                               type="button"
                               onClick={() => handleRemoveOptionField(idx)}
-                              className="p-1 text-text-secondary hover:text-red-500 rounded transition-colors cursor-pointer"
+                              className="p-1 text-text-secondary hover:text-red rounded transition-colors cursor-pointer"
                               title="Remove option"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1159,7 +1159,7 @@ export default function EditConceptPage({ params }: PageProps) {
                       <button
                         type="button"
                         onClick={() => setBulkText('')}
-                        className="p-1.5 rounded-lg text-text-secondary hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg text-text-secondary hover:text-red hover:bg-red-tint/50 transition-colors cursor-pointer"
                         title="Clear input"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1203,7 +1203,7 @@ export default function EditConceptPage({ params }: PageProps) {
                               <span>Valid ({validationReport.totalValid} Ready)</span>
                             </span>
                           ) : validationReport.syntaxError ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-50 text-red-600 text-xs font-bold">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-red-tint text-red text-xs font-bold">
                               <AlertCircle className="w-3 h-3" />
                               <span>Syntax Error</span>
                             </span>
@@ -1221,9 +1221,9 @@ export default function EditConceptPage({ params }: PageProps) {
                             {validationReport.errors.map((errStr, eIdx) => (
                               <div
                                 key={eIdx}
-                                className="p-2 rounded-lg bg-red-50/80 border border-red-200/80 text-red-700 text-xs flex items-start gap-2"
+                                className="p-2 rounded-lg bg-red-tint/50 border border-red/30 text-red text-xs flex items-start gap-2"
                               >
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-red mt-1.5 flex-shrink-0" />
                                 <span className="leading-tight">{errStr}</span>
                               </div>
                             ))}
@@ -1420,7 +1420,7 @@ export default function EditConceptPage({ params }: PageProps) {
                         <button
                           type="button"
                           onClick={() => handleDeleteQuestion(q.id)}
-                          className="p-1.5 text-text-secondary hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                          className="p-1.5 text-text-secondary hover:text-red rounded-lg hover:bg-red-tint/50 transition-colors cursor-pointer"
                           title="Delete question"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

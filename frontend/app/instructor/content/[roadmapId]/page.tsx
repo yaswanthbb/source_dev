@@ -435,7 +435,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                 <button
                   type="button"
                   onClick={() => setIsDeleteRoadmapOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-surface text-red-600 hover:bg-red-50 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red/30 bg-surface text-red hover:bg-red-tint/50 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
                   title="Delete Roadmap (Admin only)"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -613,7 +613,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                       {isAdmin && (
                         <button
                           onClick={() => handleDeleteModuleClick(moduleItem)}
-                          className="p-1.5 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          className="p-1.5 text-text-secondary hover:text-red hover:bg-red-tint/50 rounded-lg transition-colors cursor-pointer"
                           title="Delete module (Admin only)"
                           aria-label="Delete module"
                         >
@@ -668,7 +668,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                             </Link>
                             <button
                               onClick={() => handleDetachConceptClick(moduleItem.id, c)}
-                              className="p-1 text-text-secondary hover:text-red-500 rounded-md transition-colors cursor-pointer"
+                              className="p-1 text-text-secondary hover:text-red rounded-md transition-colors cursor-pointer"
                               title="Detach concept from module"
                               aria-label="Detach concept"
                             >

@@ -293,7 +293,7 @@ export default function CreateConceptPage() {
         </div>
 
         {errorMessage && (
-          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+          <div className="p-4 rounded-xl bg-red-tint border border-red/30 text-red text-xs font-medium flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -304,7 +304,7 @@ export default function CreateConceptPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2 space-y-1.5">
               <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                Concept Title <span className="text-red-500">*</span>
+                Concept Title <span className="text-red">*</span>
               </label>
               <input
                 type="text"
@@ -398,7 +398,7 @@ export default function CreateConceptPage() {
           {/* Markdown Content Area */}
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-              Article Content (Markdown) <span className="text-red-500">*</span>
+              Article Content (Markdown) <span className="text-red">*</span>
             </label>
 
             <div

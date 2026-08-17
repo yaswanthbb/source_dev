@@ -288,7 +288,7 @@ export default function InstructorContentDirectoryPage() {
                         <button
                           type="button"
                           onClick={() => handleDeleteRoadmapClick(roadmap)}
-                          className="p-2 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          className="p-2 text-text-secondary hover:text-red hover:bg-red-tint/50 rounded-lg transition-colors cursor-pointer"
                           title="Delete Roadmap (Admin only)"
                           aria-label="Delete Roadmap"
                         >
@@ -340,7 +340,7 @@ export default function InstructorContentDirectoryPage() {
                         concept.difficulty === 'easy'
                           ? 'bg-green-tint text-green'
                           : concept.difficulty === 'hard'
-                          ? 'bg-red-50 text-red-600'
+                          ? 'bg-red-tint text-red'
                           : 'bg-amber-tint text-amber'
                       }`}
                     >
@@ -378,7 +378,7 @@ export default function InstructorContentDirectoryPage() {
                       <button
                         type="button"
                         onClick={() => handleDeleteConceptClick(concept)}
-                        className="p-1 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-1 text-text-secondary hover:text-red hover:bg-red-tint/50 rounded-lg transition-colors cursor-pointer"
                         title="Delete Concept (Admin only)"
                         aria-label="Delete Concept"
                       >

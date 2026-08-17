@@ -227,6 +227,13 @@ export default function InstructorAppShellLayout({
 
   return (
     <div className="min-h-screen bg-bg flex flex-col lg:flex-row relative">
+      {/* Ambient Dark Mode Glow Orbs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10 hidden dark:block" aria-hidden="true">
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-indigo-600/15 blur-[120px]" />
+        <div className="absolute top-1/3 right-0 w-[500px] h-[500px] rounded-full bg-violet-600/10 blur-[100px]" />
+        <div className="absolute bottom-0 left-1/2 w-[400px] h-[400px] rounded-full bg-blue-600/10 blur-[90px]" />
+      </div>
+
       {/* 1. Mobile Top Navigation Bar (< lg) */}
       <header className="lg:hidden h-14 px-4 bg-surface border-b border-border flex items-center justify-between sticky top-0 z-30">
         <Link href="/instructor/dashboard" className="flex items-center">
@@ -398,7 +405,7 @@ export default function InstructorAppShellLayout({
           </nav>
         </div>
 
-        {/* Bottom User Profile Section */}
+        {/* Bottom User Profile Section with Integrated Theme Toggle */}
         <div className="p-4 border-t border-border bg-surface">
           <ProfileActionsMenu
             user={user || undefined}

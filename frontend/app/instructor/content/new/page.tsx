@@ -75,7 +75,7 @@ export default function CreateRoadmapPage() {
         </div>
 
         {errorMessage && (
-          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
+          <div className="p-4 rounded-xl bg-red-tint border border-red/30 text-red text-xs font-medium">
             {errorMessage}
           </div>
         )}
@@ -83,7 +83,7 @@ export default function CreateRoadmapPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-              Roadmap Title <span className="text-red-500">*</span>
+              Roadmap Title <span className="text-red">*</span>
             </label>
             <input
               type="text"

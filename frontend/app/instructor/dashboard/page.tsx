@@ -158,7 +158,7 @@ export default function InstructorDashboardPage() {
             <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
               Q&A Answered
             </span>
-            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-300 flex items-center justify-center">
               <MessageSquare className="w-4 h-4" />
             </div>
           </div>
@@ -321,7 +321,7 @@ export default function InstructorDashboardPage() {
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${
                           q.correctRate < 50
-                            ? 'bg-red-50 text-red-600 border border-red-200'
+                            ? 'bg-red-tint text-red border border-red/30'
                             : q.correctRate < 75
                             ? 'bg-amber-tint text-amber'
                             : 'bg-green-tint text-green'
