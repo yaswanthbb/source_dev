@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  darkMode: 'class',
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -11,21 +12,27 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: '#F7F8FA',
-        surface: '#FFFFFF',
-        border: '#E2E5EA',
-        'text-primary': '#1B1F27',
-        'text-secondary': '#5B6472',
-        accent: '#3B5FE2',
-        'accent-tint': '#EAEEFB',
-        amber: '#D98C1D',
-        'amber-tint': '#FCF0E1',
-        green: '#0F8C52',
-        'green-tint': '#E6F6EC',
+        bg: 'var(--color-bg)',
+        surface: 'var(--color-surface)',
+        'surface-hover': 'var(--color-surface-hover)',
+        border: 'var(--color-border)',
+        'border-subtle': 'var(--color-border-subtle)',
+        'text-primary': 'var(--color-text-primary)',
+        'text-secondary': 'var(--color-text-secondary)',
+        'text-muted': 'var(--color-text-muted)',
+        accent: 'var(--color-accent)',
+        'accent-hover': 'var(--color-accent-hover)',
+        'accent-tint': 'var(--color-accent-tint)',
+        amber: 'var(--color-amber)',
+        'amber-tint': 'var(--color-amber-tint)',
+        green: 'var(--color-green)',
+        'green-tint': 'var(--color-green-tint)',
+        red: 'var(--color-red)',
+        'red-tint': 'var(--color-red-tint)',
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'sans-serif'],
-        display: ['var(--font-space-grotesk)', 'sans-serif'],
+        sans: ['var(--font-sans)', 'sans-serif'],
+        display: ['var(--font-display)', 'sans-serif'],
       },
     },
   },

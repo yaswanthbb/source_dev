@@ -1,12 +1,40 @@
 @import "tailwindcss";
 
 @theme {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-border: var(--color-border);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-tint: var(--color-accent-tint);
+  --color-amber: var(--color-amber);
+  --color-amber-tint: var(--color-amber-tint);
+  --color-green: var(--color-green);
+  --color-green-tint: var(--color-green-tint);
+  --color-red: var(--color-red);
+  --color-red-tint: var(--color-red-tint);
+
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
+:root {
+  /* ── Light Mode (Original baseline, 100% pixel-identical) ──────────── */
   --color-bg: #F7F8FA;
   --color-surface: #FFFFFF;
+  --color-surface-hover: #F1F3F7;
   --color-border: #E2E5EA;
+  --color-border-subtle: #ECEEF2;
   --color-text-primary: #1B1F27;
   --color-text-secondary: #5B6472;
+  --color-text-muted: #8E98A8;
   --color-accent: #3B5FE2;
+  --color-accent-hover: #2E4ECB;
   --color-accent-tint: #EAEEFB;
   --color-amber: #D98C1D;
   --color-amber-tint: #FCF0E1;
@@ -19,12 +47,82 @@
   --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
 }
 
+.dark {
+  /* ── Dark Mode (Glassmorphic + Deep Space & Indigo/Violet palette) ──── */
+  --color-bg: #0d0f1a;
+  --color-surface: rgba(255, 255, 255, 0.06);
+  --color-surface-hover: rgba(255, 255, 255, 0.10);
+  --color-border: rgba(255, 255, 255, 0.10);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+  --color-accent: #6366F1;
+  --color-accent-hover: #818CF8;
+  --color-accent-tint: rgba(99, 102, 241, 0.18);
+  --color-amber: #FBBF24;
+  --color-amber-tint: rgba(251, 191, 36, 0.18);
+  --color-green: #34D399;
+  --color-green-tint: rgba(52, 211, 153, 0.18);
+  --color-red: #F87171;
+  --color-red-tint: rgba(248, 113, 113, 0.18);
+
+  --font-sans: var(--font-rubik), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Dark Mode Frosted Glass Surfaces ────────────────────────────────── */
+.dark .bg-surface {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Smooth theme transitions */
 html {
   scroll-behavior: smooth;
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ── Staggered entrance animation utility (respects reduced motion) ──── */
+@keyframes fadeInScaleUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-item {
+  animation: fadeInScaleUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.stagger-item:nth-child(1) { animation-delay: 0.04s; }
+.stagger-item:nth-child(2) { animation-delay: 0.08s; }
+.stagger-item:nth-child(3) { animation-delay: 0.12s; }
+.stagger-item:nth-child(4) { animation-delay: 0.16s; }
+.stagger-item:nth-child(5) { animation-delay: 0.20s; }
+.stagger-item:nth-child(6) { animation-delay: 0.24s; }
+.stagger-item:nth-child(7) { animation-delay: 0.28s; }
+.stagger-item:nth-child(8) { animation-delay: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-item {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
