@@ -63,7 +63,7 @@ export function ProfileActionsMenu({
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
               isAdmin
-                ? 'bg-purple-100 text-purple-700'
+                ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300'
                 : 'bg-accent-tint text-accent'
             }`}
           >
@@ -101,7 +101,7 @@ export function ProfileActionsMenu({
 
       {/* Floating Dropdown Popover (Opens Upward from Sidebar Footer) */}
       {isMenuOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-2 bg-surface border border-border rounded-2xl shadow-xl p-1.5 z-50 space-y-1 animate-in zoom-in-95 fade-in duration-150">
+        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-[#131622] border border-border rounded-2xl shadow-xl p-1.5 z-50 space-y-1 animate-in zoom-in-95 fade-in duration-150">
           {/* Header Info */}
           <div className="px-3 py-2 border-b border-border/60">
             <p className="text-xs font-bold text-text-primary truncate">
@@ -145,9 +145,9 @@ export function ProfileActionsMenu({
             <Link
               href="/admin/dashboard"
               onClick={() => setIsMenuOpen(false)}
-              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-purple-700 hover:bg-purple-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-purple-600 dark:text-purple-300 hover:bg-purple-500/10 flex items-center gap-2.5 transition-colors cursor-pointer"
             >
-              <Shield className="w-4 h-4 text-purple-600" />
+              <Shield className="w-4 h-4 text-purple-600 dark:text-purple-300" />
               <span>Switch to Admin Console</span>
             </Link>
           )}
@@ -182,9 +182,9 @@ export function ProfileActionsMenu({
                 setIsMenuOpen(false);
                 setShowDeletionModal(true);
               }}
-              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-red hover:bg-red-tint/50 flex items-center gap-2.5 transition-colors cursor-pointer"
             >
-              <Trash2 className="w-4 h-4 text-red-500" />
+              <Trash2 className="w-4 h-4 text-red" />
               <span>Request Account Deletion</span>
             </button>
           )}
@@ -198,7 +198,7 @@ export function ProfileActionsMenu({
               setIsMenuOpen(false);
               onOpenLogoutModal();
             }}
-            className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-secondary hover:text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+            className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-secondary hover:text-red hover:bg-red-tint/50 flex items-center gap-2.5 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
             <span>Sign Out</span>

@@ -45,7 +45,7 @@ export function ConfirmModal({
 
   if (!isOpen || !mounted) return null;
 
-  let iconContainerClass = 'bg-red-50 text-red';
+  let iconContainerClass = 'bg-red-tint text-red';
   let IconComponent = AlertCircle;
   let confirmBtnClass = 'bg-red text-white hover:bg-red/90';
 

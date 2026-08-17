@@ -31,7 +31,7 @@ export function LogoutConfirmationModal({
         aria-modal="true"
       >
         <div className="flex items-center justify-between">
-          <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-red-tint text-red flex items-center justify-center flex-shrink-0">
             <LogOut className="w-5 h-5" />
           </div>
           <button
@@ -64,7 +64,7 @@ export function LogoutConfirmationModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+            className="px-4 py-2 rounded-xl bg-red hover:bg-red/90 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
           >
             Sign Out
           </button>

@@ -123,7 +123,7 @@ export function RequestDeletionModal({
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-border/80 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-red-tint text-red flex items-center justify-center flex-shrink-0">
               <ShieldAlert className="w-5 h-5" />
             </div>
             <div>
@@ -181,16 +181,16 @@ export function RequestDeletionModal({
           /* State 2: GitHub-Style Confirmation Form */
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Warning Callout Box */}
-            <div className="p-4 rounded-xl bg-red-50/60 border border-red-200 text-red-800 text-xs space-y-2 leading-relaxed">
-              <div className="font-bold flex items-center gap-2 text-red-900">
+            <div className="p-4 rounded-xl bg-red-tint/40 border border-red/30 text-text-primary text-xs space-y-2 leading-relaxed">
+              <div className="font-bold flex items-center gap-2 text-red">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                 <span>This action cannot be undone</span>
               </div>
-              <p className="text-red-700/90 text-xs">
+              <p className="text-text-secondary text-xs">
                 Once an administrator approves your request, all personal data
                 associated with this account will be permanently erased:
               </p>
-              <ul className="list-disc list-inside space-y-1 text-[11px] text-red-800 font-medium pl-1">
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-text-secondary font-medium pl-1">
                 <li>Your enrolled roadmaps and concept reading progress</li>
                 <li>Your MCQ quiz submission history and scores</li>
                 <li>Your earned XP, badges, and learning streaks</li>
@@ -223,7 +223,7 @@ export function RequestDeletionModal({
             <div className="space-y-2 pt-1 border-t border-border/80">
               <label className="block text-xs text-text-primary font-medium">
                 To confirm, please type{' '}
-                <span className="font-mono font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded text-[11px]">
+                <span className="font-mono font-bold text-red bg-red-tint border border-red/30 px-1.5 py-0.5 rounded text-[11px]">
                   {REQUIRED_CONFIRMATION_TEXT}
                 </span>{' '}
                 in the box below:
@@ -253,10 +253,10 @@ export function RequestDeletionModal({
               <button
                 type="submit"
                 disabled={!isConfirmationMatched || requestMutation.isPending}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 ${
                   isConfirmationMatched
-                    ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
-                    : 'bg-red-200 text-red-400 cursor-not-allowed opacity-60'
+                    ? 'bg-red hover:bg-red/90 text-white cursor-pointer'
+                    : 'bg-red-tint/50 text-red/60 border border-red/20 cursor-not-allowed opacity-60'
                 }`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
