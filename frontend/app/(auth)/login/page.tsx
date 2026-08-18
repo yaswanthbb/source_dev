@@ -11,6 +11,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { setToken, setUser, User } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const loginSchema = z.object({
   email: z
@@ -103,14 +104,17 @@ export default function LoginPage() {
             unoptimized
           />
         </Link>
-        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-text-secondary text-right">
-          <span className="hidden xs:inline">Don&apos;t have an account?</span>
-          <Link
-            href="/register"
-            className="text-accent font-medium hover:underline transition-colors whitespace-nowrap"
-          >
-            Create account
-          </Link>
+        <div className="flex items-center gap-3 text-xs sm:text-sm text-text-secondary text-right">
+          <ThemeToggle />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="hidden xs:inline">Don&apos;t have an account?</span>
+            <Link
+              href="/register"
+              className="text-accent font-medium hover:underline transition-colors whitespace-nowrap"
+            >
+              Create account
+            </Link>
+          </div>
         </div>
       </header>
 

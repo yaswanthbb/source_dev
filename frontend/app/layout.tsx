@@ -4,7 +4,6 @@ import { QueryProvider } from '../providers/query-provider';
 import { SnackbarProvider } from '../providers/snackbar-provider';
 import { ThemeProvider } from '../providers/theme-provider';
 import { ScrollProgressBar } from '@/components/scroll-progress-bar';
-import { ThemeToggle } from '@/components/theme-toggle';
 import './globals.css';
 
 const inter = Inter({
@@ -76,7 +75,6 @@ export default function RootLayout({
       <body className="min-h-screen bg-bg text-text-primary antialiased font-sans">
         <ScrollProgressBar />
         <ThemeProvider>
-          <ThemeToggle />
           <QueryProvider>
             <SnackbarProvider>{children}</SnackbarProvider>
           </QueryProvider>
