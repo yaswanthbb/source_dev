@@ -54,7 +54,9 @@ export class AiGenerateController {
     status: 200,
     description: 'Remaining quota out of 20 daily generations.',
   })
-  async getQuota(@CurrentUser() user: User): Promise<{ remaining: number; limit: number }> {
+  async getQuota(
+    @CurrentUser() user: User,
+  ): Promise<{ remaining: number; limit: number }> {
     const { remaining } = await this.aiGenerateService.checkRateLimit(user.id);
     return { remaining, limit: 20 };
   }

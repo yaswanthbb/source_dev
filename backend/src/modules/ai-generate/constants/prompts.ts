@@ -1,69 +1,110 @@
-export const ROADMAP_DESCRIPTION_SYSTEM_PROMPT = `You are an expert curriculum designer and senior technical instructor. Your task is to write a brief, course-catalog-style introduction for a learning roadmap.
+export const ROADMAP_DESCRIPTION_SYSTEM_PROMPT = `You are an expert curriculum designer and senior technical instructor. Your task is to write a brief, course-catalog-style introduction for a learning roadmap that clearly conveys the learning progression arc.
 
-Guidelines & Style:
+Guidelines & Progression Arc:
 - Write exactly 2-4 sentences, as a single short paragraph (no more than roughly 60 words).
-- Provide a concise course-catalog-style overview of what the roadmap covers and what learners will achieve. This is a brief introductory summary, NOT a syllabus, module breakdown, or detailed curriculum outline.
-- Write in a direct, natural instructor voice with crisp, varied phrasing.
+- If the roadmap title implies a progression (e.g. contains words like "basics to advanced", "beginner to expert", "zero to hero", "fundamentals to mastery", "from scratch", or similar framing), the description MUST explicitly convey a clear starting point and ending point—not just a list of topics covered, but the actual shape of the journey.
+- If the title implies starting from scratch or "basics", the description must make clear the reader needs ZERO prior knowledge of the subject—state plainly what the absolute starting point looks like (e.g. "starting with what a repository even is" rather than jumping straight into terminology-heavy concepts).
+- The description should read as a journey with a beginning, middle, and end—not a bag of vocabulary terms from the subject clustered together. A reader should be able to tell roughly where the foundational material ends and the advanced material begins just from reading it.
+- Maintain a direct, natural instructor voice with crisp, varied phrasing.
 - STRICTLY AVOID generic AI fluff, hype words, and cliché transitions. Do NOT use phrases like "In today's fast-paced world", "dive into", "delve into", "In conclusion", "embark on a journey", "unlock your potential", "testament", or "furthermore".
 - Do not include bullet points, headings, meta-commentary, introductory remarks (e.g., "Here is the description:"), or markdown code fences. Output ONLY the single short paragraph of plain text.`;
 
 export function buildRoadmapDescriptionUserPrompt(title: string): string {
-  return `Generate a brief course-catalog description (2-4 sentences, single short paragraph) for a learning roadmap titled: "${title}".`;
+  return `Generate a brief course-catalog description (2-4 sentences, single short paragraph, ~60 words) that clearly states the starting point, learning arc, and final outcome for a learning roadmap titled: "${title}".`;
 }
 
-export const ROADMAP_MODULES_SYSTEM_PROMPT = `You are an expert curriculum designer and principal engineer organizing a technical roadmap into a coherent sequence of learning modules.
+export const ROADMAP_MODULES_SYSTEM_PROMPT = `You are an expert curriculum designer and principal engineer organizing a technical roadmap into a coherent sequence of learning modules that forms a genuine step-by-step progression.
 
 Rules & Guidelines:
 1. Break the curriculum down into a logical progression of modules (up to 6 modules, choose the optimal number based on topic depth).
-2. Each module title must be concise, descriptive, and actionable (e.g., "Foundations & Core Syntax", "Advanced Concurrency Patterns", "Production Deployment & Observability").
-3. Ensure logical prerequisite ordering: fundamentals first, followed by core patterns, advanced techniques, and real-world architectures.
-4. Output MUST be a strictly valid JSON array of strings containing only the module titles, e.g.:
+2. Order modules to form a genuine progression matching the roadmap's stated arc. If the roadmap starts from scratch/basics, Module 1 must cover TRUE fundamentals—assume the reader has never used this tool/subject before.
+3. Do not front-load any module with content that assumes knowledge not yet established by earlier modules. Each module's difficulty should increase step-by-step; the final module(s) should be where genuinely advanced material lives, not the first.
+4. Each module title must be concise, descriptive, and actionable (e.g., "Foundations & Core Syntax", "Branching & Collaboration Workflows", "Advanced Internals & Recovery").
+5. Output MUST be a strictly valid JSON array of strings containing only the module titles, e.g.:
    ["Module 1 Title", "Module 2 Title", "Module 3 Title"]
-5. STRICTLY FORBIDDEN: Markdown formatting, code fences (\`\`\`json), explanations, bullet lists, or conversational filler. Output ONLY the raw JSON array.`;
+6. STRICTLY FORBIDDEN: Markdown formatting, code fences (\`\`\`json), explanations, bullet lists, or conversational filler. Output ONLY the raw JSON array.`;
 
 export function buildRoadmapModulesUserPrompt(
   roadmapTitle: string,
   roadmapDescription?: string,
   existingModuleTitles: string[] = [],
+  targetCount: number = 6,
 ): string {
   const parts = [`Roadmap Title: "${roadmapTitle}"`];
   if (roadmapDescription) {
-    parts.push(`Roadmap Description: "${roadmapDescription}"`);
+    parts.push(`Roadmap Description & Progression Arc: "${roadmapDescription}"`);
   }
   if (existingModuleTitles.length > 0) {
     parts.push(
-      `Existing Modules (do NOT duplicate): ${existingModuleTitles.map((t) => `"${t}"`).join(', ')}`,
+      `Existing Modules Already in Curriculum (do NOT duplicate topics): ${existingModuleTitles.map((t, idx) => `[Module #${idx + 1}] "${t}"`).join(', ')}`,
+    );
+    parts.push(
+      `Task: The curriculum currently has ${existingModuleTitles.length} modules. Generate an ordered list of exactly ${targetCount} new module title${targetCount > 1 ? 's' : ''} (JSON array of strings) starting at Module #${existingModuleTitles.length + 1} that logically continue and advance the learning progression towards the end of the stated roadmap arc without repeating existing module topics.`,
+    );
+  } else {
+    parts.push(
+      `Task: Generate an ordered list of up to ${targetCount} module titles (JSON array of strings) following a strict step-by-step difficulty progression matching the roadmap arc.`,
     );
   }
-  return `${parts.join('\n')}\n\nGenerate an ordered list of module titles (JSON array of strings, up to 6 modules) for this roadmap.`;
+  return parts.join('\n\n');
 }
 
 export const MODULE_CONCEPTS_SYSTEM_PROMPT = `You are an expert technical educator and syllabus designer breaking down a single module into bite-sized, sequential learning concepts.
 
-Rules & Guidelines:
-1. Generate up to 6 focused, atomic concept titles that together cover the module comprehensively.
-2. Each concept title should represent one specific lesson or mental model (e.g., "Goroutines & the Go Runtime Scheduler", "Channels & Directional Types", "Select Statements & Non-Blocking I/O").
-3. Order concepts sequentially so each concept builds naturally on the previous one.
-4. Output MUST be a strictly valid JSON array of strings containing only the concept titles, e.g.:
+Rules & Scope Control:
+1. Generate focused, atomic concept titles specifically and exclusively scoped for the target module (up to the requested count).
+2. Respect Roadmap Position & Pacing: Given this module's position in the overall roadmap (e.g. Module #1 of 5) and the roadmap's stated progression, generate concepts at the appropriate difficulty level for this exact point in the journey.
+3. If this is an early module (e.g. Module 1) in a roadmap that starts from scratch, concepts must assume ZERO prior knowledge of the subject—focus on absolute fundamentals (e.g. what the tool/system is, installation, first command/file). Do NOT introduce advanced workflows, branching, merging, conflict resolution, or complex internals that belong in dedicated later modules.
+4. Sibling Module Scope Isolation: Strictly respect the scope of other modules already planned in the roadmap. Do NOT generate concepts covering topics that belong in those other modules. Save intermediate/advanced techniques for the modules whose titles and position indicate where they belong.
+5. Order concepts sequentially so each concept builds naturally on the previous one.
+6. Output MUST be a strictly valid JSON array of strings containing only the concept titles, e.g.:
    ["Concept 1 Title", "Concept 2 Title", "Concept 3 Title"]
-5. STRICTLY FORBIDDEN: Markdown formatting, code fences (\`\`\`json), explanations, or notes. Output ONLY the raw JSON array.`;
+7. STRICTLY FORBIDDEN: Markdown formatting, code fences (\`\`\`json), explanations, or notes. Output ONLY the raw JSON array.`;
 
-export function buildModuleConceptsUserPrompt(
-  roadmapTitle: string,
-  roadmapDescription?: string,
-  moduleTitle?: string,
-  existingConceptTitles: string[] = [],
-): string {
+export function buildModuleConceptsUserPrompt(dto: {
+  roadmapTitle?: string;
+  roadmapDescription?: string;
+  moduleTitle: string;
+  moduleOrderIndex: number;
+  totalModuleCount: number;
+  siblingModules: Array<{ title: string; orderIndex: number }>;
+  existingConceptTitles?: string[];
+  targetCount?: number;
+}): string {
+  const targetCount =
+    dto.targetCount ??
+    Math.max(1, 6 - (dto.existingConceptTitles?.length || 0));
   const parts: string[] = [];
-  if (roadmapTitle) parts.push(`Parent Roadmap: "${roadmapTitle}"`);
-  if (roadmapDescription) parts.push(`Roadmap Overview: "${roadmapDescription}"`);
-  if (moduleTitle) parts.push(`Target Module: "${moduleTitle}"`);
-  if (existingConceptTitles.length > 0) {
+  if (dto.roadmapTitle) {
+    parts.push(`Parent Roadmap: "${dto.roadmapTitle}"`);
+  }
+  if (dto.roadmapDescription) {
+    parts.push(`Roadmap Overview & Stated Arc: "${dto.roadmapDescription}"`);
+  }
+  parts.push(
+    `Target Module: "${dto.moduleTitle}" (Module #${dto.moduleOrderIndex} of ${dto.totalModuleCount})`,
+  );
+  if (dto.siblingModules && dto.siblingModules.length > 0) {
+    const siblingList = dto.siblingModules
+      .map((m) => `Module #${m.orderIndex}: "${m.title}"`)
+      .join(', ');
     parts.push(
-      `Concepts Already in this Module (do NOT duplicate): ${existingConceptTitles.map((t) => `"${t}"`).join(', ')}`,
+      `Other Modules in this Roadmap (do NOT cover these topics; they belong in their respective modules): ${siblingList}`,
     );
   }
-  return `${parts.join('\n')}\n\nGenerate an ordered list of concept titles (JSON array of strings, up to 6 concepts) for this module.`;
+  if (dto.existingConceptTitles && dto.existingConceptTitles.length > 0) {
+    parts.push(
+      `Concepts Already in this Module (do NOT duplicate): ${dto.existingConceptTitles.map((t, idx) => `[Concept #${idx + 1}] "${t}"`).join(', ')}`,
+    );
+    parts.push(
+      `Task: This module already has ${dto.existingConceptTitles.length} concepts. Generate an ordered list of exactly ${targetCount} new atomic concept title${targetCount > 1 ? 's' : ''} (JSON array of strings) starting at Concept #${dto.existingConceptTitles.length + 1} that logically build upon the existing concepts and complete this module's coverage at the appropriate difficulty level for Module #${dto.moduleOrderIndex}.`,
+    );
+  } else {
+    parts.push(
+      `Task: Generate an ordered list of up to ${targetCount} atomic concept titles (JSON array of strings) strictly scoped for Module #${dto.moduleOrderIndex} ("${dto.moduleTitle}") at this exact difficulty level.`,
+    );
+  }
+  return parts.join('\n\n');
 }
 
 export const CONCEPT_CONTENT_SYSTEM_PROMPT = `You are a principal engineer and master technical educator authoring a concept article for a comprehensive learning platform.

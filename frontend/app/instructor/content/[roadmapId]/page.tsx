@@ -20,6 +20,7 @@ import {
   FilePlus,
   Link as LinkIcon,
   Sparkles,
+  Lock,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
@@ -648,23 +649,47 @@ export default function RoadmapManagementPage({ params }: PageProps) {
           </h2>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleGenerateModules}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer"
-              title="Use AI to generate curriculum module titles for this roadmap"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Generate Modules with AI</span>
-            </button>
+            {modules.length >= 6 ? (
+              <span
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface border border-border text-text-muted font-semibold text-xs opacity-60 cursor-not-allowed select-none"
+                title="Module limit reached (6/6)"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Module limit reached (6/6)</span>
+              </span>
+            ) : modules.length > 0 ? (
+              <button
+                type="button"
+                onClick={handleGenerateModules}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer"
+                title={`Generate ${6 - modules.length} more curriculum module titles to reach the 6-module cap`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>
+                  Generate {6 - modules.length} More Module{6 - modules.length > 1 ? 's' : ''} with AI
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleGenerateModules}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer"
+                title="Use AI to generate curriculum module titles for this roadmap"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Generate Modules with AI</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => setIsAddingModule(!isAddingModule)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 transition-all shadow-xs cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Module</span>
-            </button>
+            {modules.length < 6 && (
+              <button
+                onClick={() => setIsAddingModule(!isAddingModule)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 transition-all shadow-xs cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Module</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -807,6 +832,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
 
                     {/* Actions & Dynamic State Machine */}
                     <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                      {/* 0 Concepts */}
                       {!hasConcepts && (
                         <button
                           type="button"
@@ -819,23 +845,72 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                         </button>
                       )}
 
-                      {needsMcqs && (
-                        <button
-                          type="button"
-                          onClick={() => handleGenerateMcqs(moduleItem.id, moduleItem.title)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
-                          title="Generate 5 assessment MCQs for concepts lacking quizzes"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Generate MCQs with AI</span>
-                        </button>
+                      {/* 1-5 Concepts (Under Cap) */}
+                      {hasConcepts && conceptsInModule.length < 6 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateConcepts(moduleItem.id, moduleItem.title)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                            title={`Generate ${6 - conceptsInModule.length} more concept articles to reach the 6-concept cap`}
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>
+                              Generate {6 - conceptsInModule.length} More Concept{6 - conceptsInModule.length > 1 ? 's' : ''} with AI
+                            </span>
+                          </button>
+
+                          {needsMcqs ? (
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateMcqs(moduleItem.id, moduleItem.title)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                              title="Generate assessment MCQs for concepts lacking quizzes"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Generate MCQs with AI</span>
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-green bg-green-tint border border-green/20">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>MCQs generated</span>
+                            </span>
+                          )}
+                        </>
                       )}
 
-                      {allHaveMcqs && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-green bg-green-tint border border-green/20">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Fully generated</span>
-                        </span>
+                      {/* 6 Concepts (Cap Reached) */}
+                      {conceptsInModule.length >= 6 && (
+                        <>
+                          {allHaveMcqs ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-green bg-green-tint border border-green/20">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Fully generated ✓</span>
+                            </span>
+                          ) : (
+                            <>
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-text-muted bg-surface border border-border cursor-not-allowed opacity-75 select-none"
+                                title="Concept limit reached (6/6)"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                                <span>Concept limit reached (6/6)</span>
+                              </span>
+
+                              {needsMcqs && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerateMcqs(moduleItem.id, moduleItem.title)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                                  title="Generate assessment MCQs for concepts lacking quizzes"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <span>Generate MCQs with AI</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </>
                       )}
 
                       <button

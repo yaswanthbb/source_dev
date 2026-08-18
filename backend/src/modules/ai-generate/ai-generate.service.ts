@@ -3,6 +3,7 @@ import {
   HttpException,
   HttpStatus,
   NotFoundException,
+  BadRequestException,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
@@ -261,7 +262,9 @@ export class AiGenerateService {
       });
     } catch (err: unknown) {
       const error = err as Error;
-      this.logger.error(`Failed to connect to NVIDIA NIM API: ${error.message}`);
+      this.logger.error(
+        `Failed to connect to NVIDIA NIM API: ${error.message}`,
+      );
       if (!res.headersSent) {
         throw new HttpException(
           `Unable to reach NVIDIA NIM API: ${error.message}`,
@@ -361,7 +364,9 @@ export class AiGenerateService {
       res.end();
     } catch (err: unknown) {
       const error = err as Error;
-      this.logger.warn(`Stream reading error or client abort: ${error.message}`);
+      this.logger.warn(
+        `Stream reading error or client abort: ${error.message}`,
+      );
       try {
         res.write('data: [DONE]\n\n');
         res.end();
@@ -403,13 +408,13 @@ export class AiGenerateService {
   }
 
   /**
-   * Part 3: Generate Modules for a Roadmap
+   * Part 3: Generate Modules for a Roadmap (up to 6 total modules)
    */
   async generateRoadmapModules(
     roadmapId: string,
     user: User,
   ): Promise<{ modules: ModuleEntity[]; count: number }> {
-    await this.checkRateLimit(user.id);
+    await this.checkRateLimit(user.id, 1);
 
     const roadmap = await this.roadmapRepository.findOne({
       where: { id: roadmapId },
@@ -423,6 +428,13 @@ export class AiGenerateService {
     this.roadmapsService.checkOwnership(roadmap.createdById, user);
 
     const existingModules = roadmap.modules || [];
+    if (existingModules.length >= 6) {
+      throw new BadRequestException(
+        'Roadmap module limit reached (6/6). Cannot generate more modules.',
+      );
+    }
+
+    const remainingCount = 6 - existingModules.length;
     const existingTitles = existingModules.map((m) => m.title);
 
     const systemPrompt = ROADMAP_MODULES_SYSTEM_PROMPT;
@@ -430,6 +442,7 @@ export class AiGenerateService {
       roadmap.title,
       roadmap.description || undefined,
       existingTitles,
+      remainingCount,
     );
 
     const responseText = await this.generateNvidiaCompletion(
@@ -440,7 +453,8 @@ export class AiGenerateService {
 
     await this.logGeneration(user.id, AiGenerationType.ROADMAP_MODULES);
 
-    const moduleTitles = this.parseStringArray(responseText);
+    const parsedTitles = this.parseStringArray(responseText);
+    const moduleTitles = parsedTitles.slice(0, remainingCount);
     if (moduleTitles.length === 0) {
       throw new HttpException(
         'AI failed to produce a valid list of module titles. Please try again.',
@@ -467,7 +481,7 @@ export class AiGenerateService {
   }
 
   /**
-   * Part 4: Generate Concepts (with content) for a Module in sequence
+   * Part 4: Generate Concepts (with content) for a Module in sequence (up to 6 total concepts)
    */
   async generateModuleConcepts(
     moduleId: string,
@@ -479,9 +493,6 @@ export class AiGenerateService {
     skippedCount: number;
     error?: string;
   }> {
-    // Upfront check: require at least 7 generation slots remaining
-    await this.checkRateLimit(user.id, 7);
-
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id: moduleId },
       relations: ['roadmap', 'moduleConcepts', 'moduleConcepts.concept'],
@@ -491,20 +502,50 @@ export class AiGenerateService {
       throw new NotFoundException('Module not found');
     }
 
-    this.roadmapsService.checkOwnership(moduleEntity.roadmap?.createdById, user);
+    this.roadmapsService.checkOwnership(
+      moduleEntity.roadmap?.createdById,
+      user,
+    );
 
     const existingConceptTitles = (moduleEntity.moduleConcepts || [])
       .map((mc) => mc.concept?.title)
       .filter((t): t is string => Boolean(t));
 
-    // Phase 1: Generate concept title list
+    if (existingConceptTitles.length >= 6) {
+      throw new BadRequestException(
+        'Concept limit reached (6/6) for this module. Cannot generate more concepts.',
+      );
+    }
+
+    const remainingSlots = 6 - existingConceptTitles.length;
+
+    // Upfront check: require at least (remainingSlots + 1) slots (1 title + remainingSlots content)
+    await this.checkRateLimit(user.id, remainingSlots + 1);
+
+    // Fetch all sibling modules belonging to this roadmap to enforce scope isolation and position pacing
+    const allRoadmapModules = await this.moduleRepository.find({
+      where: { roadmapId: moduleEntity.roadmapId },
+      order: { orderIndex: 'ASC' },
+    });
+
+    const totalModuleCount = Math.max(allRoadmapModules.length, 1);
+    const currentOrderIndex = moduleEntity.orderIndex || 1;
+    const siblingModules = allRoadmapModules
+      .filter((m) => m.id !== moduleId)
+      .map((m) => ({ title: m.title, orderIndex: m.orderIndex }));
+
+    // Phase 1: Generate concept title list with roadmap arc, top-up target, and sibling module awareness
     const systemPrompt = MODULE_CONCEPTS_SYSTEM_PROMPT;
-    const userPrompt = buildModuleConceptsUserPrompt(
-      moduleEntity.roadmap?.title || '',
-      moduleEntity.roadmap?.description || undefined,
-      moduleEntity.title,
+    const userPrompt = buildModuleConceptsUserPrompt({
+      roadmapTitle: moduleEntity.roadmap?.title,
+      roadmapDescription: moduleEntity.roadmap?.description || undefined,
+      moduleTitle: moduleEntity.title,
+      moduleOrderIndex: currentOrderIndex,
+      totalModuleCount,
+      siblingModules,
       existingConceptTitles,
-    );
+      targetCount: remainingSlots,
+    });
 
     const titlesResponse = await this.generateNvidiaCompletion(
       systemPrompt,
@@ -514,7 +555,8 @@ export class AiGenerateService {
 
     await this.logGeneration(user.id, AiGenerationType.MODULE_CONCEPTS);
 
-    const conceptTitles = this.parseStringArray(titlesResponse);
+    const parsedTitles = this.parseStringArray(titlesResponse);
+    const conceptTitles = parsedTitles.slice(0, remainingSlots);
     if (conceptTitles.length === 0) {
       throw new HttpException(
         'AI failed to produce a valid list of concept titles. Please try again.',
@@ -585,7 +627,10 @@ export class AiGenerateService {
       createdConcepts,
       totalRequested: conceptTitles.length,
       createdCount: createdConcepts.length,
-      skippedCount: skippedCount > 0 ? skippedCount : conceptTitles.length - createdConcepts.length,
+      skippedCount:
+        skippedCount > 0
+          ? skippedCount
+          : conceptTitles.length - createdConcepts.length,
       error: quotaError,
     };
   }
@@ -612,7 +657,10 @@ export class AiGenerateService {
       throw new NotFoundException('Module not found');
     }
 
-    this.roadmapsService.checkOwnership(moduleEntity.roadmap?.createdById, user);
+    this.roadmapsService.checkOwnership(
+      moduleEntity.roadmap?.createdById,
+      user,
+    );
 
     const moduleConcepts = moduleEntity.moduleConcepts || [];
     if (moduleConcepts.length === 0) {
@@ -664,7 +712,8 @@ export class AiGenerateService {
         await this.checkRateLimit(user.id, 1);
       } catch {
         quotaError = 'Daily AI generation limit reached mid-batch.';
-        skippedCount = conceptsNeedingMcqs.length - (generatedCount + failedCount);
+        skippedCount =
+          conceptsNeedingMcqs.length - (generatedCount + failedCount);
         break;
       }
 
@@ -706,7 +755,11 @@ export class AiGenerateService {
         let createdForConcept = 0;
         for (let qIdx = 0; qIdx < parsedQuestions.length; qIdx++) {
           const q = parsedQuestions[qIdx];
-          if (!q.questionText || !Array.isArray(q.options) || q.options.length < 2) {
+          if (
+            !q.questionText ||
+            !Array.isArray(q.options) ||
+            q.options.length < 2
+          ) {
             continue;
           }
 
