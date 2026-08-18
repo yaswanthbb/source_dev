@@ -23,6 +23,7 @@ import {
   useRoadmapProgress,
 } from "@/lib/hooks/use-roadmap-progress";
 import { ProfileActionsMenu } from "./profile-actions-menu";
+import { ThemeToggle } from "./theme-toggle";
 
 interface ConceptSyllabusSidebarProps {
   conceptId: string;
@@ -126,17 +127,20 @@ export function ConceptSyllabusSidebar({
               <span>Back to course</span>
             </Link>
 
-            {onHideSidebar && (
-              <button
-                type="button"
-                onClick={onHideSidebar}
-                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-all cursor-pointer hover:scale-105 active:scale-95"
-                title="Hide sidebar"
-                aria-label="Hide sidebar"
-              >
-                <PanelLeftClose className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-1.5">
+              <ThemeToggle />
+              {onHideSidebar && (
+                <button
+                  type="button"
+                  onClick={onHideSidebar}
+                  className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-all cursor-pointer hover:scale-105 active:scale-95"
+                  title="Hide sidebar"
+                  aria-label="Hide sidebar"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Course / Roadmap Title */}

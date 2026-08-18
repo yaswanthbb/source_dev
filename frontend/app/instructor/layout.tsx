@@ -24,6 +24,7 @@ import apiClient from '@/lib/api-client';
 import { getToken, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 interface FullUser extends User {
   instructorProfile?: {
@@ -248,14 +249,17 @@ export default function InstructorAppShellLayout({
           />
         </Link>
 
-        <button
-          type="button"
-          onClick={() => setIsMobileDrawerOpen(true)}
-          className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
-          aria-label="Open Navigation Menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setIsMobileDrawerOpen(true)}
+            className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
+            aria-label="Open Navigation Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* 2. Mobile Slide-In Drawer Navigation (< lg) */}
@@ -287,14 +291,17 @@ export default function InstructorAppShellLayout({
                   />
                 </Link>
 
-                <button
-                  type="button"
-                  onClick={() => setIsMobileDrawerOpen(false)}
-                  className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
-                  aria-label="Close navigation"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <ThemeToggle />
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileDrawerOpen(false)}
+                    className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
+                    aria-label="Close navigation"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Navigation Links */}
@@ -351,7 +358,7 @@ export default function InstructorAppShellLayout({
         }`}
       >
         <div className="flex flex-col">
-          {/* Top Brand Header with Collapse Button */}
+          {/* Top Brand Header with Theme Toggle & Collapse Button */}
           <div className="h-20 px-6 flex items-center justify-between border-b border-border">
             <Link href="/instructor/dashboard" className="flex items-center">
               <Image
@@ -365,15 +372,18 @@ export default function InstructorAppShellLayout({
               />
             </Link>
 
-            <button
-              type="button"
-              onClick={() => setIsSidebarHidden(true)}
-              className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-all cursor-pointer hover:scale-105 active:scale-95"
-              title="Hide sidebar"
-              aria-label="Hide sidebar"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => setIsSidebarHidden(true)}
+                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-all cursor-pointer hover:scale-105 active:scale-95"
+                title="Hide sidebar"
+                aria-label="Hide sidebar"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Links */}
@@ -405,7 +415,7 @@ export default function InstructorAppShellLayout({
           </nav>
         </div>
 
-        {/* Bottom User Profile Section with Integrated Theme Toggle */}
+        {/* Bottom User Profile Section */}
         <div className="p-4 border-t border-border bg-surface">
           <ProfileActionsMenu
             user={user || undefined}
@@ -419,7 +429,7 @@ export default function InstructorAppShellLayout({
       <div className="flex-1 flex flex-col min-w-0 w-full transition-all duration-300 ease-in-out">
         {/* Top Header Strip on Desktop when Sidebar is Collapsed */}
         {isSidebarHidden && (
-          <div className="hidden lg:flex h-14 px-6 lg:px-10 items-center border-b border-border/80 bg-surface/80 backdrop-blur-md sticky top-0 z-30 animate-in fade-in duration-200">
+          <div className="hidden lg:flex h-14 px-6 lg:px-10 items-center justify-between border-b border-border/80 bg-surface/80 backdrop-blur-md sticky top-0 z-30 animate-in fade-in duration-200">
             <button
               type="button"
               onClick={() => setIsSidebarHidden(false)}
@@ -430,6 +440,8 @@ export default function InstructorAppShellLayout({
               <PanelLeftOpen className="w-4 h-4 text-accent transition-transform group-hover:translate-x-0.5" />
               <span className="font-display">Sidebar</span>
             </button>
+
+            <ThemeToggle />
           </div>
         )}
 
