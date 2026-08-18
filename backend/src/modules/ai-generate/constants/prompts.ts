@@ -11,6 +11,61 @@ export function buildRoadmapDescriptionUserPrompt(title: string): string {
   return `Generate a brief course-catalog description (2-4 sentences, single short paragraph) for a learning roadmap titled: "${title}".`;
 }
 
+export const ROADMAP_MODULES_SYSTEM_PROMPT = `You are an expert curriculum designer and principal engineer organizing a technical roadmap into a coherent sequence of learning modules.
+
+Rules & Guidelines:
+1. Break the curriculum down into a logical progression of modules (up to 6 modules, choose the optimal number based on topic depth).
+2. Each module title must be concise, descriptive, and actionable (e.g., "Foundations & Core Syntax", "Advanced Concurrency Patterns", "Production Deployment & Observability").
+3. Ensure logical prerequisite ordering: fundamentals first, followed by core patterns, advanced techniques, and real-world architectures.
+4. Output MUST be a strictly valid JSON array of strings containing only the module titles, e.g.:
+   ["Module 1 Title", "Module 2 Title", "Module 3 Title"]
+5. STRICTLY FORBIDDEN: Markdown formatting, code fences (\`\`\`json), explanations, bullet lists, or conversational filler. Output ONLY the raw JSON array.`;
+
+export function buildRoadmapModulesUserPrompt(
+  roadmapTitle: string,
+  roadmapDescription?: string,
+  existingModuleTitles: string[] = [],
+): string {
+  const parts = [`Roadmap Title: "${roadmapTitle}"`];
+  if (roadmapDescription) {
+    parts.push(`Roadmap Description: "${roadmapDescription}"`);
+  }
+  if (existingModuleTitles.length > 0) {
+    parts.push(
+      `Existing Modules (do NOT duplicate): ${existingModuleTitles.map((t) => `"${t}"`).join(', ')}`,
+    );
+  }
+  return `${parts.join('\n')}\n\nGenerate an ordered list of module titles (JSON array of strings, up to 6 modules) for this roadmap.`;
+}
+
+export const MODULE_CONCEPTS_SYSTEM_PROMPT = `You are an expert technical educator and syllabus designer breaking down a single module into bite-sized, sequential learning concepts.
+
+Rules & Guidelines:
+1. Generate up to 6 focused, atomic concept titles that together cover the module comprehensively.
+2. Each concept title should represent one specific lesson or mental model (e.g., "Goroutines & the Go Runtime Scheduler", "Channels & Directional Types", "Select Statements & Non-Blocking I/O").
+3. Order concepts sequentially so each concept builds naturally on the previous one.
+4. Output MUST be a strictly valid JSON array of strings containing only the concept titles, e.g.:
+   ["Concept 1 Title", "Concept 2 Title", "Concept 3 Title"]
+5. STRICTLY FORBIDDEN: Markdown formatting, code fences (\`\`\`json), explanations, or notes. Output ONLY the raw JSON array.`;
+
+export function buildModuleConceptsUserPrompt(
+  roadmapTitle: string,
+  roadmapDescription?: string,
+  moduleTitle?: string,
+  existingConceptTitles: string[] = [],
+): string {
+  const parts: string[] = [];
+  if (roadmapTitle) parts.push(`Parent Roadmap: "${roadmapTitle}"`);
+  if (roadmapDescription) parts.push(`Roadmap Overview: "${roadmapDescription}"`);
+  if (moduleTitle) parts.push(`Target Module: "${moduleTitle}"`);
+  if (existingConceptTitles.length > 0) {
+    parts.push(
+      `Concepts Already in this Module (do NOT duplicate): ${existingConceptTitles.map((t) => `"${t}"`).join(', ')}`,
+    );
+  }
+  return `${parts.join('\n')}\n\nGenerate an ordered list of concept titles (JSON array of strings, up to 6 concepts) for this module.`;
+}
+
 export const CONCEPT_CONTENT_SYSTEM_PROMPT = `You are a principal engineer and master technical educator authoring a concept article for a comprehensive learning platform.
 
 Guidelines & Scope:

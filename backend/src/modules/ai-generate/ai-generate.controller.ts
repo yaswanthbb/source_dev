@@ -3,9 +3,9 @@ import {
   Post,
   Get,
   Body,
-  Res,
-  Req,
   UseGuards,
+  Req,
+  Res,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -16,30 +16,30 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import type { Response, Request } from 'express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { User } from '../users/entities/user.entity';
 import { AiGenerateService } from './ai-generate.service';
-import { AiGenerationType } from '../../common/enums/ai-generation-type.enum';
 import {
   GenerateRoadmapDescriptionDto,
+  GenerateRoadmapModulesDto,
+  GenerateModuleConceptsDto,
+  GenerateModuleMcqsDto,
   GenerateConceptContentDto,
   GenerateConceptMcqsDto,
 } from './dto/ai-generate.dto';
 import {
   ROADMAP_DESCRIPTION_SYSTEM_PROMPT,
   buildRoadmapDescriptionUserPrompt,
-  CONCEPT_CONTENT_SYSTEM_PROMPT,
-  buildConceptContentUserPrompt,
-  CONCEPT_MCQ_SYSTEM_PROMPT,
-  buildConceptMcqUserPrompt,
 } from './constants/prompts';
+import { AiGenerationType } from '../../common/enums/ai-generation-type.enum';
 
-@ApiTags('AI Content Generation')
+@ApiTags('AI Generate')
 @ApiBearerAuth('bearer-auth')
-@UseGuards(RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
 @Controller('ai-generate')
 export class AiGenerateController {
@@ -47,13 +47,14 @@ export class AiGenerateController {
 
   @Get('quota')
   @ApiOperation({
-    summary: 'Check remaining daily AI generations for current user',
+    summary:
+      'Get the remaining daily AI generation quota for the authenticated instructor/admin',
   })
   @ApiResponse({
     status: 200,
-    description: 'Returns remaining generation quota for today (UTC).',
+    description: 'Remaining quota out of 20 daily generations.',
   })
-  async getQuota(@CurrentUser() user: User) {
+  async getQuota(@CurrentUser() user: User): Promise<{ remaining: number; limit: number }> {
     const { remaining } = await this.aiGenerateService.checkRateLimit(user.id);
     return { remaining, limit: 20 };
   }
@@ -61,7 +62,8 @@ export class AiGenerateController {
   @Post('roadmap-description')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Stream generated roadmap description via Server-Sent Events',
+    summary:
+      'Stream generated roadmap description via Server-Sent Events (live typing)',
   })
   @ApiResponse({
     status: 200,
@@ -98,15 +100,77 @@ export class AiGenerateController {
     );
   }
 
+  @Post('roadmap-modules')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Generate and create ordered modules for a roadmap using AI',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Created modules returned.',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Daily rate limit exceeded.',
+  })
+  async generateRoadmapModules(
+    @CurrentUser() user: User,
+    @Body() dto: GenerateRoadmapModulesDto,
+  ) {
+    return this.aiGenerateService.generateRoadmapModules(dto.roadmapId, user);
+  }
+
+  @Post('module-concepts')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Generate concept titles and full article content sequentially for a module',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Created concepts with full content attached to module.',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Insufficient remaining quota for batch concept generation.',
+  })
+  async generateModuleConcepts(
+    @CurrentUser() user: User,
+    @Body() dto: GenerateModuleConceptsDto,
+  ) {
+    return this.aiGenerateService.generateModuleConcepts(dto.moduleId, user);
+  }
+
+  @Post('module-mcqs')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Generate and attach 5 assessment MCQs for every concept in a module lacking questions',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'MCQs generated and attached to concepts in the module.',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Daily rate limit exceeded.',
+  })
+  async generateModuleMcqs(
+    @CurrentUser() user: User,
+    @Body() dto: GenerateModuleMcqsDto,
+  ) {
+    return this.aiGenerateService.generateModuleMcqs(dto.moduleId, user);
+  }
+
   @Post('concept-content')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Stream generated Markdown concept article via Server-Sent Events with curriculum context',
+      'Generate full Markdown concept article with curriculum context in one shot',
   })
   @ApiResponse({
     status: 200,
-    description: 'SSE stream of Markdown content chunks.',
+    description: 'Generated Markdown concept content.',
   })
   @ApiResponse({
     status: 429,
@@ -115,39 +179,19 @@ export class AiGenerateController {
   async generateConceptContent(
     @CurrentUser() user: User,
     @Body() dto: GenerateConceptContentDto,
-    @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    await this.aiGenerateService.checkRateLimit(user.id);
-    await this.aiGenerateService.logGeneration(
-      user.id,
-      AiGenerationType.CONCEPT_CONTENT,
-    );
-
-    const abortController = new AbortController();
-    req.on('close', () => abortController.abort());
-
-    const systemPrompt = CONCEPT_CONTENT_SYSTEM_PROMPT;
-    const userPrompt = buildConceptContentUserPrompt(dto);
-
-    await this.aiGenerateService.streamNvidiaCompletion(
-      systemPrompt,
-      userPrompt,
-      res,
-      { maxTokens: 3000 },
-      abortController.signal,
-    );
+  ) {
+    return this.aiGenerateService.generateSingleConceptContent(dto, user);
   }
 
   @Post('concept-mcqs')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Stream generated assessment MCQs in JSON format via Server-Sent Events',
+      'Generate complete, valid assessment MCQs JSON for Swagger Auto-Mapper in one shot',
   })
   @ApiResponse({
     status: 200,
-    description: 'SSE stream of raw JSON array chunks matching Auto-Mapper.',
+    description: 'Generated valid JSON array of questions for auto-mapper.',
   })
   @ApiResponse({
     status: 429,
@@ -156,27 +200,7 @@ export class AiGenerateController {
   async generateConceptMcqs(
     @CurrentUser() user: User,
     @Body() dto: GenerateConceptMcqsDto,
-    @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    await this.aiGenerateService.checkRateLimit(user.id);
-    await this.aiGenerateService.logGeneration(
-      user.id,
-      AiGenerationType.CONCEPT_MCQS,
-    );
-
-    const abortController = new AbortController();
-    req.on('close', () => abortController.abort());
-
-    const systemPrompt = CONCEPT_MCQ_SYSTEM_PROMPT;
-    const userPrompt = buildConceptMcqUserPrompt(dto.title, dto.content);
-
-    await this.aiGenerateService.streamNvidiaCompletion(
-      systemPrompt,
-      userPrompt,
-      res,
-      { maxTokens: 1200 },
-      abortController.signal,
-    );
+  ) {
+    return this.aiGenerateService.generateSingleConceptMcqs(dto, user);
   }
 }

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional, IsArray } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsArray, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GenerateRoadmapDescriptionDto {
@@ -9,6 +9,36 @@ export class GenerateRoadmapDescriptionDto {
   @IsString()
   @IsNotEmpty()
   title: string;
+}
+
+export class GenerateRoadmapModulesDto {
+  @ApiProperty({
+    description: 'ID of the roadmap to generate modules for',
+    example: 'd9b2d63d-a233-4f9e-bbd8-4d519b7d8e20',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  roadmapId: string;
+}
+
+export class GenerateModuleConceptsDto {
+  @ApiProperty({
+    description: 'ID of the module to generate concepts for',
+    example: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  moduleId: string;
+}
+
+export class GenerateModuleMcqsDto {
+  @ApiProperty({
+    description: 'ID of the module whose concepts need MCQs',
+    example: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  moduleId: string;
 }
 
 export class GenerateConceptContentDto {
