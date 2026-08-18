@@ -19,8 +19,8 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { useAiStream } from '@/hooks/use-ai-stream';
-import { AiGenerateButton } from '@/components/ai-generate-button';
+import { AiGeneratingModal } from '@/components/ai-generating-modal';
+import { AiQuotaBadge } from '@/components/ai-quota-badge';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface ConceptSummary {
@@ -68,11 +68,11 @@ export default function CreateConceptPage() {
   const [activeTab, setActiveTab] = useState<'write' | 'preview' | 'split'>('split');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const {
-    isStreaming: isStreamingContent,
-    startStream: startContentStream,
-    abortStream: abortContentStream,
-  } = useAiStream();
+  // AI Modal & Quota State
+  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
 
   // Module-Scoped Prerequisite State
   const [selectedPrerequisiteId, setSelectedPrerequisiteId] = useState<string>('');
@@ -226,36 +226,62 @@ export default function CreateConceptPage() {
     });
   };
 
-  const handleGenerateContent = () => {
+  const handleCancelAiGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsAiModalOpen(false);
+    setAiError(null);
+  };
+
+  const handleGenerateContent = async () => {
     if (!title.trim()) {
       showError('Please enter a concept title first.');
       return;
     }
-    startContentStream(
-      '/ai-generate/concept-content',
-      {
-        title: title.trim(),
-        difficulty,
-        roadmapTitle: roadmapDetail?.title,
-        roadmapDescription: roadmapDetail?.description || undefined,
-        moduleTitle: targetModuleName || undefined,
-        siblingConceptTitles: conceptsInCurrentModule.map((c) => c.title),
-      },
-      {
-        onChunk: (_delta, accumulated) => {
-          setContent(accumulated);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setIsAiModalOpen(true);
+    setAiError(null);
+
+    try {
+      const res = await apiClient.post<{ content: string }>(
+        '/ai-generate/concept-content',
+        {
+          title: title.trim(),
+          difficulty,
+          roadmapTitle: roadmapDetail?.title,
+          roadmapDescription: roadmapDetail?.description || undefined,
+          moduleTitle: targetModuleName || undefined,
+          siblingConceptTitles: conceptsInCurrentModule.map((c) => c.title),
         },
-        onError: (err) => {
-          showError(err);
-        },
-      },
-    );
+        { signal: controller.signal },
+      );
+
+      if (res.data?.content) {
+        setContent(res.data.content);
+        setQuotaRefreshKey((k) => k + 1);
+        showSuccess('Concept article generated successfully!');
+      }
+      setIsAiModalOpen(false);
+    } catch (err: any) {
+      if (controller.signal.aborted) return;
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to generate concept article.';
+      setAiError(msg);
+    } finally {
+      abortControllerRef.current = null;
+    }
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-16">
-      {/* Back Navigation */}
-      <div>
+      {/* Back Navigation & Quota Badge */}
+      <div className="flex items-center justify-between gap-4">
         <Link
           href={
             inferredRoadmapId
@@ -269,6 +295,8 @@ export default function CreateConceptPage() {
             {inferredRoadmapId ? 'Back to Roadmap' : 'Back to Content Studio'}
           </span>
         </Link>
+
+        <AiQuotaBadge refreshTrigger={quotaRefreshKey} />
       </div>
 
       {/* Editor Header Card */}
@@ -436,19 +464,21 @@ export default function CreateConceptPage() {
               <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
                 Article Content (Markdown) <span className="text-red">*</span>
               </label>
-              {(content.trim() === '' || isStreamingContent) && (
-                <AiGenerateButton
+              {content.trim() === '' && (
+                <button
+                  type="button"
                   onClick={handleGenerateContent}
-                  isStreaming={isStreamingContent}
-                  onAbort={abortContentStream}
                   disabled={!title.trim()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                   title={
                     !title.trim()
                       ? 'Enter a concept title first'
                       : 'Generate concept article with AI'
                   }
-                  label="AI Generate Article"
-                />
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>AI Generate Article</span>
+                </button>
               )}
             </div>
 
@@ -538,6 +568,20 @@ export default function CreateConceptPage() {
           </div>
         </form>
       </div>
+
+      {/* AI Generating Loading Modal */}
+      <AiGeneratingModal
+        isOpen={isAiModalOpen}
+        contextType="concept_content"
+        title="Writing Concept Article"
+        subtitle={title ? `Drafting lesson for "${title}"` : undefined}
+        error={aiError}
+        onCancel={handleCancelAiGeneration}
+        onCloseError={() => {
+          setIsAiModalOpen(false);
+          setAiError(null);
+        }}
+      />
     </div>
   );
 }

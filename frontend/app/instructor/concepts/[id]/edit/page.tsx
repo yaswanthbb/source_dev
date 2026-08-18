@@ -31,8 +31,11 @@ import {
   Terminal,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { useAiStream } from '@/hooks/use-ai-stream';
-import { AiGenerateButton } from '@/components/ai-generate-button';
+import {
+  AiGeneratingModal,
+  AiGenerationContextType,
+} from '@/components/ai-generating-modal';
+import { AiQuotaBadge } from '@/components/ai-quota-badge';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
 interface PageProps {
@@ -357,67 +360,6 @@ export default function EditConceptPage({ params }: PageProps) {
       .filter((t): t is string => Boolean(t) && t !== title);
   }, [roadmapDetail, firstAppearsIn?.moduleId, title]);
 
-  const {
-    isStreaming: isStreamingContent,
-    startStream: startContentStream,
-    abortStream: abortContentStream,
-  } = useAiStream();
-
-  const {
-    isStreaming: isStreamingMcqs,
-    startStream: startMcqStream,
-    abortStream: abortMcqStream,
-  } = useAiStream();
-
-  const handleGenerateContent = () => {
-    if (!title.trim()) {
-      showError('Please enter a concept title first.');
-      return;
-    }
-    startContentStream(
-      '/ai-generate/concept-content',
-      {
-        title: title.trim(),
-        difficulty,
-        roadmapTitle: firstAppearsIn?.roadmapTitle || roadmapDetail?.title,
-        roadmapDescription: roadmapDetail?.description || undefined,
-        moduleTitle: firstAppearsIn?.moduleTitle,
-        siblingConceptTitles,
-      },
-      {
-        onChunk: (_delta, accumulated) => {
-          setContent(accumulated);
-        },
-        onError: (err) => {
-          showError(err);
-        },
-      },
-    );
-  };
-
-  const handleGenerateMcqs = () => {
-    const targetTitle = title.trim() || concept?.title;
-    if (!targetTitle) {
-      showError('Concept title is required.');
-      return;
-    }
-    startMcqStream(
-      '/ai-generate/concept-mcqs',
-      {
-        title: targetTitle,
-        content: content.trim() || concept?.content || undefined,
-      },
-      {
-        onChunk: (_delta, accumulated) => {
-          setBulkText(accumulated);
-        },
-        onError: (err) => {
-          showError(err);
-        },
-      },
-    );
-  };
-
   // Seed form state on fetch
   useEffect(() => {
     if (concept) {
@@ -498,6 +440,125 @@ export default function EditConceptPage({ params }: PageProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // AI Modal & Quota State
+  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
+  const [aiModalState, setAiModalState] = useState<{
+    isOpen: boolean;
+    contextType: AiGenerationContextType;
+    title?: string;
+    subtitle?: string;
+    error?: string | null;
+  }>({
+    isOpen: false,
+    contextType: 'concept_content',
+  });
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  const handleCancelAiGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+  };
+
+  const handleCloseAiError = () => {
+    setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+  };
+
+  const handleGenerateContent = async () => {
+    if (!title.trim()) {
+      showError('Please enter a concept title first.');
+      return;
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setAiModalState({
+      isOpen: true,
+      contextType: 'concept_content',
+      title: 'Writing Concept Article',
+      subtitle: `Drafting lesson for "${title.trim()}"`,
+      error: null,
+    });
+
+    try {
+      const res = await apiClient.post<{ content: string }>(
+        '/ai-generate/concept-content',
+        {
+          title: title.trim(),
+          difficulty,
+          roadmapTitle: firstAppearsIn?.roadmapTitle || roadmapDetail?.title,
+          roadmapDescription: roadmapDetail?.description || undefined,
+          moduleTitle: firstAppearsIn?.moduleTitle,
+          siblingConceptTitles,
+        },
+        { signal: controller.signal },
+      );
+
+      if (res.data?.content) {
+        setContent(res.data.content);
+        setQuotaRefreshKey((k) => k + 1);
+        showSuccess('Concept article generated successfully!');
+      }
+      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+    } catch (err: any) {
+      if (controller.signal.aborted) return;
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to generate concept article.';
+      setAiModalState((prev) => ({ ...prev, error: msg }));
+    } finally {
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleGenerateMcqs = async () => {
+    const targetTitle = title.trim() || concept?.title;
+    if (!targetTitle) {
+      showError('Concept title is required.');
+      return;
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setAiModalState({
+      isOpen: true,
+      contextType: 'concept_mcqs',
+      title: 'Generating Assessment MCQs',
+      subtitle: `Formulating 5 questions for "${targetTitle}"`,
+      error: null,
+    });
+
+    try {
+      const res = await apiClient.post<{ rawText: string }>(
+        '/ai-generate/concept-mcqs',
+        {
+          title: targetTitle,
+          content: content.trim() || concept?.content || undefined,
+        },
+        { signal: controller.signal },
+      );
+
+      if (res.data?.rawText) {
+        setBulkText(res.data.rawText);
+        setQuotaRefreshKey((k) => k + 1);
+        showSuccess('MCQs generated and loaded into Auto-Mapper!');
+      }
+      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+    } catch (err: any) {
+      if (controller.signal.aborted) return;
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to generate MCQs.';
+      setAiModalState((prev) => ({ ...prev, error: msg }));
+    } finally {
+      abortControllerRef.current = null;
+    }
+  };
 
   // Live Swagger-style validation report
   const validationReport = React.useMemo(
@@ -794,8 +855,8 @@ export default function EditConceptPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6 max-w-6xl pb-16">
-      {/* Back Link & Student View Link */}
-      <div className="flex items-center justify-between">
+      {/* Back Link & Student View Link & Quota */}
+      <div className="flex items-center justify-between gap-4">
         <Link
           href="/instructor/content"
           className="inline-flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-accent transition-colors cursor-pointer"
@@ -804,14 +865,17 @@ export default function EditConceptPage({ params }: PageProps) {
           <span>Back to My Content</span>
         </Link>
 
-        <Link
-          href={`/student/concepts/${conceptId}`}
-          target="_blank"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
-        >
-          <span>Preview Student View</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Link>
+        <div className="flex items-center gap-3">
+          <AiQuotaBadge refreshTrigger={quotaRefreshKey} />
+          <Link
+            href={`/student/concepts/${conceptId}`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
+          >
+            <span>Preview Student View</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
 
       {/* Main Section Navigation Tabs */}
@@ -943,19 +1007,21 @@ export default function EditConceptPage({ params }: PageProps) {
                 <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
                   Article Content (Markdown) <span className="text-red">*</span>
                 </label>
-                {(content.trim() === '' || isStreamingContent) && (
-                  <AiGenerateButton
+                {content.trim() === '' && (
+                  <button
+                    type="button"
                     onClick={handleGenerateContent}
-                    isStreaming={isStreamingContent}
-                    onAbort={abortContentStream}
                     disabled={!title.trim()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                     title={
                       !title.trim()
                         ? 'Enter a concept title first'
                         : 'Generate concept article with AI'
                     }
-                    label="AI Generate Article"
-                  />
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI Generate Article</span>
+                  </button>
                 )}
               </div>
 
@@ -1266,14 +1332,15 @@ export default function EditConceptPage({ params }: PageProps) {
                       </button>
 
                       {/* AI Generate MCQs Button */}
-                      <AiGenerateButton
+                      <button
+                        type="button"
                         onClick={handleGenerateMcqs}
-                        isStreaming={isStreamingMcqs}
-                        onAbort={abortMcqStream}
-                        label="AI Generate MCQs"
-                        streamingLabel="Generating MCQs..."
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent text-white hover:bg-accent/90 text-xs font-semibold transition-all cursor-pointer shadow-2xs hover:scale-102 active:scale-98"
                         title="Generate 5 assessment MCQs from concept article with AI"
-                      />
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>AI Generate MCQs</span>
+                      </button>
 
                       {/* Insert Template Button */}
                       <button
@@ -1608,6 +1675,17 @@ export default function EditConceptPage({ params }: PageProps) {
           )}
         </div>
       )}
+
+      {/* AI Generating Modal */}
+      <AiGeneratingModal
+        isOpen={aiModalState.isOpen}
+        contextType={aiModalState.contextType}
+        title={aiModalState.title}
+        subtitle={aiModalState.subtitle}
+        error={aiModalState.error}
+        onCancel={handleCancelAiGeneration}
+        onCloseError={handleCloseAiError}
+      />
     </div>
   );
 }
