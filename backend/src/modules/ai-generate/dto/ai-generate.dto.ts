@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, IsOptional, IsArray, IsUUID } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsArray,
+  IsUUID,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GenerateRoadmapDescriptionDto {
@@ -69,7 +75,8 @@ export class GenerateConceptContentDto {
 
   @ApiPropertyOptional({
     description: 'Description or learning objectives of the parent roadmap',
-    example: 'Master distributed primitives, consensus, and fault-tolerant architecture.',
+    example:
+      'Master distributed primitives, consensus, and fault-tolerant architecture.',
   })
   @IsOptional()
   @IsString()
@@ -84,7 +91,8 @@ export class GenerateConceptContentDto {
   moduleTitle?: string;
 
   @ApiPropertyOptional({
-    description: 'Titles of sibling concepts in the same module to avoid duplication',
+    description:
+      'Titles of sibling concepts in the same module to avoid duplication',
     example: ['Paxos Foundations', 'Two-Phase Commit vs Consensus'],
     type: [String],
   })

@@ -32,7 +32,9 @@ export function buildRoadmapModulesUserPrompt(
 ): string {
   const parts = [`Roadmap Title: "${roadmapTitle}"`];
   if (roadmapDescription) {
-    parts.push(`Roadmap Description & Progression Arc: "${roadmapDescription}"`);
+    parts.push(
+      `Roadmap Description & Progression Arc: "${roadmapDescription}"`,
+    );
   }
   if (existingModuleTitles.length > 0) {
     parts.push(
