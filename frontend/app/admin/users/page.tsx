@@ -393,7 +393,7 @@ export default function AdminUsersDirectoryPage() {
                       {users.map((u) => {
                         let rolePillStyle = 'bg-bg text-text-secondary border border-border';
                         if (u.role === 'admin') {
-                          rolePillStyle = 'bg-purple-500/15 text-purple-600 dark:text-purple-300 font-bold border border-purple-500/20';
+                          rolePillStyle = 'bg-purple-600/20 text-purple-800 dark:bg-purple-500/25 dark:text-purple-300 font-bold border border-purple-600/30';
                         } else if (u.role === 'instructor') {
                           rolePillStyle = 'bg-accent-tint text-accent font-bold';
                         } else if (u.role === 'student') {
@@ -486,7 +486,7 @@ export default function AdminUsersDirectoryPage() {
                   {users.map((u) => {
                     let rolePillStyle = 'bg-bg text-text-secondary border border-border';
                     if (u.role === 'admin') {
-                      rolePillStyle = 'bg-purple-500/15 text-purple-600 dark:text-purple-300 font-bold border border-purple-500/20';
+                      rolePillStyle = 'bg-purple-600/20 text-purple-800 dark:bg-purple-500/25 dark:text-purple-300 font-bold border border-purple-600/30';
                     } else if (u.role === 'instructor') {
                       rolePillStyle = 'bg-accent-tint text-accent font-bold';
                     } else if (u.role === 'student') {

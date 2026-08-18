@@ -161,7 +161,7 @@ export default function AdminInstructorsApprovalPage() {
     <div className="space-y-10 max-w-5xl pb-16">
       {/* Header */}
       <div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold uppercase tracking-wider mb-2">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-tint text-accent text-xs font-bold uppercase tracking-wider mb-2">
           <UserCheck className="w-3.5 h-3.5" />
           <span>Faculty Management</span>
         </div>

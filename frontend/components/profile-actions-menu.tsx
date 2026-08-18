@@ -60,15 +60,9 @@ export function ProfileActionsMenu({
       {/* Profile Card Container */}
       <div className="p-3 rounded-xl bg-bg border border-border/80 flex items-center justify-between gap-3 shadow-2xs">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-              isAdmin
-                ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300'
-                : 'bg-accent-tint text-accent'
-            }`}
-          >
+          <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 bg-accent-tint text-accent">
             {isAdmin ? (
-              <Shield className="w-4 h-4" />
+              <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400 stroke-[2.5]" />
             ) : user?.name ? (
               user.name.charAt(0).toUpperCase()
             ) : (
@@ -101,7 +95,7 @@ export function ProfileActionsMenu({
 
       {/* Floating Dropdown Popover (Opens Upward from Sidebar Footer) */}
       {isMenuOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-[#131622] border border-border rounded-2xl shadow-xl p-1.5 z-50 space-y-1 animate-in zoom-in-95 fade-in duration-150">
+        <div className="absolute bottom-full left-0 right-0 mb-2 bg-surface border border-border rounded-2xl shadow-xl p-1.5 z-50 space-y-1 animate-in zoom-in-95 fade-in duration-150 backdrop-blur-xl">
           {/* Header Info */}
           <div className="px-3 py-2 border-b border-border/60">
             <p className="text-xs font-bold text-text-primary truncate">
@@ -145,9 +139,9 @@ export function ProfileActionsMenu({
             <Link
               href="/admin/dashboard"
               onClick={() => setIsMenuOpen(false)}
-              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-purple-600 dark:text-purple-300 hover:bg-purple-500/10 flex items-center gap-2.5 transition-colors cursor-pointer"
+              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-primary hover:bg-bg hover:text-purple-600 dark:hover:text-purple-400 flex items-center gap-2.5 transition-colors cursor-pointer group"
             >
-              <Shield className="w-4 h-4 text-purple-600 dark:text-purple-300" />
+              <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400 stroke-[2.5]" />
               <span>Switch to Admin Console</span>
             </Link>
           )}

@@ -23,6 +23,7 @@ import apiClient from '@/lib/api-client';
 import { getToken, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const ADMIN_NAV_ITEMS = [
   {
@@ -149,8 +150,8 @@ export default function AdminAppShellLayout({
     <div className="min-h-screen bg-bg flex flex-col lg:flex-row relative">
       {/* Ambient Dark Mode Glow Orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10 hidden dark:block" aria-hidden="true">
-        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-purple-600/15 blur-[120px]" />
-        <div className="absolute top-1/3 right-0 w-[500px] h-[500px] rounded-full bg-indigo-600/10 blur-[100px]" />
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-indigo-600/15 blur-[120px]" />
+        <div className="absolute top-1/3 right-0 w-[500px] h-[500px] rounded-full bg-violet-600/10 blur-[100px]" />
         <div className="absolute bottom-0 left-1/2 w-[400px] h-[400px] rounded-full bg-blue-600/10 blur-[90px]" />
       </div>
 
@@ -168,14 +169,17 @@ export default function AdminAppShellLayout({
           />
         </Link>
 
-        <button
-          type="button"
-          onClick={() => setIsMobileDrawerOpen(true)}
-          className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
-          aria-label="Open Navigation Menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setIsMobileDrawerOpen(true)}
+            className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
+            aria-label="Open Navigation Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* 2. Mobile Slide-In Drawer Navigation (< lg) */}
@@ -207,19 +211,22 @@ export default function AdminAppShellLayout({
                   />
                 </Link>
 
-                <button
-                  type="button"
-                  onClick={() => setIsMobileDrawerOpen(false)}
-                  className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
-                  aria-label="Close navigation"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <ThemeToggle />
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileDrawerOpen(false)}
+                    className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-colors cursor-pointer"
+                    aria-label="Close navigation"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Navigation Links */}
               <nav className="p-4 space-y-1.5" aria-label="Admin Mobile Navigation">
-                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary/70">
                   Admin Console
                 </div>
                 {ADMIN_NAV_ITEMS.map((item) => {
@@ -235,11 +242,11 @@ export default function AdminAppShellLayout({
                       onClick={() => setIsMobileDrawerOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 font-semibold'
+                          ? 'bg-accent-tint text-accent font-semibold'
                           : 'text-text-secondary hover:bg-bg hover:text-text-primary'
                       }`}
                     >
-                      <Icon className={`w-5 h-5 ${isActive ? 'text-purple-600 dark:text-purple-300' : 'text-text-secondary'}`} />
+                      <Icon className={`w-5 h-5 ${isActive ? 'text-accent' : 'text-text-secondary'}`} />
                       <span>{item.name}</span>
                     </Link>
                   );
@@ -271,7 +278,7 @@ export default function AdminAppShellLayout({
         }`}
       >
         <div className="flex flex-col">
-          {/* Top Brand Header with Collapse Button */}
+          {/* Top Brand Header with Theme Toggle & Collapse Button */}
           <div className="h-20 px-6 flex items-center justify-between border-b border-border">
             <Link href="/admin/dashboard" className="flex items-center">
               <Image
@@ -285,20 +292,23 @@ export default function AdminAppShellLayout({
               />
             </Link>
 
-            <button
-              type="button"
-              onClick={() => setIsSidebarHidden(true)}
-              className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-all cursor-pointer hover:scale-105 active:scale-95"
-              title="Hide sidebar"
-              aria-label="Hide sidebar"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => setIsSidebarHidden(true)}
+                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-all cursor-pointer hover:scale-105 active:scale-95"
+                title="Hide sidebar"
+                aria-label="Hide sidebar"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1.5" aria-label="Admin Navigation">
-            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary/70">
               Admin Console
             </div>
             {ADMIN_NAV_ITEMS.map((item) => {
@@ -313,11 +323,11 @@ export default function AdminAppShellLayout({
                   href={item.href}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 font-semibold'
+                      ? 'bg-accent-tint text-accent font-semibold'
                       : 'text-text-secondary hover:bg-bg hover:text-text-primary'
                   }`}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-purple-600 dark:text-purple-300' : 'text-text-secondary'}`} />
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-accent' : 'text-text-secondary'}`} />
                   <span>{item.name}</span>
                 </Link>
               );
@@ -325,7 +335,7 @@ export default function AdminAppShellLayout({
           </nav>
         </div>
 
-        {/* Bottom User Profile Section with Integrated Theme Toggle */}
+        {/* Bottom User Profile Section */}
         <div className="p-4 border-t border-border bg-surface">
           <ProfileActionsMenu
             user={user || undefined}
@@ -339,7 +349,7 @@ export default function AdminAppShellLayout({
       <div className="flex-1 flex flex-col min-w-0 w-full transition-all duration-300 ease-in-out">
         {/* Top Header Strip on Desktop when Sidebar is Collapsed */}
         {isSidebarHidden && (
-          <div className="hidden lg:flex h-14 px-6 lg:px-10 items-center border-b border-border/80 bg-surface/80 backdrop-blur-md sticky top-0 z-30 animate-in fade-in duration-200">
+          <div className="hidden lg:flex h-14 px-6 lg:px-10 items-center justify-between border-b border-border/80 bg-surface/80 backdrop-blur-md sticky top-0 z-30 animate-in fade-in duration-200">
             <button
               type="button"
               onClick={() => setIsSidebarHidden(false)}
@@ -350,6 +360,8 @@ export default function AdminAppShellLayout({
               <PanelLeftOpen className="w-4 h-4 text-accent transition-transform group-hover:translate-x-0.5" />
               <span className="font-display">Sidebar</span>
             </button>
+
+            <ThemeToggle />
           </div>
         )}
 

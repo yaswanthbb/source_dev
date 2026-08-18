@@ -87,7 +87,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-8 pb-16">
       {/* Header */}
       <div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 text-xs font-bold uppercase tracking-wider mb-2">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-tint text-accent text-xs font-bold uppercase tracking-wider mb-2">
           <TrendingUp className="w-3.5 h-3.5" />
           <span>System Intelligence</span>
         </div>
@@ -123,7 +123,7 @@ export default function AdminDashboardPage() {
             <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
               Instructors
             </span>
-            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-300 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-accent-tint text-accent flex items-center justify-center">
               <GraduationCap className="w-4 h-4" />
             </div>
           </div>
