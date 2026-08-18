@@ -1,6 +1,6 @@
 'use client';
 
-import React, { use, useState } from 'react';
+import React, { use, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +19,7 @@ import {
   FolderKanban,
   FilePlus,
   Link as LinkIcon,
+  Sparkles,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
@@ -26,6 +27,11 @@ import { useSnackbar } from '@/providers/snackbar-provider';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { useAiStream } from '@/hooks/use-ai-stream';
 import { AiGenerateButton } from '@/components/ai-generate-button';
+import {
+  AiGeneratingModal,
+  AiGenerationContextType,
+} from '@/components/ai-generating-modal';
+import { AiQuotaBadge } from '@/components/ai-quota-badge';
 
 interface PageProps {
   params: Promise<{ roadmapId: string }>;
@@ -36,6 +42,7 @@ interface ConceptSummary {
   title: string;
   slug: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  questionCount?: number;
 }
 
 interface ModuleConcept {
@@ -324,6 +331,146 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     return allConcepts.filter((c) => c.title.toLowerCase().includes(q));
   }, [allConcepts, conceptSearchQuery]);
 
+  // AI Cascading Generation & Modal State
+  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
+  const [aiModalState, setAiModalState] = useState<{
+    isOpen: boolean;
+    contextType: AiGenerationContextType;
+    title?: string;
+    subtitle?: string;
+    error?: string | null;
+  }>({
+    isOpen: false,
+    contextType: 'modules',
+  });
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelAiGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+  };
+
+  const handleCloseAiError = () => {
+    setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+  };
+
+  const handleGenerateModules = async () => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setAiModalState({
+      isOpen: true,
+      contextType: 'modules',
+      title: 'Generating Curriculum Modules',
+      subtitle: `Structuring modules for "${roadmap?.title}"`,
+      error: null,
+    });
+
+    try {
+      const res = await apiClient.post(
+        '/ai-generate/roadmap-modules',
+        { roadmapId },
+        { signal: controller.signal },
+      );
+      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+      setQuotaRefreshKey((k) => k + 1);
+      const count = res.data?.count ?? 0;
+      showSuccess(`Successfully generated ${count} modules!`);
+      refetch();
+    } catch (err: any) {
+      if (controller.signal.aborted) return;
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to generate modules.';
+      setAiModalState((prev) => ({ ...prev, error: msg }));
+    } finally {
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleGenerateConcepts = async (
+    moduleId: string,
+    moduleTitle: string,
+  ) => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setAiModalState({
+      isOpen: true,
+      contextType: 'concepts',
+      title: 'Generating Concepts & Full Content',
+      subtitle: `Writing lessons for module "${moduleTitle}"`,
+      error: null,
+    });
+
+    try {
+      const res = await apiClient.post(
+        '/ai-generate/module-concepts',
+        { moduleId },
+        { signal: controller.signal },
+      );
+      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+      setQuotaRefreshKey((k) => k + 1);
+      const count = res.data?.createdCount ?? 0;
+      const skipped = res.data?.skippedCount ?? 0;
+      showSuccess(
+        `Generated ${count} concepts with full content${
+          skipped > 0 ? ` (${skipped} skipped due to quota)` : ''
+        }!`,
+      );
+      refetch();
+    } catch (err: any) {
+      if (controller.signal.aborted) return;
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to generate concepts.';
+      setAiModalState((prev) => ({ ...prev, error: msg }));
+    } finally {
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleGenerateMcqs = async (moduleId: string, moduleTitle: string) => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setAiModalState({
+      isOpen: true,
+      contextType: 'mcqs',
+      title: 'Generating Assessment MCQs',
+      subtitle: `Formulating quizzes for concepts in "${moduleTitle}"`,
+      error: null,
+    });
+
+    try {
+      const res = await apiClient.post(
+        '/ai-generate/module-mcqs',
+        { moduleId },
+        { signal: controller.signal },
+      );
+      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+      setQuotaRefreshKey((k) => k + 1);
+      const count = res.data?.generatedCount ?? 0;
+      showSuccess(`Generated and attached MCQs for ${count} concepts!`);
+      refetch();
+    } catch (err: any) {
+      if (controller.signal.aborted) return;
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to generate MCQs.';
+      setAiModalState((prev) => ({ ...prev, error: msg }));
+    } finally {
+      abortControllerRef.current = null;
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6 max-w-4xl animate-pulse">
@@ -357,8 +504,8 @@ export default function RoadmapManagementPage({ params }: PageProps) {
 
   return (
     <div className="space-y-8 max-w-4xl pb-16">
-      {/* Back Link */}
-      <div className="flex items-center justify-between">
+      {/* Back Link & Quota Header */}
+      <div className="flex items-center justify-between gap-4">
         <Link
           href="/instructor/content"
           className="inline-flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-accent transition-colors cursor-pointer"
@@ -367,14 +514,17 @@ export default function RoadmapManagementPage({ params }: PageProps) {
           <span>Back to My Content</span>
         </Link>
 
-        <Link
-          href={`/student/roadmaps/${roadmap.id}`}
-          target="_blank"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
-        >
-          <span>Preview Student View</span>
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Link>
+        <div className="flex items-center gap-3">
+          <AiQuotaBadge refreshTrigger={quotaRefreshKey} />
+          <Link
+            href={`/student/roadmaps/${roadmap.id}`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
+          >
+            <span>Preview Student View</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
 
       {/* Roadmap Overview Header */}
@@ -492,18 +642,30 @@ export default function RoadmapManagementPage({ params }: PageProps) {
 
       {/* Modules Section */}
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-lg sm:text-xl font-bold font-display text-text-primary">
             Curriculum Modules ({modules.length})
           </h2>
 
-          <button
-            onClick={() => setIsAddingModule(!isAddingModule)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 transition-all shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Module</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGenerateModules}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer"
+              title="Use AI to generate curriculum module titles for this roadmap"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Generate Modules with AI</span>
+            </button>
+
+            <button
+              onClick={() => setIsAddingModule(!isAddingModule)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 transition-all shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Module</span>
+            </button>
+          </div>
         </div>
 
         {/* Add Module Form Modal/Box */}
@@ -580,6 +742,9 @@ export default function RoadmapManagementPage({ params }: PageProps) {
           <div className="space-y-6">
             {modules.map((moduleItem, modIdx) => {
               const conceptsInModule = (moduleItem.moduleConcepts || []).map((mc) => mc.concept).filter(Boolean);
+              const hasConcepts = conceptsInModule.length > 0;
+              const allHaveMcqs = hasConcepts && conceptsInModule.every((c) => (c.questionCount ?? 0) > 0);
+              const needsMcqs = hasConcepts && !allHaveMcqs;
               const isEditingThisModule = editingModuleId === moduleItem.id;
               const isAttachingToThis = attachingModuleId === moduleItem.id;
 
@@ -640,8 +805,39 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                       </div>
                     )}
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                    {/* Actions & Dynamic State Machine */}
+                    <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                      {!hasConcepts && (
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateConcepts(moduleItem.id, moduleItem.title)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent text-white hover:bg-accent/90 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                          title="Generate concept titles and full article content for this module"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Generate Concepts with AI</span>
+                        </button>
+                      )}
+
+                      {needsMcqs && (
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateMcqs(moduleItem.id, moduleItem.title)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                          title="Generate 5 assessment MCQs for concepts lacking quizzes"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Generate MCQs with AI</span>
+                        </button>
+                      )}
+
+                      {allHaveMcqs && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-green bg-green-tint border border-green/20">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Fully generated</span>
+                        </span>
+                      )}
+
                       <button
                         onClick={() => {
                           setEditingModuleId(moduleItem.id);
@@ -872,6 +1068,17 @@ export default function RoadmapManagementPage({ params }: PageProps) {
             conceptTitle: '',
           })
         }
+      />
+
+      {/* AI Cascading Generation Modal */}
+      <AiGeneratingModal
+        isOpen={aiModalState.isOpen}
+        contextType={aiModalState.contextType}
+        title={aiModalState.title}
+        subtitle={aiModalState.subtitle}
+        error={aiModalState.error}
+        onCancel={handleCancelAiGeneration}
+        onCloseError={handleCloseAiError}
       />
     </div>
   );

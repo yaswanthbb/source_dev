@@ -8,6 +8,7 @@ import { ArrowLeft, Layers, Sparkles } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { useAiStream } from '@/hooks/use-ai-stream';
 import { AiGenerateButton } from '@/components/ai-generate-button';
+import { AiQuotaBadge } from '@/components/ai-quota-badge';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
 export default function CreateRoadmapPage() {
@@ -19,6 +20,7 @@ export default function CreateRoadmapPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
 
   const createMutation = useMutation({
     mutationFn: async (payload: { title: string; description?: string }) => {
@@ -50,6 +52,9 @@ export default function CreateRoadmapPage() {
         onChunk: (_delta, accumulated) => {
           setDescription(accumulated);
         },
+        onDone: () => {
+          setQuotaRefreshKey((k) => k + 1);
+        },
         onError: (err) => {
           showError(err);
         },
@@ -69,8 +74,8 @@ export default function CreateRoadmapPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-16">
-      {/* Back Link */}
-      <div>
+      {/* Back Link & Quota Badge */}
+      <div className="flex items-center justify-between gap-4">
         <Link
           href="/instructor/content"
           className="inline-flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-accent transition-colors cursor-pointer"
@@ -78,6 +83,8 @@ export default function CreateRoadmapPage() {
           <ArrowLeft className="w-4 h-4" />
           <span>Back to My Content</span>
         </Link>
+
+        <AiQuotaBadge refreshTrigger={quotaRefreshKey} />
       </div>
 
       {/* Form Container Card */}
