@@ -6,6 +6,7 @@ import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
 import { ModuleConceptPrerequisite } from './entities/module-concept-prerequisite.entity';
 import { InstructorProfile } from '../users/entities/instructor-profile.entity';
+import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { RoadmapsService } from './roadmaps.service';
 import { RoadmapsController } from './roadmaps.controller';
 import { ConceptsService } from './concepts.service';
@@ -20,6 +21,7 @@ import { ConceptsController } from './concepts.controller';
       ModuleConcept,
       ModuleConceptPrerequisite,
       InstructorProfile,
+      McqQuestion,
     ]),
   ],
   controllers: [RoadmapsController, ConceptsController],

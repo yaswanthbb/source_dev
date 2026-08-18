@@ -21,6 +21,7 @@ import { CreateModuleDto } from './dto/create-module.dto';
 import { UpdateModuleDto } from './dto/update-module.dto';
 import { AttachConceptDto } from './dto/attach-concept.dto';
 import { UpdateModuleConceptDto } from './dto/update-module-concept.dto';
+import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { User } from '../users/entities/user.entity';
 
 @Injectable()
@@ -38,6 +39,8 @@ export class RoadmapsService {
     private readonly moduleConceptPrerequisiteRepository: Repository<ModuleConceptPrerequisite>,
     @InjectRepository(InstructorProfile)
     private readonly instructorProfileRepository: Repository<InstructorProfile>,
+    @InjectRepository(McqQuestion)
+    private readonly mcqQuestionRepository: Repository<McqQuestion>,
   ) {}
 
   async checkApprovedContentCreator(
@@ -129,12 +132,47 @@ export class RoadmapsService {
       throw new NotFoundException('Roadmap not found');
     }
 
+    // Collect all concept IDs in this roadmap
+    const allConceptIds: string[] = [];
+    if (roadmap.modules) {
+      for (const mod of roadmap.modules) {
+        if (mod.moduleConcepts) {
+          for (const mc of mod.moduleConcepts) {
+            if (mc.conceptId) {
+              allConceptIds.push(mc.conceptId);
+            }
+          }
+        }
+      }
+    }
+
+    const questionCountMap = new Map<string, number>();
+    if (allConceptIds.length > 0) {
+      const counts = await this.mcqQuestionRepository
+        .createQueryBuilder('q')
+        .select('q.concept_id', 'conceptId')
+        .addSelect('COUNT(q.id)', 'count')
+        .where('q.concept_id IN (:...conceptIds)', {
+          conceptIds: allConceptIds,
+        })
+        .groupBy('q.concept_id')
+        .getRawMany<{ conceptId: string; count: string }>();
+
+      for (const row of counts) {
+        questionCountMap.set(row.conceptId, parseInt(row.count, 10) || 0);
+      }
+    }
+
     if (roadmap.modules) {
       roadmap.modules.sort((a, b) => a.orderIndex - b.orderIndex);
       for (const mod of roadmap.modules) {
         if (mod.moduleConcepts && mod.moduleConcepts.length > 0) {
           mod.moduleConcepts.sort((a, b) => a.orderIndex - b.orderIndex);
           for (const mc of mod.moduleConcepts) {
+            if (mc.concept) {
+              (mc.concept as any).questionCount =
+                questionCountMap.get(mc.conceptId) || 0;
+            }
             (mc as any).prerequisites = (mc.prerequisites || []).map((p) => ({
               moduleConceptId: p.moduleConceptId,
               prerequisiteConceptId: p.prerequisiteModuleConcept?.conceptId,
