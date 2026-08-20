@@ -137,7 +137,11 @@ export class AiGenerateService {
   async generateNvidiaCompletion(
     systemPrompt: string,
     userPrompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: {
+      maxTokens?: number;
+      temperature?: number;
+      responseFormat?: { type: 'json_object' | 'text' };
+    },
     signal?: AbortSignal,
   ): Promise<string> {
     const apiKey = this.configService.get<string>('NVIDIA_API_KEY')?.trim();
@@ -157,6 +161,22 @@ export class AiGenerateService {
     const maxTokens = options?.maxTokens ?? 2048;
     const temperature = options?.temperature ?? 0.6;
 
+    const requestBody: any = {
+      model: modelId,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      stream: false,
+      temperature,
+      top_p: 0.9,
+      max_tokens: maxTokens,
+    };
+
+    if (options?.responseFormat) {
+      requestBody.response_format = options.responseFormat;
+    }
+
     let response: globalThis.Response;
     try {
       response = await fetch(apiUrl, {
@@ -165,17 +185,7 @@ export class AiGenerateService {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          stream: false,
-          temperature,
-          top_p: 0.9,
-          max_tokens: maxTokens,
-        }),
+        body: JSON.stringify(requestBody),
         signal,
       });
     } catch (err: unknown) {
@@ -374,6 +384,117 @@ export class AiGenerateService {
         // response may already be closed
       }
     }
+  }
+
+  /**
+   * Pre-repairs malformed JSON containing unescaped backslashes (e.g. Windows paths)
+   * or unescaped double quotes inside key/value strings.
+   */
+  private repairMalformedJson(str: string): string {
+    // 1. Fix unescaped backslashes (not followed by valid JSON escape chars)
+    let fixed = str.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+
+    // 2. Fix unescaped double quotes inside property values
+    fixed = fixed.replace(
+      /"(questionText|optionText|title|question|content)"\s*:\s*"([\s\S]*?)"\s*(,\s*"|,\s*\}|\s*\})/g,
+      (_match, key, val, tail) => {
+        const escapedVal = val.replace(/(?<!\\)"/g, '\\"');
+        return `"${key}": "${escapedVal}"${tail}`;
+      },
+    );
+
+    return fixed;
+  }
+
+  /**
+   * Parses MCQ question output safely from direct arrays or wrapped JSON objects,
+   * with multi-stage sanitization and detailed diagnostic logging on parse errors.
+   */
+  private parseMcqQuestions(raw: string, conceptTitle: string): any[] | null {
+    let cleaned = this.cleanModelOutput(raw);
+
+    // If response contains reasoning before JSON code fence
+    if (cleaned.includes('```')) {
+      const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (fenceMatch) {
+        cleaned = fenceMatch[1].trim();
+      }
+    }
+
+    const tryExtractQuestions = (parsedObj: any): any[] | null => {
+      if (Array.isArray(parsedObj) && parsedObj.length > 0) {
+        return parsedObj;
+      }
+      if (parsedObj && typeof parsedObj === 'object') {
+        if (
+          Array.isArray(parsedObj.questions) &&
+          parsedObj.questions.length > 0
+        ) {
+          return parsedObj.questions;
+        }
+        if (Array.isArray(parsedObj.items) && parsedObj.items.length > 0) {
+          return parsedObj.items;
+        }
+        if (Array.isArray(parsedObj.mcqs) && parsedObj.mcqs.length > 0) {
+          return parsedObj.mcqs;
+        }
+      }
+      return null;
+    };
+
+    // 1. Direct JSON.parse
+    try {
+      const parsed = JSON.parse(cleaned);
+      const qs = tryExtractQuestions(parsed);
+      if (qs) return qs;
+    } catch {
+      // 2. Attempt with JSON repair
+      try {
+        const repaired = this.repairMalformedJson(cleaned);
+        const parsed = JSON.parse(repaired);
+        const qs = tryExtractQuestions(parsed);
+        if (qs) return qs;
+      } catch {
+        // 3. Fallback: regex extraction of outermost array or object
+        const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          try {
+            const parsed = JSON.parse(arrayMatch[0]);
+            const qs = tryExtractQuestions(parsed);
+            if (qs) return qs;
+          } catch {
+            try {
+              const parsed = JSON.parse(
+                this.repairMalformedJson(arrayMatch[0]),
+              );
+              const qs = tryExtractQuestions(parsed);
+              if (qs) return qs;
+            } catch {}
+          }
+        }
+
+        const objMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          try {
+            const parsed = JSON.parse(objMatch[0]);
+            const qs = tryExtractQuestions(parsed);
+            if (qs) return qs;
+          } catch {
+            try {
+              const parsed = JSON.parse(this.repairMalformedJson(objMatch[0]));
+              const qs = tryExtractQuestions(parsed);
+              if (qs) return qs;
+            } catch {}
+          }
+        }
+      }
+    }
+
+    // Diagnostic logging when all parse stages fail
+    this.logger.warn(
+      `Failed to parse MCQ JSON for concept "${conceptTitle}". Raw snippet: ${cleaned.slice(0, 250)}...`,
+    );
+    return null;
   }
 
   /**
@@ -723,29 +844,47 @@ export class AiGenerateService {
           concept.content,
         );
 
-        const responseText = await this.generateNvidiaCompletion(
-          CONCEPT_MCQ_SYSTEM_PROMPT,
-          userPrompt,
-          { maxTokens: 1200, temperature: 0.5 },
-        );
+        let parsedQuestions: any[] | null = null;
+        let attempt = 0;
+        const maxAttempts = 2; // Initial attempt + 1 automatic retry
 
-        await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
+        while (attempt < maxAttempts && !parsedQuestions) {
+          attempt++;
+          try {
+            const responseText = await this.generateNvidiaCompletion(
+              CONCEPT_MCQ_SYSTEM_PROMPT,
+              userPrompt,
+              {
+                maxTokens: 2000,
+                temperature: attempt === 1 ? 0.3 : 0.4,
+                responseFormat: { type: 'json_object' },
+              },
+            );
 
-        const cleaned = this.cleanModelOutput(responseText);
-        let parsedQuestions: any[] = [];
+            if (attempt === 1) {
+              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
+            }
 
-        try {
-          parsedQuestions = JSON.parse(cleaned);
-        } catch {
-          const match = cleaned.match(/\[[\s\S]*\]/);
-          if (match) {
-            parsedQuestions = JSON.parse(match[0]);
+            parsedQuestions = this.parseMcqQuestions(
+              responseText,
+              concept.title,
+            );
+            if (!parsedQuestions && attempt < maxAttempts) {
+              this.logger.warn(
+                `Parse failed on attempt 1 for concept "${concept.title}". Automatically retrying with fresh completion...`,
+              );
+            }
+          } catch (apiErr: any) {
+            if (attempt >= maxAttempts) throw apiErr;
+            this.logger.warn(
+              `API error on attempt 1 for concept "${concept.title}": ${apiErr.message}. Retrying...`,
+            );
           }
         }
 
-        if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
-          this.logger.warn(
-            `Invalid MCQ JSON response for concept "${concept.title}"`,
+        if (!parsedQuestions || parsedQuestions.length === 0) {
+          this.logger.error(
+            `Invalid MCQ JSON response after ${maxAttempts} attempts for concept "${concept.title}"`,
           );
           failedCount++;
           continue;
@@ -840,33 +979,46 @@ export class AiGenerateService {
     const systemPrompt = CONCEPT_MCQ_SYSTEM_PROMPT;
     const userPrompt = buildConceptMcqUserPrompt(dto.title, dto.content);
 
-    const rawResponse = await this.generateNvidiaCompletion(
-      systemPrompt,
-      userPrompt,
-      { maxTokens: 1200, temperature: 0.5 },
-    );
+    let parsedQuestions: any[] | null = null;
+    let attempt = 0;
+    const maxAttempts = 2;
+    let lastResponseText = '';
 
-    await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
+    while (attempt < maxAttempts && !parsedQuestions) {
+      attempt++;
+      try {
+        lastResponseText = await this.generateNvidiaCompletion(
+          systemPrompt,
+          userPrompt,
+          {
+            maxTokens: 2000,
+            temperature: attempt === 1 ? 0.3 : 0.4,
+            responseFormat: { type: 'json_object' },
+          },
+        );
 
-    const cleaned = this.cleanModelOutput(rawResponse);
-    let formatted = cleaned;
-
-    // Validate and format JSON nicely
-    try {
-      const parsed = JSON.parse(cleaned);
-      formatted = JSON.stringify(parsed, null, 2);
-    } catch {
-      const match = cleaned.match(/\[[\s\S]*\]/);
-      if (match) {
-        try {
-          const parsed = JSON.parse(match[0]);
-          formatted = JSON.stringify(parsed, null, 2);
-        } catch {
-          // fallback to cleaned string
+        if (attempt === 1) {
+          await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
         }
+
+        parsedQuestions = this.parseMcqQuestions(lastResponseText, dto.title);
+        if (!parsedQuestions && attempt < maxAttempts) {
+          this.logger.warn(
+            `Single concept MCQ parse failed on attempt 1 for "${dto.title}". Retrying...`,
+          );
+        }
+      } catch (err: any) {
+        if (attempt >= maxAttempts) throw err;
+        this.logger.warn(
+          `Single concept MCQ API error on attempt 1 for "${dto.title}": ${err.message}. Retrying...`,
+        );
       }
     }
 
-    return { rawText: formatted };
+    if (parsedQuestions && parsedQuestions.length > 0) {
+      return { rawText: JSON.stringify(parsedQuestions, null, 2) };
+    }
+
+    return { rawText: this.cleanModelOutput(lastResponseText) };
   }
 }

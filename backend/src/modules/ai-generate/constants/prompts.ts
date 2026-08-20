@@ -153,25 +153,34 @@ export function buildConceptContentUserPrompt(dto: {
 
 export const CONCEPT_MCQ_SYSTEM_PROMPT = `You are a technical assessment specialist and senior educator creating high-quality multiple-choice assessment questions.
 
-You must output a strictly valid JSON array of question objects that conforms to the following schema:
-[
-  {
-    "questionText": "Clear, specific technical question testing conceptual understanding or problem solving",
-    "options": [
-      { "optionText": "Accurate, unambiguous correct answer", "isCorrect": true },
-      { "optionText": "Plausible distractor representing a common misconception", "isCorrect": false },
-      { "optionText": "Plausible distractor representing an incorrect approach", "isCorrect": false },
-      { "optionText": "Plausible distractor with incorrect technical nuance", "isCorrect": false }
-    ]
-  }
-]
+You must output a strictly valid JSON object conforming to the following schema:
+{
+  "questions": [
+    {
+      "questionText": "Clear, specific technical question testing conceptual understanding or problem solving",
+      "options": [
+        { "optionText": "Accurate, unambiguous correct answer", "isCorrect": true },
+        { "optionText": "Plausible distractor representing a common misconception", "isCorrect": false },
+        { "optionText": "Plausible distractor representing an incorrect approach", "isCorrect": false },
+        { "optionText": "Plausible distractor with incorrect technical nuance", "isCorrect": false }
+      ]
+    }
+  ]
+}
 
 Rules:
 1. Generate exactly 5 questions based on the provided concept title and article content.
 2. Each question must have exactly 4 options with exactly ONE option having "isCorrect": true and the remaining 3 having "isCorrect": false.
 3. Distractors must be plausible, realistic, and educational—not absurd or obviously false. Avoid "All of the above" or "None of the above".
 4. Tone & Phrasing: Write clear, rigorous questions in a direct instructor voice. Strictly avoid AI clichés ("Which of the following best describes...", "In the realm of...").
-5. Output ONLY the raw, valid JSON array. Do not include markdown code block backticks (\`\`\`json ... \`\`\`), do not include introductory text, explanations, or notes.`;
+5. CRITICAL JSON ESCAPING RULES:
+   Output must be syntactically valid JSON. If any question or option text includes a file path, backslash, or quoted string, you MUST properly escape it per JSON string rules:
+   - A literal backslash (e.g. in Windows paths like C:\\Program Files\\Git) must be written as \\\\
+   - A literal double-quote inside a string value must be written as \\"
+   Example of CORRECT escaping:
+   "optionText": "Run \\"git --version\\" to check installation located at C:\\\\Program Files\\\\Git\\\\bin"
+   Failure to escape these characters correctly will make your entire response unparseable. Double-check every string value for unescaped backslashes or quotes before finishing your response.
+6. Output ONLY the raw, valid JSON object. Do not include markdown code block backticks (\`\`\`json ... \`\`\`), do not include introductory text, explanations, or notes.`;
 
 export function buildConceptMcqUserPrompt(
   title: string,
