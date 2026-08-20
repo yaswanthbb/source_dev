@@ -11,6 +11,7 @@ import { RoadmapsService } from './roadmaps.service';
 import { RoadmapsController } from './roadmaps.controller';
 import { ConceptsService } from './concepts.service';
 import { ConceptsController } from './concepts.controller';
+import { AdminContentReviewController } from './admin-content-review.controller';
 
 @Module({
   imports: [
@@ -24,7 +25,11 @@ import { ConceptsController } from './concepts.controller';
       McqQuestion,
     ]),
   ],
-  controllers: [RoadmapsController, ConceptsController],
+  controllers: [
+    RoadmapsController,
+    ConceptsController,
+    AdminContentReviewController,
+  ],
   providers: [RoadmapsService, ConceptsService],
   exports: [RoadmapsService, ConceptsService, TypeOrmModule],
 })
