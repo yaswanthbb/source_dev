@@ -18,6 +18,7 @@ import {
   PanelLeftOpen,
   Menu,
   X,
+  ClipboardCheck,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { getToken, clearAuth, User } from '@/lib/auth';
@@ -30,6 +31,11 @@ const ADMIN_NAV_ITEMS = [
     name: 'Dashboard',
     href: '/admin/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    name: 'Content Review',
+    href: '/admin/content-review',
+    icon: ClipboardCheck,
   },
   {
     name: 'Instructors',
