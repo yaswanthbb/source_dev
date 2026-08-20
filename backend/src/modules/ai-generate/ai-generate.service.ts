@@ -726,6 +726,7 @@ export class AiGenerateService {
           title,
           content: generatedContent,
           difficulty: ConceptDifficulty.MEDIUM,
+          isAiGenerated: true,
         });
 
         // Attach concept to module using existing service (inherits order index & prerequisite logic)

@@ -18,6 +18,8 @@ import { UpdateQuestionDto } from './dto/update-question.dto';
 import { UpdateOptionDto } from './dto/update-option.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
 
+import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+
 @Injectable()
 export class QuizService {
   constructor(
@@ -31,6 +33,15 @@ export class QuizService {
     private readonly conceptRepository: Repository<Concept>,
     private readonly progressService: ProgressService,
   ) {}
+
+  private async resetConceptReviewStatus(conceptId: string): Promise<void> {
+    await this.conceptRepository.update(conceptId, {
+      reviewStatus: ConceptReviewStatus.PENDING,
+      rejectionReason: null,
+      reviewedByUserId: null,
+      reviewedAt: null,
+    });
+  }
 
   private checkOwnership(
     authorId: string | null,
@@ -88,6 +99,8 @@ export class QuizService {
       }),
     );
     savedQuestion.options = await this.mcqOptionRepository.save(options);
+
+    await this.resetConceptReviewStatus(conceptId);
 
     return savedQuestion;
   }
@@ -156,7 +169,9 @@ export class QuizService {
       question.orderIndex = dto.orderIndex;
     }
 
-    return this.mcqQuestionRepository.save(question);
+    const saved = await this.mcqQuestionRepository.save(question);
+    await this.resetConceptReviewStatus(question.conceptId);
+    return saved;
   }
 
   async deleteQuestion(
@@ -172,7 +187,9 @@ export class QuizService {
     }
     this.checkOwnership(question.concept.authorId, user);
 
+    const conceptId = question.conceptId;
     await this.mcqQuestionRepository.remove(question);
+    await this.resetConceptReviewStatus(conceptId);
   }
 
   async updateOption(
@@ -221,7 +238,9 @@ export class QuizService {
       option.optionText = dto.optionText;
     }
 
-    return this.mcqOptionRepository.save(option);
+    const savedOption = await this.mcqOptionRepository.save(option);
+    await this.resetConceptReviewStatus(question.conceptId);
+    return savedOption;
   }
 
   private async checkAndTriggerConceptCompletion(

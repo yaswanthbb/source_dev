@@ -50,8 +50,11 @@ export class ConceptsController {
     description: 'Search term for concept title',
   })
   @ApiResponse({ status: 200, description: 'Concepts retrieved.' })
-  async findAllConcepts(@Query('search') search?: string) {
-    return this.conceptsService.findAllConcepts(search);
+  async findAllConcepts(
+    @CurrentUser() user: User,
+    @Query('search') search?: string,
+  ) {
+    return this.conceptsService.findAllConcepts(search, user);
   }
 
   @Get(':id')
@@ -61,8 +64,9 @@ export class ConceptsController {
   @ApiResponse({ status: 200, description: 'Concept details retrieved.' })
   async findConceptById(
     @Param('id') id: string,
+    @CurrentUser() user: User,
   ): Promise<Record<string, unknown>> {
-    return this.conceptsService.findConceptById(id);
+    return this.conceptsService.findConceptById(id, user);
   }
 
   @Patch(':id')

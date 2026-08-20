@@ -10,7 +10,9 @@ import { ModuleConcept } from './entities/module-concept.entity';
 import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { InstructorStatus } from '../../common/enums/instructor-status.enum';
+import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
 import { slugify } from '../../common/utils/slugify.util';
+import { hasSignificantContentChange } from '../../common/utils/content-diff.util';
 import { CreateConceptDto } from './dto/create-concept.dto';
 import { UpdateConceptDto } from './dto/update-concept.dto';
 import { User } from '../users/entities/user.entity';
@@ -85,24 +87,52 @@ export class ConceptsService {
       slug,
       difficulty: dto.difficulty,
       authorId: user.id,
+      reviewStatus: ConceptReviewStatus.PENDING,
+      isAiGenerated: Boolean(dto.isAiGenerated),
+      rejectionReason: null,
+      reviewedByUserId: null,
+      reviewedAt: null,
     });
     return this.conceptRepository.save(concept);
   }
 
-  async findAllConcepts(search?: string): Promise<Concept[]> {
+  async findAllConcepts(
+    search?: string,
+    user?: User | Omit<User, 'passwordHash'>,
+  ): Promise<Concept[]> {
+    const isStudent = user && user.role === UserRole.STUDENT;
+
     if (search) {
+      const whereCondition: any = { title: ILike(`%${search}%`) };
+      if (isStudent) {
+        whereCondition.reviewStatus = ConceptReviewStatus.APPROVED;
+      }
+      return this.conceptRepository.find({ where: whereCondition });
+    }
+
+    if (isStudent) {
       return this.conceptRepository.find({
-        where: { title: ILike(`%${search}%`) },
+        where: { reviewStatus: ConceptReviewStatus.APPROVED },
       });
     }
+
     return this.conceptRepository.find();
   }
 
-  async findConceptById(id: string): Promise<Record<string, unknown>> {
+  async findConceptById(
+    id: string,
+    user?: User | Omit<User, 'passwordHash'>,
+  ): Promise<Record<string, unknown>> {
     const concept = await this.conceptRepository.findOne({
       where: { id },
     });
     if (!concept) {
+      throw new NotFoundException('Concept not found');
+    }
+
+    // Visibility gating: unapproved concepts are hidden from students
+    const isStudent = user && user.role === UserRole.STUDENT;
+    if (isStudent && concept.reviewStatus !== ConceptReviewStatus.APPROVED) {
       throw new NotFoundException('Concept not found');
     }
 
@@ -152,12 +182,30 @@ export class ConceptsService {
       concept.title = dto.title;
       concept.slug = await this.generateUniqueConceptSlug(dto.title);
     }
+
     if (dto.content !== undefined) {
+      const isAiGen = Boolean((dto as any).isAiGenerated);
+      const isSignificant =
+        isAiGen || hasSignificantContentChange(concept.content, dto.content, 40);
+
       concept.content = dto.content;
+
+      if (isSignificant) {
+        concept.reviewStatus = ConceptReviewStatus.PENDING;
+        concept.rejectionReason = null;
+        concept.reviewedByUserId = null;
+        concept.reviewedAt = null;
+      }
+
+      if (isAiGen) {
+        concept.isAiGenerated = true;
+      }
     }
+
     if (dto.difficulty !== undefined) {
       concept.difficulty = dto.difficulty;
     }
+
     return this.conceptRepository.save(concept);
   }
 
