@@ -21,6 +21,7 @@ import {
   Link as LinkIcon,
   Sparkles,
   Lock,
+  Clock,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
@@ -43,6 +44,9 @@ interface ConceptSummary {
   title: string;
   slug: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  reviewStatus?: 'pending' | 'approved' | 'rejected';
+  isAiGenerated?: boolean;
+  rejectionReason?: string | null;
   questionCount?: number;
 }
 
@@ -954,10 +958,21 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                               {cIdx + 1}
                             </span>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <h4 className="font-bold text-text-primary truncate">
                                   {c.title}
                                 </h4>
+
+                                {c.isAiGenerated && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-accent-tint text-accent border border-accent/20 flex-shrink-0"
+                                    title="Generated with AI"
+                                  >
+                                    <Sparkles className="w-2.5 h-2.5" />
+                                    <span>AI</span>
+                                  </span>
+                                )}
+
                                 <span
                                   className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider flex-shrink-0 ${
                                     c.difficulty === 'easy'
@@ -969,6 +984,37 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                                 >
                                   {c.difficulty}
                                 </span>
+
+                                {/* Review Status Badge */}
+                                {c.reviewStatus === 'approved' ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-green-tint text-green border border-green/20 flex-shrink-0"
+                                    title="Approved & Live for students"
+                                  >
+                                    <Check className="w-2.5 h-2.5" />
+                                    <span>Approved</span>
+                                  </span>
+                                ) : c.reviewStatus === 'rejected' ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-red-tint text-red border border-red/30 flex-shrink-0 cursor-help"
+                                    title={
+                                      c.rejectionReason
+                                        ? `Rejected by Admin: "${c.rejectionReason}"`
+                                        : 'Rejected by Admin. Please update and resubmit.'
+                                    }
+                                  >
+                                    <AlertCircle className="w-2.5 h-2.5" />
+                                    <span>Rejected</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-tint text-amber border border-amber/30 flex-shrink-0"
+                                    title="Pending Admin Review before student publication"
+                                  >
+                                    <Clock className="w-2.5 h-2.5" />
+                                    <span>Pending Review</span>
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
