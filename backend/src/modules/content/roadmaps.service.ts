@@ -24,6 +24,8 @@ import { UpdateModuleConceptDto } from './dto/update-module-concept.dto';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { User } from '../users/entities/user.entity';
 
+import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+
 @Injectable()
 export class RoadmapsService {
   constructor(
@@ -115,7 +117,10 @@ export class RoadmapsService {
     return roadmaps;
   }
 
-  async findRoadmapById(id: string): Promise<Roadmap> {
+  async findRoadmapById(
+    id: string,
+    user?: User | Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
     const roadmap = await this.roadmapRepository.findOne({
       where: { id },
       relations: [
@@ -130,6 +135,21 @@ export class RoadmapsService {
 
     if (!roadmap) {
       throw new NotFoundException('Roadmap not found');
+    }
+
+    const isStudent = user && user.role === UserRole.STUDENT;
+
+    // Filter unapproved concepts for student callers
+    if (isStudent && roadmap.modules) {
+      for (const mod of roadmap.modules) {
+        if (mod.moduleConcepts) {
+          mod.moduleConcepts = mod.moduleConcepts.filter(
+            (mc) =>
+              mc.concept &&
+              mc.concept.reviewStatus === ConceptReviewStatus.APPROVED,
+          );
+        }
+      }
     }
 
     // Collect all concept IDs in this roadmap
@@ -173,13 +193,23 @@ export class RoadmapsService {
               (mc.concept as any).questionCount =
                 questionCountMap.get(mc.conceptId) || 0;
             }
-            (mc as any).prerequisites = (mc.prerequisites || []).map((p) => ({
-              moduleConceptId: p.moduleConceptId,
-              prerequisiteConceptId: p.prerequisiteModuleConcept?.conceptId,
-              title: p.prerequisiteModuleConcept?.concept?.title,
-              slug: p.prerequisiteModuleConcept?.concept?.slug,
-              orderIndex: p.prerequisiteModuleConcept?.orderIndex,
-            }));
+            (mc as any).prerequisites = (mc.prerequisites || [])
+              .filter((p) => {
+                if (!isStudent) return true;
+                const prereqReviewStatus =
+                  p.prerequisiteModuleConcept?.concept?.reviewStatus;
+                return (
+                  !prereqReviewStatus ||
+                  prereqReviewStatus === ConceptReviewStatus.APPROVED
+                );
+              })
+              .map((p) => ({
+                moduleConceptId: p.moduleConceptId,
+                prerequisiteConceptId: p.prerequisiteModuleConcept?.conceptId,
+                title: p.prerequisiteModuleConcept?.concept?.title,
+                slug: p.prerequisiteModuleConcept?.concept?.slug,
+                orderIndex: p.prerequisiteModuleConcept?.orderIndex,
+              }));
           }
         }
       }

@@ -10,6 +10,7 @@ import { GamificationService } from '../gamification/gamification.service';
 import { ReviewService } from '../review/review.service';
 import { ProgressStatus } from '../../common/enums/progress-status.enum';
 import { XpSource } from '../../common/enums/xp-source.enum';
+import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
 
 @Injectable()
 export class ProgressService {
@@ -153,9 +154,13 @@ export class ProgressService {
       );
       sortedModules.forEach((mod) => {
         if (mod.moduleConcepts) {
-          const sortedConcepts = [...mod.moduleConcepts].sort(
-            (a, b) => a.orderIndex - b.orderIndex,
-          );
+          const sortedConcepts = [...mod.moduleConcepts]
+            .filter(
+              (mc) =>
+                mc.concept &&
+                mc.concept.reviewStatus === ConceptReviewStatus.APPROVED,
+            )
+            .sort((a, b) => a.orderIndex - b.orderIndex);
           moduleConceptsList.push(...sortedConcepts);
         }
       });

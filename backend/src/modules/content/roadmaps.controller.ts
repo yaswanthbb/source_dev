@@ -55,8 +55,11 @@ export class RoadmapsController {
   @Get('roadmaps/:id')
   @ApiOperation({ summary: 'Get roadmap detail with modules and concepts' })
   @ApiResponse({ status: 200, description: 'Roadmap details retrieved.' })
-  async findRoadmapById(@Param('id') id: string) {
-    return this.roadmapsService.findRoadmapById(id);
+  async findRoadmapById(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.roadmapsService.findRoadmapById(id, user);
   }
 
   @Patch('roadmaps/:id')
