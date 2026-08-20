@@ -27,4 +27,7 @@ export class CreateConceptDto {
   @IsOptional()
   @IsEnum(ConceptDifficulty)
   difficulty?: ConceptDifficulty;
+
+  @IsOptional()
+  isAiGenerated?: boolean;
 }
