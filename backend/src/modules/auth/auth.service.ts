@@ -17,6 +17,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { OAuthProfile } from './interfaces/oauth-profile.interface';
 
 @Injectable()
 export class AuthService {
@@ -62,6 +63,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (!userWithPassword.passwordHash) {
+      throw new UnauthorizedException(
+        'This account uses social sign-in. Please log in with Google or GitHub, or use forgot password to set a password.',
+      );
+    }
+
     const isPasswordValid = await bcrypt.compare(
       dto.password,
       userWithPassword.passwordHash,
@@ -84,6 +91,69 @@ export class AuthService {
       accessToken,
     };
   }
+
+  async handleOAuthLogin(oauthProfile: OAuthProfile) {
+    if (!oauthProfile.email) {
+      throw new BadRequestException(
+        'Email address is required from OAuth provider',
+      );
+    }
+
+    const normalizedEmail = oauthProfile.email.toLowerCase().trim();
+
+    // 1. Check if user already exists by OAuth provider & providerId
+    const user = await this.usersService.findByOAuthProvider(
+      oauthProfile.provider,
+      oauthProfile.providerId,
+    );
+
+    if (user) {
+      const payload = { sub: user.id, email: user.email, role: user.role };
+      const accessToken = this.jwtService.sign(payload);
+      return {
+        user,
+        accessToken,
+      };
+    }
+
+    // 2. Check if a user with this email already exists
+    const existingByEmail =
+      await this.usersService.findOneByEmailWithPassword(normalizedEmail);
+
+    if (existingByEmail) {
+      if (!existingByEmail.authProvider) {
+        throw new ConflictException(
+          `An account with email ${normalizedEmail} already exists. Please log in with your password and connect ${oauthProfile.provider === 'google' ? 'Google' : 'GitHub'} from your Profile settings.`,
+        );
+      } else {
+        throw new ConflictException(
+          `This email is linked to another sign-in method (${existingByEmail.authProvider}).`,
+        );
+      }
+    }
+
+    // 3. Auto-register new user via OAuth
+    const newUser = await this.usersService.createOAuthUser({
+      email: normalizedEmail,
+      name: oauthProfile.name,
+      authProvider: oauthProfile.provider,
+      authProviderId: oauthProfile.providerId,
+      profilePicture: oauthProfile.photo || null,
+    });
+
+    const payload = {
+      sub: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
+    };
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      user: newUser,
+      accessToken,
+    };
+  }
+
 
   async forgotPassword(
     dto: ForgotPasswordDto,

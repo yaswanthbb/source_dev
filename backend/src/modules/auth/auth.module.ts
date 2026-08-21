@@ -11,6 +11,8 @@ import { PasswordResetOtp } from './entities/password-reset-otp.entity';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { GitHubStrategy } from './strategies/github.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
@@ -37,12 +39,23 @@ import { RolesGuard } from './guards/roles.guard';
   providers: [
     AuthService,
     JwtStrategy,
+    GoogleStrategy,
+    GitHubStrategy,
     RolesGuard,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
   ],
-  exports: [AuthService, JwtStrategy, PassportModule, JwtModule, RolesGuard],
+  exports: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy,
+    GitHubStrategy,
+    PassportModule,
+    JwtModule,
+    RolesGuard,
+  ],
 })
 export class AuthModule {}
+

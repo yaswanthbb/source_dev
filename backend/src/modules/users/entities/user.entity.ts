@@ -8,8 +8,14 @@ export class User extends BaseEntity {
   @Column({ unique: true })
   email: string;
 
-  @Column({ name: 'password_hash' })
-  passwordHash: string;
+  @Column({ type: 'varchar', name: 'password_hash', nullable: true })
+  passwordHash: string | null;
+
+  @Column({ type: 'varchar', name: 'auth_provider', nullable: true })
+  authProvider: string | null;
+
+  @Column({ type: 'varchar', name: 'auth_provider_id', nullable: true })
+  authProviderId: string | null;
 
   @Column()
   name: string;

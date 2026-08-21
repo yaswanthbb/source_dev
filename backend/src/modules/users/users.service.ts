@@ -4,6 +4,7 @@ import {
   BadRequestException,
   UnauthorizedException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -70,6 +71,70 @@ export class UsersService {
     });
     const savedUser = await this.userRepository.save(user);
     return this.sanitizeUser(savedUser);
+  }
+
+  async findByOAuthProvider(
+    provider: string,
+    providerId: string,
+  ): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { authProvider: provider, authProviderId: providerId },
+      relations: ['instructorProfile'],
+    });
+  }
+
+  async createOAuthUser(data: {
+    email: string;
+    name: string;
+    authProvider: string;
+    authProviderId: string;
+    profilePicture?: string | null;
+  }): Promise<Omit<User, 'passwordHash'>> {
+    const user = this.userRepository.create({
+      email: data.email,
+      name: data.name,
+      passwordHash: null,
+      authProvider: data.authProvider,
+      authProviderId: data.authProviderId,
+      profilePicture: data.profilePicture || null,
+      role: UserRole.STUDENT,
+    });
+    const savedUser = await this.userRepository.save(user);
+    return this.sanitizeUser(savedUser);
+  }
+
+  async linkOAuthProvider(
+    userId: string,
+    provider: string,
+    providerId: string,
+  ): Promise<Omit<User, 'passwordHash'>> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['instructorProfile'],
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.authProvider) {
+      throw new BadRequestException(
+        `Account is already linked to ${user.authProvider}`,
+      );
+    }
+
+    const existingOAuth = await this.userRepository.findOne({
+      where: { authProvider: provider, authProviderId: providerId },
+    });
+    if (existingOAuth && existingOAuth.id !== user.id) {
+      throw new ConflictException(
+        `This ${provider} account is already linked to another user`,
+      );
+    }
+
+    user.authProvider = provider;
+    user.authProviderId = providerId;
+    const updated = await this.userRepository.save(user);
+    return this.sanitizeUser(updated);
   }
 
   async getSelfProfile(userId: string): Promise<Omit<User, 'passwordHash'>> {
@@ -139,6 +204,13 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'This account uses social sign-in and does not have a password set.',
+      );
+    }
+
 
     const isPasswordValid = await bcrypt.compare(
       dto.currentPassword,
