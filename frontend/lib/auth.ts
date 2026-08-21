@@ -5,6 +5,8 @@ export interface User {
   role: 'student' | 'instructor' | 'admin';
   timezone?: string;
   profilePicture?: string | null;
+  authProvider?: string | null;
+  authProviderId?: string | null;
   createdAt?: string;
   instructorProfile?: {
     id?: string;
@@ -14,6 +16,7 @@ export interface User {
     approvedAt?: string | null;
   };
 }
+
 
 const TOKEN_KEY = 'kip_token';
 const USER_KEY = 'kip_user';
