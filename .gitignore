@@ -47,3 +47,8 @@ pids
 *.pid
 *.seed
 *.pid.lock
+
+
+#Graphify 
+graphify-out/cost.json
+graphify-out/cache/
