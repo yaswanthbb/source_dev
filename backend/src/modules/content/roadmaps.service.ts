@@ -107,12 +107,40 @@ export class RoadmapsService {
     return this.roadmapRepository.save(roadmap);
   }
 
-  async findAllRoadmaps(): Promise<Roadmap[]> {
-    const roadmaps = await this.roadmapRepository
-      .createQueryBuilder('roadmap')
-      .leftJoinAndSelect('roadmap.modules', 'module')
-      .loadRelationCountAndMap('roadmap.moduleCount', 'roadmap.modules')
-      .getMany();
+  async findAllRoadmaps(
+    user?: User | Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap[]> {
+    const roadmaps = await this.roadmapRepository.find({
+      relations: [
+        'modules',
+        'modules.moduleConcepts',
+        'modules.moduleConcepts.concept',
+      ],
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    const isStudent = user && user.role === UserRole.STUDENT;
+
+    for (const roadmap of roadmaps) {
+      if (roadmap.modules) {
+        roadmap.modules.sort((a, b) => a.orderIndex - b.orderIndex);
+        for (const mod of roadmap.modules) {
+          if (mod.moduleConcepts) {
+            if (isStudent) {
+              mod.moduleConcepts = mod.moduleConcepts.filter(
+                (mc) =>
+                  mc.concept &&
+                  mc.concept.reviewStatus === ConceptReviewStatus.APPROVED,
+              );
+            }
+            mod.moduleConcepts.sort((a, b) => a.orderIndex - b.orderIndex);
+          }
+        }
+      }
+      (roadmap as any).moduleCount = roadmap.modules ? roadmap.modules.length : 0;
+    }
 
     return roadmaps;
   }

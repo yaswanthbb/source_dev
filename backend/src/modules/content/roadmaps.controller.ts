@@ -48,8 +48,8 @@ export class RoadmapsController {
   @Get('roadmaps')
   @ApiOperation({ summary: 'List all roadmaps' })
   @ApiResponse({ status: 200, description: 'Roadmaps list retrieved.' })
-  async findAllRoadmaps() {
-    return this.roadmapsService.findAllRoadmaps();
+  async findAllRoadmaps(@CurrentUser() user: User) {
+    return this.roadmapsService.findAllRoadmaps(user);
   }
 
   @Get('roadmaps/:id')
