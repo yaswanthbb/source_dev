@@ -13,6 +13,7 @@ import {
   BookOpen,
   HelpCircle,
   Clock,
+  RefreshCw,
   Search,
   CheckCircle2,
   ChevronDown,
@@ -78,10 +79,12 @@ export default function AdminContentReviewPage() {
   // Rejection dialog state
   const [rejectingConcept, setRejectingConcept] = useState<PendingConcept | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [isManualRotating, setIsManualRotating] = useState(false);
 
   const {
     data: pendingConcepts = [],
     isLoading,
+    isFetching,
     isError,
     refetch,
   } = useQuery<PendingConcept[]>({
@@ -92,6 +95,12 @@ export default function AdminContentReviewPage() {
     },
     staleTime: 10000,
   });
+
+  const handleRefreshQueue = async () => {
+    setIsManualRotating(true);
+    await refetch();
+    setTimeout(() => setIsManualRotating(false), 650);
+  };
 
   const approveMutation = useMutation({
     mutationFn: async (conceptId: string) => {
@@ -174,10 +183,17 @@ export default function AdminContentReviewPage() {
         </div>
 
         <button
-          onClick={() => refetch()}
-          className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-surface hover:bg-bg text-xs font-semibold text-text-primary cursor-pointer transition-colors shadow-xs"
+          type="button"
+          onClick={handleRefreshQueue}
+          disabled={isFetching || isManualRotating}
+          className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-surface hover:bg-bg text-xs font-semibold text-text-primary cursor-pointer transition-colors shadow-xs disabled:opacity-75"
+          title="Reload pending review queue"
         >
-          <Clock className="w-3.5 h-3.5" />
+          <RefreshCw
+            className={`w-3.5 h-3.5 ${
+              isFetching || isManualRotating ? 'animate-spin' : ''
+            }`}
+          />
           <span>Refresh Queue</span>
         </button>
       </div>
