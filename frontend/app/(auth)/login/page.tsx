@@ -186,12 +186,12 @@ export default function LoginPage() {
                 >
                   Password
                 </label>
-                <span
-                  title="Password reset endpoint is not yet configured"
-                  className="text-xs text-text-secondary cursor-not-allowed hover:text-text-secondary"
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-accent hover:underline font-medium transition-colors"
                 >
                   Forgot your password?
-                </span>
+                </Link>
               </div>
               <div className="relative">
                 <input
