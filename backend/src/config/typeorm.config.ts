@@ -30,6 +30,7 @@ import { McqAttempt } from '../modules/quiz/entities/mcq-attempt.entity';
 import { AccountDeletionRequest } from '../modules/users/entities/account-deletion-request.entity';
 import { ReviewItem } from '../modules/review/entities/review-item.entity';
 import { AiGenerationLog } from '../modules/ai-generate/entities/ai-generation-log.entity';
+import { PasswordResetOtp } from '../modules/auth/entities/password-reset-otp.entity';
 
 export const entities = [
   User,
@@ -54,6 +55,7 @@ export const entities = [
   McqAttempt,
   ReviewItem,
   AiGenerationLog,
+  PasswordResetOtp,
 ];
 
 export const getTypeOrmConfig = (
