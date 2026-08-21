@@ -60,15 +60,23 @@ export function ProfileActionsMenu({
       {/* Profile Card Container */}
       <div className="p-3 rounded-xl bg-bg border border-border/80 flex items-center justify-between gap-3 shadow-2xs">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 bg-accent-tint text-accent">
-            {isAdmin ? (
-              <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400 stroke-[2.5]" />
-            ) : user?.name ? (
-              user.name.charAt(0).toUpperCase()
-            ) : (
-              <UserIcon className="w-4 h-4" />
-            )}
-          </div>
+          {user?.profilePicture ? (
+            <img
+              src={user.profilePicture}
+              alt={user.name || 'User'}
+              className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-border"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 bg-accent-tint text-accent">
+              {isAdmin ? (
+                <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400 stroke-[2.5]" />
+              ) : user?.name ? (
+                user.name.charAt(0).toUpperCase()
+              ) : (
+                <UserIcon className="w-4 h-4" />
+              )}
+            </div>
+          )}
           <div className="overflow-hidden">
             <p className="text-xs font-semibold text-text-primary truncate">
               {user?.name || 'User'}
@@ -105,6 +113,16 @@ export function ProfileActionsMenu({
               {user?.email}
             </p>
           </div>
+
+          {/* Edit Profile Link */}
+          <Link
+            href="/profile"
+            onClick={() => setIsMenuOpen(false)}
+            className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-primary hover:bg-bg hover:text-accent flex items-center gap-2.5 transition-colors cursor-pointer"
+          >
+            <UserIcon className="w-4 h-4 text-accent" />
+            <span>Edit Profile</span>
+          </Link>
 
           {/* Option 1: Student Application to Instructor */}
           {isStudent && onOpenApplyModal && (

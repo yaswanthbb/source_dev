@@ -4,6 +4,7 @@ export interface User {
   name: string;
   role: 'student' | 'instructor' | 'admin';
   timezone?: string;
+  profilePicture?: string | null;
   createdAt?: string;
   instructorProfile?: {
     id?: string;
