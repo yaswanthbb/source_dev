@@ -1020,12 +1020,23 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                           </div>
 
                           <div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
-                            <Link
-                              href={`/instructor/concepts/${c.id}/edit`}
-                              className="px-2.5 py-1 rounded-lg border border-border bg-surface text-text-primary hover:bg-bg font-semibold text-[11px]"
-                            >
-                              Edit Article
-                            </Link>
+                            {c.reviewStatus === 'rejected' ? (
+                              <Link
+                                href={`/instructor/concepts/${c.id}/edit`}
+                                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-red-tint text-red border border-red/30 hover:bg-red hover:text-white font-bold text-[11px] transition-all shadow-2xs cursor-pointer"
+                                title="Edit concept and resubmit for admin review"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Edit &amp; Resubmit</span>
+                              </Link>
+                            ) : (
+                              <Link
+                                href={`/instructor/concepts/${c.id}/edit`}
+                                className="px-2.5 py-1 rounded-lg border border-border bg-surface text-text-primary hover:bg-bg font-semibold text-[11px]"
+                              >
+                                Edit Article
+                              </Link>
+                            )}
                             <button
                               onClick={() => handleDetachConceptClick(moduleItem.id, c)}
                               className="p-1 text-text-secondary hover:text-red rounded-md transition-colors cursor-pointer"

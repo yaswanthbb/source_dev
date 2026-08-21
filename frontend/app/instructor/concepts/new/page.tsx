@@ -22,6 +22,7 @@ import apiClient from '@/lib/api-client';
 import { AiGeneratingModal } from '@/components/ai-generating-modal';
 import { AiQuotaBadge } from '@/components/ai-quota-badge';
 import { useSnackbar } from '@/providers/snackbar-provider';
+import { ConfirmModal } from '@/components/confirm-modal';
 
 interface ConceptSummary {
   id: string;
@@ -196,7 +197,7 @@ export default function CreateConceptPage() {
       return newConcept;
     },
     onSuccess: (newConcept) => {
-      showSuccess('Concept created and attached successfully');
+      showSuccess('Submitted for review.');
       queryClient.invalidateQueries({ queryKey: ['concepts'] });
       queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
       if (inferredRoadmapId) {
@@ -213,11 +214,17 @@ export default function CreateConceptPage() {
     },
   });
 
+  const [isReviewConfirmOpen, setIsReviewConfirmOpen] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
     setErrorMessage(null);
+    setIsReviewConfirmOpen(true);
+  };
 
+  const handleConfirmSubmit = () => {
+    setIsReviewConfirmOpen(false);
     createConceptMutation.mutate({
       title: title.trim(),
       difficulty,
@@ -561,7 +568,7 @@ export default function CreateConceptPage() {
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Publish Concept</span>
+                  <span>Submit for Review</span>
                 </>
               )}
             </button>
@@ -581,6 +588,19 @@ export default function CreateConceptPage() {
           setIsAiModalOpen(false);
           setAiError(null);
         }}
+      />
+
+      {/* Review Submission Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isReviewConfirmOpen}
+        title="Submit for Admin Review?"
+        message="This concept will be submitted for admin review before it's visible to students. Continue?"
+        confirmText="Continue & Submit"
+        cancelText="Cancel"
+        variant="primary"
+        isLoading={createConceptMutation.isPending}
+        onConfirm={handleConfirmSubmit}
+        onCancel={() => setIsReviewConfirmOpen(false)}
       />
     </div>
   );

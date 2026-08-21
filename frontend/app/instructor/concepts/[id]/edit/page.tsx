@@ -37,6 +37,8 @@ import {
 } from '@/components/ai-generating-modal';
 import { AiQuotaBadge } from '@/components/ai-quota-badge';
 import { useSnackbar } from '@/providers/snackbar-provider';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { hasSignificantContentChange } from '@/lib/content-diff';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -58,6 +60,8 @@ interface ConceptDetail {
   content: string;
   difficulty: 'easy' | 'medium' | 'hard';
   authorId: string;
+  reviewStatus?: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string | null;
   appearsIn?: ConceptAppearsIn[];
 }
 
@@ -381,6 +385,15 @@ export default function EditConceptPage({ params }: PageProps) {
 
   const { showSuccess, showError } = useSnackbar();
 
+  // Review confirmation modal state
+  const [isReviewConfirmOpen, setIsReviewConfirmOpen] = useState(false);
+  const [pendingSavePayload, setPendingSavePayload] = useState<{
+    title: string;
+    difficulty: 'easy' | 'medium' | 'hard';
+    content: string;
+    willTriggerReview: boolean;
+  } | null>(null);
+
   // Content Save mutation
   const updateConceptMutation = useMutation({
     mutationFn: async (payload: {
@@ -391,11 +404,26 @@ export default function EditConceptPage({ params }: PageProps) {
       return (await apiClient.patch(`/concepts/${conceptId}`, payload)).data;
     },
     onSuccess: () => {
-      setSuccessMessage('Concept article saved successfully.');
-      showSuccess('Concept updated');
+      const triggeredReview =
+        pendingSavePayload?.willTriggerReview ??
+        (concept?.reviewStatus !== 'approved');
+
+      if (triggeredReview) {
+        showSuccess('Submitted for review.');
+      } else {
+        showSuccess('Concept updated');
+      }
+
       queryClient.invalidateQueries({ queryKey: ['concepts'] });
       queryClient.invalidateQueries({ queryKey: ['concepts', conceptId] });
-      setTimeout(() => setSuccessMessage(null), 3000);
+      queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
+
+      // Bug 4 & 5: Redirect to the specific roadmap this concept belongs to
+      if (parentRoadmapId) {
+        router.push(`/instructor/content/${parentRoadmapId}`);
+      } else {
+        router.push('/instructor/content');
+      }
     },
     onError: (err: unknown) => {
       const axiosErr = err as {
@@ -416,11 +444,44 @@ export default function EditConceptPage({ params }: PageProps) {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    updateConceptMutation.mutate({
+    const willTriggerReview =
+      concept?.reviewStatus !== 'approved' ||
+      hasSignificantContentChange(concept?.content || '', content.trim(), 40);
+
+    const payload = {
       title: title.trim(),
       difficulty,
       content: content.trim(),
-    });
+      willTriggerReview,
+    };
+
+    if (willTriggerReview) {
+      setPendingSavePayload(payload);
+      setIsReviewConfirmOpen(true);
+    } else {
+      setPendingSavePayload(payload);
+      updateConceptMutation.mutate({
+        title: payload.title,
+        difficulty: payload.difficulty,
+        content: payload.content,
+      });
+    }
+  };
+
+  const handleConfirmReviewSubmit = () => {
+    setIsReviewConfirmOpen(false);
+    if (pendingSavePayload) {
+      updateConceptMutation.mutate({
+        title: pendingSavePayload.title,
+        difficulty: pendingSavePayload.difficulty,
+        content: pendingSavePayload.content,
+      });
+    }
+  };
+
+  const handleCancelReviewSubmit = () => {
+    setIsReviewConfirmOpen(false);
+    setPendingSavePayload(null);
   };
 
   // =========================================================================
@@ -858,11 +919,17 @@ export default function EditConceptPage({ params }: PageProps) {
       {/* Back Link & Student View Link & Quota */}
       <div className="flex items-center justify-between gap-4">
         <Link
-          href="/instructor/content"
+          href={
+            parentRoadmapId
+              ? `/instructor/content/${parentRoadmapId}`
+              : '/instructor/content'
+          }
           className="inline-flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-accent transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to My Content</span>
+          <span>
+            {parentRoadmapId ? 'Back to Roadmap' : 'Back to Content Studio'}
+          </span>
         </Link>
 
         <div className="flex items-center gap-3">
@@ -906,6 +973,22 @@ export default function EditConceptPage({ params }: PageProps) {
           <span>Quiz Questions ({questions.length})</span>
         </button>
       </div>
+
+      {/* Rejection Feedback Alert Banner */}
+      {concept?.reviewStatus === 'rejected' && (
+        <div className="p-4 rounded-2xl bg-red-tint border border-red/30 space-y-1.5 text-xs">
+          <div className="flex items-center gap-2 font-bold text-red">
+            <AlertCircle className="w-4 h-4" />
+            <span>Concept Rejected by Admin</span>
+          </div>
+          <p className="text-text-primary">
+            <strong>Admin Feedback:</strong> {concept.rejectionReason || 'Please review and update the content before resubmitting.'}
+          </p>
+          <p className="text-text-secondary text-[11px]">
+            Make your revisions below and submit to request admin re-review.
+          </p>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* SECTION 1: ARTICLE CONTENT TAB */}
@@ -1685,6 +1768,19 @@ export default function EditConceptPage({ params }: PageProps) {
         error={aiModalState.error}
         onCancel={handleCancelAiGeneration}
         onCloseError={handleCloseAiError}
+      />
+
+      {/* Review Submission Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isReviewConfirmOpen}
+        title="Submit for Admin Review?"
+        message="This concept will be submitted for admin review before it's visible to students. Continue?"
+        confirmText="Continue & Submit"
+        cancelText="Cancel"
+        variant="primary"
+        isLoading={updateConceptMutation.isPending}
+        onConfirm={handleConfirmReviewSubmit}
+        onCancel={handleCancelReviewSubmit}
       />
     </div>
   );
