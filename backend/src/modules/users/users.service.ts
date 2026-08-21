@@ -2,9 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { InstructorProfile } from './entities/instructor-profile.entity';
 import {
@@ -14,6 +17,8 @@ import {
 import { UserRole } from '../../common/enums/user-role.enum';
 import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateInstructorBioDto } from './dto/update-instructor-bio.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { ApplyInstructorDto } from './dto/apply-instructor.dto';
 import { RequestDeletionDto } from './dto/request-deletion.dto';
@@ -97,8 +102,95 @@ export class UsersService {
       user.timezone = dto.timezone;
     }
 
+    if (dto.profilePicture !== undefined) {
+      if (dto.profilePicture === null || dto.profilePicture === '') {
+        user.profilePicture = null;
+      } else if (typeof dto.profilePicture === 'string') {
+        const match = dto.profilePicture.match(
+          /^data:image\/(jpeg|png|webp|jpg);base64,(.+)$/,
+        );
+        if (!match) {
+          throw new BadRequestException(
+            'Invalid profile picture format. Must be a JPEG, PNG, or WebP base64 data URI.',
+          );
+        }
+        const base64Data = match[2];
+        const approxBytes = Buffer.byteLength(base64Data, 'base64');
+        if (approxBytes > 500 * 1024) {
+          throw new BadRequestException(
+            'Profile picture exceeds 500KB size limit. Please upload a smaller image.',
+          );
+        }
+        user.profilePicture = dto.profilePicture;
+      }
+    }
+
     const savedUser = await this.userRepository.save(user);
     return this.sanitizeUser(savedUser);
+  }
+
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      dto.currentPassword,
+      user.passwordHash,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    user.passwordHash = passwordHash;
+    await this.userRepository.save(user);
+
+    return { message: 'Password updated successfully' };
+  }
+
+  async updateInstructorBio(
+    userId: string,
+    dto: UpdateInstructorBioDto,
+  ): Promise<{ message: string; bio: string | null }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['instructorProfile'],
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role !== UserRole.INSTRUCTOR && user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Only instructors and admins can update instructor bio',
+      );
+    }
+
+    if (!user.instructorProfile) {
+      const newProfile = this.instructorProfileRepository.create({
+        userId: user.id,
+        bio: dto.bio || null,
+        status: InstructorStatus.APPROVED,
+      });
+      const saved = await this.instructorProfileRepository.save(newProfile);
+      return { message: 'Instructor bio updated successfully', bio: saved.bio };
+    }
+
+    user.instructorProfile.bio =
+      dto.bio !== undefined ? dto.bio || null : user.instructorProfile.bio;
+    await this.instructorProfileRepository.save(user.instructorProfile);
+
+    return {
+      message: 'Instructor bio updated successfully',
+      bio: user.instructorProfile.bio,
+    };
   }
 
   async findUsers(

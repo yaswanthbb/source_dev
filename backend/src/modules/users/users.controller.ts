@@ -22,6 +22,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { User } from './entities/user.entity';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateInstructorBioDto } from './dto/update-instructor-bio.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { ApplyInstructorDto } from './dto/apply-instructor.dto';
 import { RequestDeletionDto } from './dto/request-deletion.dto';
@@ -44,13 +46,37 @@ export class UsersController {
   }
 
   @Patch('me')
-  @ApiOperation({ summary: 'Update current user profile (name, timezone)' })
+  @ApiOperation({
+    summary: 'Update current user profile (name, timezone, profilePicture)',
+  })
   @ApiResponse({ status: 200, description: 'Profile updated successfully.' })
   async updateSelfProfile(
     @CurrentUser() user: User,
     @Body() dto: UpdateOwnProfileDto,
   ) {
     return this.usersService.updateSelfProfile(user.id, dto);
+  }
+
+  @Patch('me/password')
+  @ApiOperation({ summary: 'Change current user account password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully.' })
+  @ApiResponse({ status: 401, description: 'Current password is incorrect.' })
+  async changePassword(
+    @CurrentUser() user: User,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.usersService.changePassword(user.id, dto);
+  }
+
+  @Patch('me/instructor-bio')
+  @ApiOperation({ summary: 'Update instructor biography (instructors/admins only)' })
+  @ApiResponse({ status: 200, description: 'Instructor bio updated successfully.' })
+  @ApiResponse({ status: 403, description: 'Only instructors/admins can update bio.' })
+  async updateInstructorBio(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateInstructorBioDto,
+  ) {
+    return this.usersService.updateInstructorBio(user.id, dto);
   }
 
   @Post('apply-instructor')

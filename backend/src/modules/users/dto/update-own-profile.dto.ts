@@ -19,4 +19,12 @@ export class UpdateOwnProfileDto {
   @IsString()
   @IsNotEmpty()
   timezone?: string;
+
+  @ApiPropertyOptional({
+    example: 'data:image/jpeg;base64,...',
+    description: 'Base64 image data URI or null to remove',
+  })
+  @IsOptional()
+  @IsString()
+  profilePicture?: string | null;
 }

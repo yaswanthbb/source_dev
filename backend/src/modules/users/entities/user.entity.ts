@@ -24,6 +24,9 @@ export class User extends BaseEntity {
   @Column({ default: 'UTC' })
   timezone: string;
 
+  @Column({ type: 'text', name: 'profile_picture', nullable: true })
+  profilePicture: string | null;
+
   @OneToOne(() => InstructorProfile, (profile) => profile.user)
   instructorProfile: InstructorProfile;
 }
