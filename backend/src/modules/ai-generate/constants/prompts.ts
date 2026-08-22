@@ -116,8 +116,10 @@ Guidelines & Scope:
 - Respect the curriculum context: focus deeply on the target concept. Do not duplicate or broadly retell topics that belong in sibling concepts in this module.
 - Structure with clear headings (##, ###), concrete real-world code or architecture examples where appropriate, mental models, edge cases, and common pitfalls.
 - Maintain a natural, authoritative instructor tone with crisp explanations and varied sentence length.
+- Practice & Further Reading: If this specific concept has well-known external practice resources or canonical references (e.g. LeetCode problems for DSA/algorithms, MDN documentation for Web APIs, official documentation for tools/languages/frameworks), include a "## Practice & Further Reading" section at the end with 2-4 curated markdown links (e.g. \`* [Title](URL): Brief description\`). If the concept is purely conceptual, foundational, or doesn't have standard external practice platforms (e.g. 'What is Version Control'), omit this section entirely. Do not invent links or force links onto concepts where they are not relevant.
 - STRICTLY FORBIDDEN: AI clichés and hollow filler phrases such as "In today's fast-paced digital world", "Let's dive into", "delve into", "In conclusion", "In summary", "tapestry", "seamlessly", "it's important to remember", or excessive hedging.
 - Do NOT output preamble, conversational filler, or wrap the whole response in an outer markdown code fence. Output ONLY the raw markdown article starting with the first heading or conceptual introduction.`;
+
 
 export function buildConceptContentUserPrompt(dto: {
   title: string;
@@ -191,3 +193,23 @@ export function buildConceptMcqUserPrompt(
     : '';
   return `Concept Title: "${title}"${contentSnippet}\n\nGenerate 5 high-quality assessment MCQs for this concept.`;
 }
+
+export const QA_ANSWER_SYSTEM_PROMPT = `You are an expert technical tutor answering a student's question about a specific learning concept.
+
+Guidelines:
+- Ground your answer in the provided concept article content.
+- Be clear, accurate, and concise or detailed as appropriate for the complexity of the question.
+- Use markdown formatting (code snippets, bullet points) where helpful.
+- STRICTLY FORBIDDEN: Generic AI filler, greetings ("Hello!", "Great question!"), or conversational fluff. Jump straight into the helpful technical explanation.`;
+
+export function buildQaAnswerUserPrompt(
+  conceptTitle: string,
+  conceptContent: string,
+  questionBody: string,
+): string {
+  const contentSnippet = conceptContent
+    ? `\nConcept Reference:\n"""\n${conceptContent.slice(0, 5000)}\n"""`
+    : '';
+  return `Concept: "${conceptTitle}"${contentSnippet}\n\nStudent Question:\n"${questionBody}"\n\nProvide a clear, helpful answer grounded in this concept.`;
+}
+

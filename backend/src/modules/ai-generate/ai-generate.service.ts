@@ -32,7 +32,10 @@ import {
   buildConceptContentUserPrompt,
   CONCEPT_MCQ_SYSTEM_PROMPT,
   buildConceptMcqUserPrompt,
+  QA_ANSWER_SYSTEM_PROMPT,
+  buildQaAnswerUserPrompt,
 } from './constants/prompts';
+
 import {
   GenerateConceptContentDto,
   GenerateConceptMcqsDto,
@@ -721,10 +724,13 @@ export class AiGenerateService {
 
         await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT);
 
+        // Validate any links generated in the markdown before persisting
+        const sanitizedContent = await this.validateAndSanitizeConceptLinks(generatedContent);
+
         // Create concept using existing service
         const createdConcept = await this.conceptsService.createConcept(user, {
           title,
-          content: generatedContent,
+          content: sanitizedContent,
           difficulty: ConceptDifficulty.MEDIUM,
           isAiGenerated: true,
         });
@@ -733,6 +739,7 @@ export class AiGenerateService {
         await this.roadmapsService.attachConceptToModule(moduleId, user, {
           conceptId: createdConcept.id,
         });
+
 
         createdConcepts.push(createdConcept);
         cumulativeSiblingTitles.push(title);
@@ -957,7 +964,7 @@ export class AiGenerateService {
     const systemPrompt = CONCEPT_CONTENT_SYSTEM_PROMPT;
     const userPrompt = buildConceptContentUserPrompt(dto);
 
-    const content = await this.generateNvidiaCompletion(
+    const rawContent = await this.generateNvidiaCompletion(
       systemPrompt,
       userPrompt,
       { maxTokens: 3000, temperature: 0.6 },
@@ -965,8 +972,11 @@ export class AiGenerateService {
 
     await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT);
 
+    const content = await this.validateAndSanitizeConceptLinks(rawContent);
+
     return { content };
   }
+
 
   /**
    * Non-streaming single concept MCQs generation helper
@@ -1022,4 +1032,185 @@ export class AiGenerateService {
 
     return { rawText: this.cleanModelOutput(lastResponseText) };
   }
+
+  /**
+   * Generates an immediate AI answer for a student Q&A question on a concept.
+   * Grounded in the concept content. Length adapts naturally to the question.
+   */
+  async generateQaAnswer(
+    conceptTitle: string,
+    conceptContent: string,
+    questionBody: string,
+    user: User,
+  ): Promise<string> {
+    await this.checkRateLimit(user.id, 1);
+
+    const systemPrompt = QA_ANSWER_SYSTEM_PROMPT;
+    const userPrompt = buildQaAnswerUserPrompt(
+      conceptTitle,
+      conceptContent,
+      questionBody,
+    );
+
+    const answer = await this.generateNvidiaCompletion(
+      systemPrompt,
+      userPrompt,
+      { maxTokens: 1500, temperature: 0.5 },
+    );
+
+    await this.logGeneration(user.id, AiGenerationType.QA_ANSWER);
+
+    return answer;
+  }
+
+  /**
+   * Performs a lightweight HTTP check (HEAD with GET fallback, 5s timeout)
+   * to verify if a URL resolves with a successful status code.
+   */
+  private async checkUrlResolves(urlStr: string): Promise<boolean> {
+    try {
+      const parsed = new URL(urlStr);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+
+    const headers = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      Accept:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      let res: globalThis.Response;
+      try {
+        res = await fetch(urlStr, {
+          method: 'HEAD',
+          signal: controller.signal,
+          headers,
+        });
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          clearTimeout(timeoutId);
+          return false;
+        }
+        res = await fetch(urlStr, {
+          method: 'GET',
+          signal: controller.signal,
+          headers,
+        });
+      }
+
+      if (res.status === 405 || res.status === 400 || res.status === 501) {
+        const getController = new AbortController();
+        const getTimeoutId = setTimeout(() => getController.abort(), 5000);
+        try {
+          res = await fetch(urlStr, {
+            method: 'GET',
+            signal: getController.signal,
+            headers,
+          });
+          clearTimeout(getTimeoutId);
+        } catch {
+          clearTimeout(getTimeoutId);
+          return false;
+        }
+      }
+
+      clearTimeout(timeoutId);
+
+      // Status 200-399 are valid
+      if (res.ok || (res.status >= 300 && res.status < 400)) {
+        return true;
+      }
+
+      // Status 401, 403, 429 indicate active server / anti-bot challenge (e.g. Cloudflare on LeetCode)
+      if (res.status === 401 || res.status === 403 || res.status === 429) {
+        return true;
+      }
+
+      return false;
+    } catch {
+      clearTimeout(timeoutId);
+      return false;
+    }
+  }
+
+
+  /**
+   * Validates all Markdown links in generated concept content.
+   * Strips broken/unresolvable links line-by-line while preserving valid content.
+   * Cleans up empty "## Practice & Further Reading" section if all links fail.
+   */
+  async validateAndSanitizeConceptLinks(content: string): Promise<string> {
+    if (!content) return content;
+
+    const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    const urlsToValidate = new Set<string>();
+    let match: RegExpExecArray | null;
+
+    while ((match = markdownLinkRegex.exec(content)) !== null) {
+      urlsToValidate.add(match[2]);
+    }
+
+    if (urlsToValidate.size === 0) {
+      return content;
+    }
+
+    this.logger.log(
+      `Validating ${urlsToValidate.size} external links in concept content...`,
+    );
+
+    // Validate URLs concurrently
+    const urlValidationResults = new Map<string, boolean>();
+    await Promise.all(
+      Array.from(urlsToValidate).map(async (url) => {
+        const isValid = await this.checkUrlResolves(url);
+        urlValidationResults.set(url, isValid);
+        if (!isValid) {
+          this.logger.warn(`Stripped invalid link from concept content: "${url}"`);
+        }
+      }),
+    );
+
+    // Filter lines: remove any line that contains an invalid URL
+    const lines = content.split('\n');
+    const sanitizedLines: string[] = [];
+
+    for (const line of lines) {
+      let lineValid = true;
+      const lineLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+      let lineMatch: RegExpExecArray | null;
+
+      while ((lineMatch = lineLinkRegex.exec(line)) !== null) {
+        const url = lineMatch[2];
+        if (urlValidationResults.get(url) === false) {
+          lineValid = false;
+          break;
+        }
+      }
+
+      if (lineValid) {
+        sanitizedLines.push(line);
+      }
+    }
+
+    let sanitizedContent = sanitizedLines.join('\n');
+
+    // If "## Practice & Further Reading" has no links remaining under it, clean up empty heading
+    sanitizedContent = sanitizedContent.replace(
+      /##\s+(?:Practice\s*(?:&|and)\s*Further\s*Reading|Further\s*Reading|Practice\s*Resources)\s*(?:\n\s*)*(?=\n##|\s*$)/i,
+      '',
+    );
+
+    return sanitizedContent.trim();
+  }
 }
+
+
