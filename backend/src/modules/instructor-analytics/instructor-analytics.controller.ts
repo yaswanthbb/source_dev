@@ -20,7 +20,7 @@ import { User } from '../users/entities/user.entity';
 @ApiTags('Instructor Analytics')
 @ApiBearerAuth('bearer-auth')
 @UseGuards(RolesGuard)
-@Roles(UserRole.INSTRUCTOR)
+@Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
 @Controller('instructor/my-analytics')
 export class InstructorAnalyticsController {
   constructor(

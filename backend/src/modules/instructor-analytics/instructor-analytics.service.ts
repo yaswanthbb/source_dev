@@ -67,6 +67,10 @@ export class InstructorAnalyticsService {
   async checkApprovedInstructor(
     user: Omit<User, 'passwordHash'>,
   ): Promise<void> {
+    if (user.role === UserRole.ADMIN) {
+      return;
+    }
+
     if (user.role !== UserRole.INSTRUCTOR) {
       throw new ForbiddenException('Instructor access required');
     }

@@ -68,6 +68,7 @@ export default function InstructorQaPage() {
 
   const myConcepts = React.useMemo(() => {
     if (!currentUser?.id) return concepts;
+    if (currentUser.role === 'admin') return concepts;
     return concepts.filter((c) => c.authorId === currentUser.id);
   }, [concepts, currentUser]);
 
