@@ -7,6 +7,7 @@ export interface User {
   profilePicture?: string | null;
   authProvider?: string | null;
   authProviderId?: string | null;
+  hasPassword?: boolean;
   createdAt?: string;
   instructorProfile?: {
     id?: string;

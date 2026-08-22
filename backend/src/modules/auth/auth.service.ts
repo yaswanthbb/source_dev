@@ -77,7 +77,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const sanitizedUser = { ...userWithPassword };
+    const sanitizedUser = {
+      ...userWithPassword,
+      hasPassword: Boolean(userWithPassword.passwordHash),
+    };
     delete (sanitizedUser as Record<string, unknown>).passwordHash;
     const payload = {
       sub: sanitizedUser.id,
@@ -110,11 +113,17 @@ export class AuthService {
     if (user) {
       const payload = { sub: user.id, email: user.email, role: user.role };
       const accessToken = this.jwtService.sign(payload);
+      const sanitizedUser = {
+        ...user,
+        hasPassword: Boolean(user.passwordHash),
+      };
+      delete (sanitizedUser as Record<string, unknown>).passwordHash;
       return {
-        user,
+        user: sanitizedUser,
         accessToken,
       };
     }
+
 
     // 2. Check if a user with this email already exists
     const existingByEmail =

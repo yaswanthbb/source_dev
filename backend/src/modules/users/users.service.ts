@@ -35,12 +35,16 @@ export class UsersService {
     private readonly deletionRequestRepository: Repository<AccountDeletionRequest>,
   ) {}
 
-  private sanitizeUser(user: User): Omit<User, 'passwordHash'> {
+  private sanitizeUser(user: User): Omit<User, 'passwordHash'> & {
+    hasPassword: boolean;
+  } {
     if (!user) return user;
-    const sanitized = { ...user };
+    const hasPassword = Boolean(user.passwordHash);
+    const sanitized = { ...user, hasPassword };
     delete (sanitized as Partial<User>).passwordHash;
     return sanitized;
   }
+
 
   async findOneById(id: string): Promise<Omit<User, 'passwordHash'> | null> {
     const user = await this.userRepository.findOne({

@@ -740,22 +740,24 @@ export default function ProfilePage() {
 
 
         {/* =================================================================== */}
-        {/* SECTION: CHANGE PASSWORD (KEPT SEPARATE & INDEPENDENT) */}
+        {/* SECTION: CHANGE PASSWORD (ONLY RENDERED IF USER HAS A PASSWORD SET) */}
         {/* =================================================================== */}
-        <div className="p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs space-y-6">
-          <div className="flex items-center gap-2.5 pb-4 border-b border-border/60">
-            <div className="w-8 h-8 rounded-xl bg-accent-tint text-accent flex items-center justify-center">
-              <Lock className="w-4 h-4" />
+        {Boolean(profileUser?.hasPassword) && (
+          <div className="p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs space-y-6">
+            <div className="flex items-center gap-2.5 pb-4 border-b border-border/60">
+              <div className="w-8 h-8 rounded-xl bg-accent-tint text-accent flex items-center justify-center">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold font-display text-text-primary">
+                  Change Password
+                </h2>
+                <p className="text-xs text-text-secondary">
+                  Ensure your account is using a long, secure password.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold font-display text-text-primary">
-                Change Password
-              </h2>
-              <p className="text-xs text-text-secondary">
-                Ensure your account is using a long, secure password.
-              </p>
-            </div>
-          </div>
+
 
           <form onSubmit={handleSubmitPassword(onPasswordSubmit)} className="space-y-4">
             {/* Current Password */}
@@ -903,7 +905,9 @@ export default function ProfilePage() {
             </div>
           </form>
         </div>
+        )}
       </main>
+
 
       {/* Footer */}
       <footer className="py-6 text-center text-xs text-text-secondary border-t border-border/60">
