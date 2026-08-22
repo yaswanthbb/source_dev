@@ -21,4 +21,8 @@ export class Answer extends BaseEntity {
 
   @Column({ type: 'text' })
   body: string;
+
+  @Column({ name: 'is_ai_answer', type: 'boolean', default: false })
+  isAiAnswer: boolean;
 }
+

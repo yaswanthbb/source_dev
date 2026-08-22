@@ -4,4 +4,6 @@ export enum AiGenerationType {
   MODULE_CONCEPTS = 'module_concepts',
   CONCEPT_CONTENT = 'concept_content',
   CONCEPT_MCQS = 'concept_mcqs',
+  QA_ANSWER = 'qa_answer',
 }
+
