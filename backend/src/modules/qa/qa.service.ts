@@ -12,6 +12,7 @@ import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { User } from '../users/entities/user.entity';
+import { AiGenerateService } from '../ai-generate/ai-generate.service';
 import { CreateQaQuestionDto } from './dto/create-qa-question.dto';
 import { UpdateQaQuestionDto } from './dto/update-qa-question.dto';
 import { CreateAnswerDto } from './dto/create-answer.dto';
@@ -28,6 +29,7 @@ export class QaService {
     private readonly conceptRepository: Repository<Concept>,
     @InjectRepository(InstructorProfile)
     private readonly instructorProfileRepository: Repository<InstructorProfile>,
+    private readonly aiGenerateService: AiGenerateService,
   ) {}
 
   private async checkApprovedContentCreator(
@@ -81,7 +83,29 @@ export class QaService {
       studentId: user.id,
       body: dto.body,
     });
-    return this.questionRepository.save(question);
+    const savedQuestion = await this.questionRepository.save(question);
+
+    // If student requested "Ask AI", generate and attach AI answer immediately
+    if (dto.target === 'ai') {
+      const aiAnswerText = await this.aiGenerateService.generateQaAnswer(
+        concept.title,
+        concept.content,
+        dto.body,
+        user as User,
+      );
+
+      const aiAnswer = this.answerRepository.create({
+        questionId: savedQuestion.id,
+        instructorId: null,
+        body: aiAnswerText,
+        isAiAnswer: true,
+      });
+      await this.answerRepository.save(aiAnswer);
+
+      savedQuestion.answers = [aiAnswer];
+    }
+
+    return savedQuestion;
   }
 
   async getQuestionsForConcept(conceptId: string): Promise<any[]> {
@@ -115,7 +139,10 @@ export class QaService {
           id: ans.id,
           questionId: ans.questionId,
           instructorId: ans.instructorId,
-          instructorName: ans.instructor?.name || null,
+          instructorName: ans.isAiAnswer
+            ? 'AI Assistant'
+            : ans.instructor?.name || null,
+          isAiAnswer: Boolean(ans.isAiAnswer),
           body: ans.body,
           createdAt: ans.createdAt,
           updatedAt: ans.updatedAt,
@@ -123,6 +150,7 @@ export class QaService {
       };
     });
   }
+
 
   async updateQuestion(
     id: string,

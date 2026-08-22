@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsOptional, IsIn } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateQaQuestionDto {
   @ApiProperty({
@@ -9,4 +9,14 @@ export class CreateQaQuestionDto {
   @IsString()
   @IsNotEmpty()
   body: string;
+
+  @ApiPropertyOptional({
+    enum: ['instructor', 'ai'],
+    default: 'instructor',
+    description: 'Target: ask a human instructor or get an immediate AI answer',
+  })
+  @IsOptional()
+  @IsIn(['instructor', 'ai'])
+  target?: 'instructor' | 'ai';
 }
+
