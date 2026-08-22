@@ -20,8 +20,12 @@ import {
   AlertCircle,
   ChevronDown,
   User as UserIcon,
+  Sparkles,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+
 import apiClient from '@/lib/api-client';
+
 import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
 import { ConfirmModal } from '@/components/confirm-modal';
@@ -37,6 +41,7 @@ interface QaAnswer {
   questionId: string;
   instructorId: string;
   instructorName?: string | null;
+  isAiAnswer?: boolean;
   body: string;
   createdAt: string;
   instructor?: {
@@ -93,7 +98,9 @@ export default function StudentQaPage() {
   const [isAskModalOpen, setIsAskModalOpen] = useState<boolean>(false);
   const [askConceptId, setAskConceptId] = useState<string>('');
   const [askQuestionBody, setAskQuestionBody] = useState<string>('');
+  const [askTarget, setAskTarget] = useState<'instructor' | 'ai'>('ai');
   const [isSubmittingQuestion, setIsSubmittingQuestion] = useState<boolean>(false);
+
 
   // Edit Question State
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -208,8 +215,13 @@ export default function StudentQaPage() {
     try {
       await apiClient.post(`/concepts/${askConceptId}/qa-questions`, {
         body: askQuestionBody.trim(),
+        target: askTarget,
       });
-      showSuccess('Your question has been posted!');
+      showSuccess(
+        askTarget === 'ai'
+          ? 'Your question has been answered by AI!'
+          : 'Your question has been posted to instructors!',
+      );
       setAskQuestionBody('');
       setAskConceptId('');
       setIsAskModalOpen(false);
@@ -221,6 +233,7 @@ export default function StudentQaPage() {
       setIsSubmittingQuestion(false);
     }
   };
+
 
   // Handle Save Edit
   const handleSaveEdit = async (questionId: string) => {
@@ -312,6 +325,34 @@ export default function StudentQaPage() {
           </div>
 
           <form onSubmit={handleAskQuestion} className="space-y-3">
+            {/* Target Choice Segmented Control */}
+            <div className="flex items-center gap-2 p-1 bg-bg rounded-xl border border-border w-fit text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setAskTarget('ai')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  askTarget === 'ai'
+                    ? 'bg-accent text-white shadow-2xs font-bold'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Ask AI (Instant)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAskTarget('instructor')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  askTarget === 'instructor'
+                    ? 'bg-accent text-white shadow-2xs font-bold'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Ask an Instructor</span>
+              </button>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">
                 Select Concept:
@@ -340,38 +381,54 @@ export default function StudentQaPage() {
                 required
                 value={askQuestionBody}
                 onChange={(e) => setAskQuestionBody(e.target.value)}
-                placeholder="What part of this concept is unclear? Be specific to get the best explanation..."
+                placeholder={
+                  askTarget === 'ai'
+                    ? 'Ask anything about this concept to get an immediate AI explanation...'
+                    : 'What part of this concept is unclear? Be specific to get the best explanation from an instructor...'
+                }
                 className="w-full p-3.5 rounded-xl border border-border bg-bg text-xs sm:text-sm text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:border-accent resize-y"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAskModalOpen(false);
-                  setAskQuestionBody('');
-                }}
-                className="px-4 py-2 rounded-xl border border-border bg-surface text-xs font-semibold text-text-secondary hover:text-text-primary cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmittingQuestion || !askConceptId || !askQuestionBody.trim()}
-                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 disabled:opacity-50 cursor-pointer shadow-xs transition-all"
-              >
-                {isSubmittingQuestion ? (
-                  <span>Posting...</span>
-                ) : (
-                  <>
-                    <span>Submit Question</span>
-                    <Send className="w-3.5 h-3.5" />
-                  </>
-                )}
-              </button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+              <span className="text-[11px] text-text-secondary">
+                {askTarget === 'ai'
+                  ? '⚡ Immediate answer generated via AI (counts against 20 daily AI quota)'
+                  : '⏳ Question will be posted for instructors to review and answer'}
+              </span>
+              <div className="flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAskModalOpen(false);
+                    setAskQuestionBody('');
+                  }}
+                  className="px-4 py-2 rounded-xl border border-border bg-surface text-xs font-semibold text-text-secondary hover:text-text-primary cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingQuestion || !askConceptId || !askQuestionBody.trim()}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 disabled:opacity-50 cursor-pointer shadow-xs transition-all"
+                >
+                  {isSubmittingQuestion ? (
+                    <span>{askTarget === 'ai' ? 'Generating AI Answer...' : 'Posting...'}</span>
+                  ) : (
+                    <>
+                      <span>{askTarget === 'ai' ? 'Ask AI' : 'Post Question'}</span>
+                      {askTarget === 'ai' ? (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </form>
+
         </div>
       )}
 
@@ -692,16 +749,29 @@ export default function StudentQaPage() {
                       return (
                         <div
                           key={ans.id}
-                          className="p-4 rounded-xl bg-bg border border-accent/20 space-y-2 shadow-2xs"
+                          className={`p-4 rounded-xl space-y-2 shadow-2xs ${
+                            ans.isAiAnswer
+                              ? 'bg-accent-tint/40 border border-accent/30'
+                              : 'bg-bg border border-accent/20'
+                          }`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded-md bg-accent-tint text-accent text-[10px] font-bold uppercase tracking-wider">
-                                Instructor
-                              </span>
-                              <span className="text-xs font-bold text-text-primary">
-                                {instructorName}
-                              </span>
+                              {ans.isAiAnswer ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent text-white text-[10px] font-bold uppercase tracking-wider shadow-2xs">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  AI Answer
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="px-2 py-0.5 rounded-md bg-accent-tint text-accent text-[10px] font-bold uppercase tracking-wider">
+                                    Instructor
+                                  </span>
+                                  <span className="text-xs font-bold text-text-primary">
+                                    {instructorName}
+                                  </span>
+                                </>
+                              )}
                             </div>
                             <span className="text-[10px] text-text-secondary">
                               {new Date(ans.createdAt).toLocaleDateString('en-US', {
@@ -712,10 +782,82 @@ export default function StudentQaPage() {
                             </span>
                           </div>
 
-                          <p className="text-xs sm:text-sm text-text-primary leading-relaxed pl-1">
-                            {ans.body}
-                          </p>
+                          <div className="text-xs sm:text-sm text-text-primary leading-relaxed pl-1">
+                            <ReactMarkdown
+                              components={{
+                                h1: ({ children }) => (
+                                  <h4 className="text-xs sm:text-sm font-bold font-display text-text-primary mt-2.5 mb-1">{children}</h4>
+                                ),
+                                h2: ({ children }) => (
+                                  <h5 className="text-xs sm:text-sm font-bold font-display text-text-primary mt-2 mb-1">{children}</h5>
+                                ),
+                                h3: ({ children }) => (
+                                  <h6 className="text-xs font-bold font-display text-text-primary mt-1.5 mb-0.5">{children}</h6>
+                                ),
+                                h4: ({ children }) => (
+                                  <h6 className="text-xs font-bold font-display text-text-primary mt-1.5 mb-0.5">{children}</h6>
+                                ),
+                                p: ({ children }) => (
+                                  <p className="text-xs sm:text-sm text-text-primary leading-relaxed my-1">{children}</p>
+                                ),
+                                ul: ({ children }) => (
+                                  <ul className="list-disc list-outside ml-4 my-1 space-y-0.5 text-xs sm:text-sm text-text-primary">{children}</ul>
+                                ),
+                                ol: ({ children }) => (
+                                  <ol className="list-decimal list-outside ml-4 my-1 space-y-0.5 text-xs sm:text-sm text-text-primary">{children}</ol>
+                                ),
+                                li: ({ children }) => (
+                                  <li className="leading-relaxed">{children}</li>
+                                ),
+                                blockquote: ({ children }) => (
+                                  <blockquote className="border-l-3 border-accent/60 pl-3 my-1.5 italic text-text-secondary bg-accent-tint/20 py-1 rounded-r-md text-xs">{children}</blockquote>
+                                ),
+                                code: ({ className, children, ...props }) => {
+                                  const isInline = !className && typeof children === 'string' && !children.includes('\n');
+                                  if (isInline) {
+                                    return (
+                                      <code className="px-1.5 py-0.5 rounded bg-bg border border-border text-accent font-mono text-[11px]">
+                                        {children}
+                                      </code>
+                                    );
+                                  }
+                                  return (
+                                    <div className="my-2 rounded-lg overflow-hidden border border-border bg-[#1E222B] text-slate-100 p-3 font-mono text-xs overflow-x-auto shadow-2xs">
+                                      <code className={className} {...props}>
+                                        {children}
+                                      </code>
+                                    </div>
+                                  );
+                                },
+                                strong: ({ children }) => (
+                                  <strong className="font-bold text-text-primary">{children}</strong>
+                                ),
+                                a: ({ href, children, ...props }) => {
+                                  const isExternal = typeof href === 'string' && (href.startsWith('http://') || href.startsWith('https://'));
+                                  return (
+                                    <a
+                                      href={href}
+                                      target={isExternal ? '_blank' : undefined}
+                                      rel={isExternal ? 'noopener noreferrer' : undefined}
+                                      className="inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-2 decoration-accent/50 hover:decoration-accent hover:text-accent/80 transition-colors"
+                                      {...props}
+                                    >
+                                      <span>{children}</span>
+                                      {isExternal && (
+                                        <ExternalLink className="w-3 h-3 shrink-0 opacity-80" />
+                                      )}
+                                    </a>
+                                  );
+                                },
+                              }}
+                            >
+                              {ans.body}
+                            </ReactMarkdown>
+
+                          </div>
                         </div>
+
+
                       );
                     })}
                   </div>

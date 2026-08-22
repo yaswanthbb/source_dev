@@ -22,7 +22,10 @@ import {
   Award,
   Code2,
   BookOpen,
+  User as UserIcon,
+  ExternalLink,
 } from 'lucide-react';
+
 import apiClient from '@/lib/api-client';
 import {
   useRoadmapDetail,
@@ -101,6 +104,7 @@ interface QaAnswer {
   id: string;
   questionId: string;
   instructorId: string;
+  isAiAnswer?: boolean;
   body: string;
   createdAt: string;
   instructor?: {
@@ -111,6 +115,7 @@ interface QaAnswer {
     instructorProfile?: { bio?: string; status?: string };
   };
 }
+
 
 interface QaQuestion {
   id: string;
@@ -369,6 +374,7 @@ export default function ConceptReadingPage({ params }: PageProps) {
 
   // Q&A Question Creation
   const [qaInputBody, setQaInputBody] = useState('');
+  const [qaTarget, setQaTarget] = useState<'instructor' | 'ai'>('ai');
   const [isPostingQa, setIsPostingQa] = useState(false);
 
   const handlePostQaQuestion = async (e: React.FormEvent) => {
@@ -379,8 +385,11 @@ export default function ConceptReadingPage({ params }: PageProps) {
     try {
       await apiClient.post(`/concepts/${conceptId}/qa-questions`, {
         body: qaInputBody.trim(),
+        target: qaTarget,
       });
-      showSuccess('Question posted');
+      showSuccess(
+        qaTarget === 'ai' ? 'Question answered by AI' : 'Question posted to instructors',
+      );
       setQaInputBody('');
       refetchQa();
     } catch (err: unknown) {
@@ -390,6 +399,7 @@ export default function ConceptReadingPage({ params }: PageProps) {
       setIsPostingQa(false);
     }
   };
+
 
   // Sibling Concepts in Current Module
   const currentModule = useMemo(() => {
@@ -622,6 +632,23 @@ export default function ConceptReadingPage({ params }: PageProps) {
                   {children}
                 </blockquote>
               ),
+              a: ({ href, children, ...props }) => {
+                const isExternal = typeof href === 'string' && (href.startsWith('http://') || href.startsWith('https://'));
+                return (
+                  <a
+                    href={href}
+                    target={isExternal ? '_blank' : undefined}
+                    rel={isExternal ? 'noopener noreferrer' : undefined}
+                    className="inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-3 decoration-accent/50 hover:decoration-accent hover:text-accent/80 transition-colors"
+                    {...props}
+                  >
+                    <span>{children}</span>
+                    {isExternal && (
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                    )}
+                  </a>
+                );
+              },
               code: ({ className, children, ...props }) => {
                 const isInline = !className && typeof children === 'string' && !children.includes('\n');
                 if (isInline) {
@@ -640,6 +667,7 @@ export default function ConceptReadingPage({ params }: PageProps) {
                 );
               },
             }}
+
           >
             {concept.content || 'No content provided for this concept yet.'}
           </ReactMarkdown>
@@ -861,26 +889,67 @@ export default function ConceptReadingPage({ params }: PageProps) {
 
           {/* Ask Question Form */}
           <form onSubmit={handlePostQaQuestion} className="space-y-3">
+            {/* Target Choice Segmented Control */}
+            <div className="flex items-center gap-2 p-1 bg-bg rounded-xl border border-border w-fit text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setQaTarget('ai')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  qaTarget === 'ai'
+                    ? 'bg-accent text-white shadow-2xs font-bold'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Ask AI (Instant)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setQaTarget('instructor')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  qaTarget === 'instructor'
+                    ? 'bg-accent text-white shadow-2xs font-bold'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Ask an Instructor</span>
+              </button>
+            </div>
+
             <textarea
               required
               rows={3}
               value={qaInputBody}
               onChange={(e) => setQaInputBody(e.target.value)}
-              placeholder="Have a question or need clarification on this concept? Ask here..."
+              placeholder={
+                qaTarget === 'ai'
+                  ? 'Ask anything about this concept to get an immediate AI explanation...'
+                  : 'Have a question or need clarification from an instructor? Ask here...'
+              }
               className="w-full p-4 rounded-xl border border-border bg-bg text-text-primary placeholder:text-text-secondary/60 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all resize-y"
             />
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-[11px] text-text-secondary">
+                {qaTarget === 'ai'
+                  ? '⚡ Instant response grounded in this concept (counts against 20 daily AI quota)'
+                  : '⏳ An instructor will review and answer in the discussion thread'}
+              </span>
               <button
                 type="submit"
                 disabled={!qaInputBody.trim() || isPostingQa}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer shrink-0"
               >
                 {isPostingQa ? (
-                  <span>Posting...</span>
+                  <span>{qaTarget === 'ai' ? 'Generating AI Answer...' : 'Posting...'}</span>
                 ) : (
                   <>
-                    <span>Post Question</span>
-                    <Send className="w-3.5 h-3.5" />
+                    <span>{qaTarget === 'ai' ? 'Ask AI' : 'Post Question'}</span>
+                    {qaTarget === 'ai' ? (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
                   </>
                 )}
               </button>
@@ -952,22 +1021,35 @@ export default function ConceptReadingPage({ params }: PageProps) {
                     {q.body}
                   </p>
 
-                  {/* Nested Instructor Answers */}
+                  {/* Nested Instructor / AI Answers */}
                   {q.answers && q.answers.length > 0 && (
                     <div className="mt-3 pl-9 space-y-3 border-l-2 border-accent/30 ml-4">
                       {q.answers.map((answer) => (
                         <div
                           key={answer.id}
-                          className="p-3.5 rounded-xl bg-surface border border-accent/20 space-y-1.5 shadow-2xs"
+                          className={`p-3.5 rounded-xl space-y-1.5 shadow-2xs ${
+                            answer.isAiAnswer
+                              ? 'bg-accent-tint/40 border border-accent/30'
+                              : 'bg-surface border border-accent/20'
+                          }`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded-md bg-accent-tint text-accent text-[10px] font-bold uppercase tracking-wider">
-                                Instructor
-                              </span>
-                              <span className="text-xs font-bold text-text-primary">
-                                {answer.instructor?.name || 'Instructor'}
-                              </span>
+                              {answer.isAiAnswer ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent text-white text-[10px] font-bold uppercase tracking-wider shadow-2xs">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  AI Answer
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="px-2 py-0.5 rounded-md bg-accent-tint text-accent text-[10px] font-bold uppercase tracking-wider">
+                                    Instructor
+                                  </span>
+                                  <span className="text-xs font-bold text-text-primary">
+                                    {answer.instructor?.name || 'Instructor'}
+                                  </span>
+                                </>
+                              )}
                             </div>
                             <span className="text-[10px] text-text-secondary">
                               {new Date(answer.createdAt).toLocaleDateString('en-US', {
@@ -976,10 +1058,81 @@ export default function ConceptReadingPage({ params }: PageProps) {
                               })}
                             </span>
                           </div>
-                          <p className="text-xs text-text-primary leading-relaxed">
-                            {answer.body}
-                          </p>
+                          <div className="text-xs sm:text-sm text-text-primary leading-relaxed">
+                            <ReactMarkdown
+                              components={{
+                                h1: ({ children }) => (
+                                  <h4 className="text-xs sm:text-sm font-bold font-display text-text-primary mt-2.5 mb-1">{children}</h4>
+                                ),
+                                h2: ({ children }) => (
+                                  <h5 className="text-xs sm:text-sm font-bold font-display text-text-primary mt-2 mb-1">{children}</h5>
+                                ),
+                                h3: ({ children }) => (
+                                  <h6 className="text-xs font-bold font-display text-text-primary mt-1.5 mb-0.5">{children}</h6>
+                                ),
+                                h4: ({ children }) => (
+                                  <h6 className="text-xs font-bold font-display text-text-primary mt-1.5 mb-0.5">{children}</h6>
+                                ),
+                                p: ({ children }) => (
+                                  <p className="text-xs sm:text-sm text-text-primary leading-relaxed my-1">{children}</p>
+                                ),
+                                ul: ({ children }) => (
+                                  <ul className="list-disc list-outside ml-4 my-1 space-y-0.5 text-xs sm:text-sm text-text-primary">{children}</ul>
+                                ),
+                                ol: ({ children }) => (
+                                  <ol className="list-decimal list-outside ml-4 my-1 space-y-0.5 text-xs sm:text-sm text-text-primary">{children}</ol>
+                                ),
+                                li: ({ children }) => (
+                                  <li className="leading-relaxed">{children}</li>
+                                ),
+                                blockquote: ({ children }) => (
+                                  <blockquote className="border-l-3 border-accent/60 pl-3 my-1.5 italic text-text-secondary bg-accent-tint/20 py-1 rounded-r-md text-xs">{children}</blockquote>
+                                ),
+                                code: ({ className, children, ...props }) => {
+                                  const isInline = !className && typeof children === 'string' && !children.includes('\n');
+                                  if (isInline) {
+                                    return (
+                                      <code className="px-1 py-0.5 rounded bg-bg border border-border text-accent font-mono text-[11px]">
+                                        {children}
+                                      </code>
+                                    );
+                                  }
+                                  return (
+                                    <div className="my-2 rounded-lg overflow-hidden border border-border bg-[#1E222B] text-slate-100 p-3 font-mono text-xs overflow-x-auto shadow-2xs">
+                                      <code className={className} {...props}>
+                                        {children}
+                                      </code>
+                                    </div>
+                                  );
+                                },
+                                strong: ({ children }) => (
+                                  <strong className="font-bold text-text-primary">{children}</strong>
+                                ),
+                                a: ({ href, children, ...props }) => {
+                                  const isExternal = typeof href === 'string' && (href.startsWith('http://') || href.startsWith('https://'));
+                                  return (
+                                    <a
+                                      href={href}
+                                      target={isExternal ? '_blank' : undefined}
+                                      rel={isExternal ? 'noopener noreferrer' : undefined}
+                                      className="inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-2 decoration-accent/50 hover:decoration-accent hover:text-accent/80 transition-colors"
+                                      {...props}
+                                    >
+                                      <span>{children}</span>
+                                      {isExternal && (
+                                        <ExternalLink className="w-3 h-3 shrink-0 opacity-80" />
+                                      )}
+                                    </a>
+                                  );
+                                },
+                              }}
+                            >
+                              {answer.body}
+                            </ReactMarkdown>
+
+                          </div>
                         </div>
+
                       ))}
                     </div>
                   )}
@@ -988,6 +1141,7 @@ export default function ConceptReadingPage({ params }: PageProps) {
             )}
           </div>
         </section>
+
       </div>
 
       {/* ========================================================================= */}

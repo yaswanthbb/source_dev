@@ -13,7 +13,9 @@ import {
   ExternalLink,
   Filter,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import apiClient from '@/lib/api-client';
+
 import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
@@ -356,10 +358,77 @@ export default function InstructorQaPage() {
                             })}
                           </span>
                         </div>
-                        <p className="text-xs text-text-primary leading-relaxed">
-                          {a.body}
-                        </p>
+                        <div className="text-xs text-text-primary leading-relaxed">
+                          <ReactMarkdown
+                            components={{
+                              h1: ({ children }) => (
+                                <h4 className="text-xs font-bold font-display text-text-primary mt-2 mb-1">{children}</h4>
+                              ),
+                              h2: ({ children }) => (
+                                <h5 className="text-xs font-bold font-display text-text-primary mt-2 mb-1">{children}</h5>
+                              ),
+                              h3: ({ children }) => (
+                                <h6 className="text-xs font-bold font-display text-text-primary mt-1.5 mb-0.5">{children}</h6>
+                              ),
+                              p: ({ children }) => (
+                                <p className="text-xs text-text-primary leading-relaxed my-1">{children}</p>
+                              ),
+                              ul: ({ children }) => (
+                                <ul className="list-disc list-outside ml-4 my-1 space-y-0.5 text-xs text-text-primary">{children}</ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="list-decimal list-outside ml-4 my-1 space-y-0.5 text-xs text-text-primary">{children}</ol>
+                              ),
+                              li: ({ children }) => (
+                                <li className="leading-relaxed">{children}</li>
+                              ),
+                              blockquote: ({ children }) => (
+                                <blockquote className="border-l-3 border-accent/60 pl-3 my-1.5 italic text-text-secondary bg-accent-tint/20 py-1 rounded-r-md text-xs">{children}</blockquote>
+                              ),
+                              code: ({ className, children, ...props }) => {
+                                const isInline = !className && typeof children === 'string' && !children.includes('\n');
+                                if (isInline) {
+                                  return (
+                                    <code className="px-1.5 py-0.5 rounded bg-bg border border-border text-accent font-mono text-[11px]">
+                                      {children}
+                                    </code>
+                                  );
+                                }
+                                return (
+                                  <div className="my-2 rounded-lg overflow-hidden border border-border bg-[#1E222B] text-slate-100 p-3 font-mono text-xs overflow-x-auto shadow-2xs">
+                                    <code className={className} {...props}>
+                                      {children}
+                                    </code>
+                                  </div>
+                                );
+                              },
+                              strong: ({ children }) => (
+                                <strong className="font-bold text-text-primary">{children}</strong>
+                              ),
+                              a: ({ href, children, ...props }) => {
+                                const isExternal = typeof href === 'string' && (href.startsWith('http://') || href.startsWith('https://'));
+                                return (
+                                  <a
+                                    href={href}
+                                    target={isExternal ? '_blank' : undefined}
+                                    rel={isExternal ? 'noopener noreferrer' : undefined}
+                                    className="inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-2 decoration-accent/50 hover:decoration-accent hover:text-accent/80 transition-colors"
+                                    {...props}
+                                  >
+                                    <span>{children}</span>
+                                    {isExternal && (
+                                      <ExternalLink className="w-3 h-3 shrink-0 opacity-80" />
+                                    )}
+                                  </a>
+                                );
+                              },
+                            }}
+                          >
+                            {a.body}
+                          </ReactMarkdown>
+                        </div>
                       </div>
+
                     ))}
                   </div>
                 )}

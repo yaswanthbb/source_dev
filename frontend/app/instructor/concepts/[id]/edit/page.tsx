@@ -1131,6 +1131,23 @@ export default function EditConceptPage({ params }: PageProps) {
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
+                          a: ({ href, children, ...props }) => {
+                            const isExternal = typeof href === 'string' && (href.startsWith('http://') || href.startsWith('https://'));
+                            return (
+                              <a
+                                href={href}
+                                target={isExternal ? '_blank' : undefined}
+                                rel={isExternal ? 'noopener noreferrer' : undefined}
+                                className="inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-3 decoration-accent/50 hover:decoration-accent hover:text-accent/80 transition-colors"
+                                {...props}
+                              >
+                                <span>{children}</span>
+                                {isExternal && (
+                                  <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                                )}
+                              </a>
+                            );
+                          },
                           code: ({ className, children, ...props }) => {
                             const isInline =
                               !className && typeof children === 'string' && !children.includes('\n');
@@ -1150,6 +1167,7 @@ export default function EditConceptPage({ params }: PageProps) {
                             );
                           },
                         }}
+
                       >
                         {content}
                       </ReactMarkdown>
