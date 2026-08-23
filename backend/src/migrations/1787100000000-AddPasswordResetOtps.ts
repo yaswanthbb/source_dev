@@ -25,7 +25,9 @@ export class AddPasswordResetOtps1787100000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX "public"."IDX_password_reset_otps_lookup"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_password_reset_otps_lookup"`,
+    );
     await queryRunner.query(`DROP TABLE "password_reset_otps"`);
   }
 }

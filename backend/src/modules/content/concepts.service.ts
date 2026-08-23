@@ -4,7 +4,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Repository, ILike, FindOptionsWhere } from 'typeorm';
+
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
 import { InstructorProfile } from '../users/entities/instructor-profile.entity';
@@ -103,7 +104,9 @@ export class ConceptsService {
     const isStudent = user && user.role === UserRole.STUDENT;
 
     if (search) {
-      const whereCondition: any = { title: ILike(`%${search}%`) };
+      const whereCondition: FindOptionsWhere<Concept> = {
+        title: ILike(`%${search}%`),
+      };
       if (isStudent) {
         whereCondition.reviewStatus = ConceptReviewStatus.APPROVED;
       }
@@ -184,9 +187,10 @@ export class ConceptsService {
     }
 
     if (dto.content !== undefined) {
-      const isAiGen = Boolean((dto as any).isAiGenerated);
+      const isAiGen = Boolean(dto.isAiGenerated);
       const isSignificant =
-        isAiGen || hasSignificantContentChange(concept.content, dto.content, 40);
+        isAiGen ||
+        hasSignificantContentChange(concept.content, dto.content, 40);
 
       concept.content = dto.content;
 

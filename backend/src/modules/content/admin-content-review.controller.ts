@@ -7,7 +7,12 @@ import {
   UseGuards,
   NotFoundException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -37,8 +42,14 @@ export class AdminContentReviewController {
   ) {}
 
   @Get('pending')
-  @ApiOperation({ summary: 'Get all concepts pending review with roadmap context and questions' })
-  @ApiResponse({ status: 200, description: 'Pending concepts retrieved successfully.' })
+  @ApiOperation({
+    summary:
+      'Get all concepts pending review with roadmap context and questions',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending concepts retrieved successfully.',
+  })
   async getPendingReviewConcepts(): Promise<Record<string, unknown>[]> {
     const pendingConcepts = await this.conceptRepository.find({
       where: { reviewStatus: ConceptReviewStatus.PENDING },
@@ -58,13 +69,16 @@ export class AdminContentReviewController {
       relations: ['module', 'module.roadmap'],
     });
 
-    const placementsMap = new Map<string, Array<{
-      roadmapId?: string;
-      roadmapTitle?: string;
-      moduleId?: string;
-      moduleTitle?: string;
-      orderIndex?: number;
-    }>>();
+    const placementsMap = new Map<
+      string,
+      Array<{
+        roadmapId?: string;
+        roadmapTitle?: string;
+        moduleId?: string;
+        moduleTitle?: string;
+        orderIndex?: number;
+      }>
+    >();
 
     moduleConcepts.forEach((mc) => {
       const existing = placementsMap.get(mc.conceptId) || [];
@@ -130,7 +144,9 @@ export class AdminContentReviewController {
   }
 
   @Patch(':conceptId/approve')
-  @ApiOperation({ summary: 'Approve a concept to publish it live for students' })
+  @ApiOperation({
+    summary: 'Approve a concept to publish it live for students',
+  })
   @ApiResponse({ status: 200, description: 'Concept approved successfully.' })
   async approveConcept(
     @Param('conceptId') conceptId: string,

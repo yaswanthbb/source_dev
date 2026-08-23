@@ -9,7 +9,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual, In } from 'typeorm';
+import { Repository, MoreThanOrEqual } from 'typeorm';
+
 import type { Response } from 'express';
 import { AiGenerationLog } from './entities/ai-generation-log.entity';
 import { AiGenerationType } from '../../common/enums/ai-generation-type.enum';
@@ -40,6 +41,16 @@ import {
   GenerateConceptContentDto,
   GenerateConceptMcqsDto,
 } from './dto/ai-generate.dto';
+
+interface ParsedMcqOption {
+  optionText?: string;
+  isCorrect?: boolean;
+}
+
+interface ParsedMcqQuestion {
+  questionText?: string;
+  options?: ParsedMcqOption[];
+}
 
 const DAILY_LIMIT = 20;
 
@@ -164,7 +175,7 @@ export class AiGenerateService {
     const maxTokens = options?.maxTokens ?? 2048;
     const temperature = options?.temperature ?? 0.6;
 
-    const requestBody: any = {
+    const requestBody: Record<string, unknown> = {
       model: modelId,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -211,7 +222,9 @@ export class AiGenerateService {
       );
     }
 
-    const data = (await response.json()) as any;
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
     const rawContent = data.choices?.[0]?.message?.content || '';
     return this.cleanModelOutput(rawContent);
   }
@@ -340,7 +353,9 @@ export class AiGenerateService {
           if (trimmed.startsWith('data: ')) {
             const jsonStr = trimmed.slice(6);
             try {
-              const parsed = JSON.parse(jsonStr);
+              const parsed = JSON.parse(jsonStr) as {
+                choices?: Array<{ delta?: { content?: string } }>;
+              };
               const deltaContent = parsed.choices?.[0]?.delta?.content;
               if (deltaContent) {
                 res.write(
@@ -360,7 +375,9 @@ export class AiGenerateService {
           res.write('data: [DONE]\n\n');
         } else if (trimmed.startsWith('data: ')) {
           try {
-            const parsed = JSON.parse(trimmed.slice(6));
+            const parsed = JSON.parse(trimmed.slice(6)) as {
+              choices?: Array<{ delta?: { content?: string } }>;
+            };
             const deltaContent = parsed.choices?.[0]?.delta?.content;
             if (deltaContent) {
               res.write(
@@ -400,7 +417,7 @@ export class AiGenerateService {
     // 2. Fix unescaped double quotes inside property values
     fixed = fixed.replace(
       /"(questionText|optionText|title|question|content)"\s*:\s*"([\s\S]*?)"\s*(,\s*"|,\s*\}|\s*\})/g,
-      (_match, key, val, tail) => {
+      (_match: string, key: string, val: string, tail: string) => {
         const escapedVal = val.replace(/(?<!\\)"/g, '\\"');
         return `"${key}": "${escapedVal}"${tail}`;
       },
@@ -413,7 +430,10 @@ export class AiGenerateService {
    * Parses MCQ question output safely from direct arrays or wrapped JSON objects,
    * with multi-stage sanitization and detailed diagnostic logging on parse errors.
    */
-  private parseMcqQuestions(raw: string, conceptTitle: string): any[] | null {
+  private parseMcqQuestions(
+    raw: string,
+    conceptTitle: string,
+  ): ParsedMcqQuestion[] | null {
     let cleaned = this.cleanModelOutput(raw);
 
     // If response contains reasoning before JSON code fence
@@ -424,22 +444,22 @@ export class AiGenerateService {
       }
     }
 
-    const tryExtractQuestions = (parsedObj: any): any[] | null => {
+    const tryExtractQuestions = (
+      parsedObj: unknown,
+    ): ParsedMcqQuestion[] | null => {
       if (Array.isArray(parsedObj) && parsedObj.length > 0) {
-        return parsedObj;
+        return parsedObj as ParsedMcqQuestion[];
       }
       if (parsedObj && typeof parsedObj === 'object') {
-        if (
-          Array.isArray(parsedObj.questions) &&
-          parsedObj.questions.length > 0
-        ) {
-          return parsedObj.questions;
+        const obj = parsedObj as Record<string, unknown>;
+        if (Array.isArray(obj.questions) && obj.questions.length > 0) {
+          return obj.questions as ParsedMcqQuestion[];
         }
-        if (Array.isArray(parsedObj.items) && parsedObj.items.length > 0) {
-          return parsedObj.items;
+        if (Array.isArray(obj.items) && obj.items.length > 0) {
+          return obj.items as ParsedMcqQuestion[];
         }
-        if (Array.isArray(parsedObj.mcqs) && parsedObj.mcqs.length > 0) {
-          return parsedObj.mcqs;
+        if (Array.isArray(obj.mcqs) && obj.mcqs.length > 0) {
+          return obj.mcqs as ParsedMcqQuestion[];
         }
       }
       return null;
@@ -447,14 +467,14 @@ export class AiGenerateService {
 
     // 1. Direct JSON.parse
     try {
-      const parsed = JSON.parse(cleaned);
+      const parsed: unknown = JSON.parse(cleaned);
       const qs = tryExtractQuestions(parsed);
       if (qs) return qs;
     } catch {
       // 2. Attempt with JSON repair
       try {
         const repaired = this.repairMalformedJson(cleaned);
-        const parsed = JSON.parse(repaired);
+        const parsed: unknown = JSON.parse(repaired);
         const qs = tryExtractQuestions(parsed);
         if (qs) return qs;
       } catch {
@@ -462,32 +482,38 @@ export class AiGenerateService {
         const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
         if (arrayMatch) {
           try {
-            const parsed = JSON.parse(arrayMatch[0]);
+            const parsed: unknown = JSON.parse(arrayMatch[0]);
             const qs = tryExtractQuestions(parsed);
             if (qs) return qs;
           } catch {
             try {
-              const parsed = JSON.parse(
+              const parsed: unknown = JSON.parse(
                 this.repairMalformedJson(arrayMatch[0]),
               );
               const qs = tryExtractQuestions(parsed);
               if (qs) return qs;
-            } catch {}
+            } catch {
+              // Ignore fallback failure
+            }
           }
         }
 
         const objMatch = cleaned.match(/\{[\s\S]*\}/);
         if (objMatch) {
           try {
-            const parsed = JSON.parse(objMatch[0]);
+            const parsed: unknown = JSON.parse(objMatch[0]);
             const qs = tryExtractQuestions(parsed);
             if (qs) return qs;
           } catch {
             try {
-              const parsed = JSON.parse(this.repairMalformedJson(objMatch[0]));
+              const parsed: unknown = JSON.parse(
+                this.repairMalformedJson(objMatch[0]),
+              );
               const qs = tryExtractQuestions(parsed);
               if (qs) return qs;
-            } catch {}
+            } catch {
+              // Ignore fallback failure
+            }
           }
         }
       }
@@ -506,10 +532,10 @@ export class AiGenerateService {
   private parseStringArray(raw: string): string[] {
     const cleaned = this.cleanModelOutput(raw);
     try {
-      const parsed = JSON.parse(cleaned);
+      const parsed: unknown = JSON.parse(cleaned);
       if (Array.isArray(parsed)) {
         return parsed
-          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .map((item: unknown) => (typeof item === 'string' ? item.trim() : ''))
           .filter(Boolean);
       }
     } catch {
@@ -517,10 +543,12 @@ export class AiGenerateService {
       const match = cleaned.match(/\[[\s\S]*\]/);
       if (match) {
         try {
-          const parsed = JSON.parse(match[0]);
+          const parsed: unknown = JSON.parse(match[0]);
           if (Array.isArray(parsed)) {
             return parsed
-              .map((item) => (typeof item === 'string' ? item.trim() : ''))
+              .map((item: unknown) =>
+                typeof item === 'string' ? item.trim() : '',
+              )
               .filter(Boolean);
           }
         } catch {
@@ -725,7 +753,8 @@ export class AiGenerateService {
         await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT);
 
         // Validate any links generated in the markdown before persisting
-        const sanitizedContent = await this.validateAndSanitizeConceptLinks(generatedContent);
+        const sanitizedContent =
+          await this.validateAndSanitizeConceptLinks(generatedContent);
 
         // Create concept using existing service
         const createdConcept = await this.conceptsService.createConcept(user, {
@@ -739,7 +768,6 @@ export class AiGenerateService {
         await this.roadmapsService.attachConceptToModule(moduleId, user, {
           conceptId: createdConcept.id,
         });
-
 
         createdConcepts.push(createdConcept);
         cumulativeSiblingTitles.push(title);
@@ -852,7 +880,7 @@ export class AiGenerateService {
           concept.content,
         );
 
-        let parsedQuestions: any[] | null = null;
+        let parsedQuestions: ParsedMcqQuestion[] | null = null;
         let attempt = 0;
         const maxAttempts = 2; // Initial attempt + 1 automatic retry
 
@@ -882,10 +910,12 @@ export class AiGenerateService {
                 `Parse failed on attempt 1 for concept "${concept.title}". Automatically retrying with fresh completion...`,
               );
             }
-          } catch (apiErr: any) {
+          } catch (apiErr: unknown) {
             if (attempt >= maxAttempts) throw apiErr;
+            const errMsg =
+              apiErr instanceof Error ? apiErr.message : String(apiErr);
             this.logger.warn(
-              `API error on attempt 1 for concept "${concept.title}": ${apiErr.message}. Retrying...`,
+              `API error on attempt 1 for concept "${concept.title}": ${errMsg}. Retrying...`,
             );
           }
         }
@@ -911,7 +941,7 @@ export class AiGenerateService {
           }
 
           const correctOptions = q.options.filter(
-            (o: any) => o.isCorrect === true,
+            (o: ParsedMcqOption) => o.isCorrect === true,
           );
           if (correctOptions.length !== 1) {
             continue;
@@ -920,7 +950,7 @@ export class AiGenerateService {
           await this.quizService.createQuestion(concept.id, user, {
             questionText: q.questionText,
             orderIndex: qIdx + 1,
-            options: q.options.map((opt: any, oIdx: number) => ({
+            options: q.options.map((opt: ParsedMcqOption, oIdx: number) => ({
               optionText: opt.optionText || '',
               isCorrect: Boolean(opt.isCorrect),
               orderIndex: oIdx + 1,
@@ -977,7 +1007,6 @@ export class AiGenerateService {
     return { content };
   }
 
-
   /**
    * Non-streaming single concept MCQs generation helper
    */
@@ -990,7 +1019,7 @@ export class AiGenerateService {
     const systemPrompt = CONCEPT_MCQ_SYSTEM_PROMPT;
     const userPrompt = buildConceptMcqUserPrompt(dto.title, dto.content);
 
-    let parsedQuestions: any[] | null = null;
+    let parsedQuestions: ParsedMcqQuestion[] | null = null;
     let attempt = 0;
     const maxAttempts = 2;
     let lastResponseText = '';
@@ -1018,10 +1047,11 @@ export class AiGenerateService {
             `Single concept MCQ parse failed on attempt 1 for "${dto.title}". Retrying...`,
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (attempt >= maxAttempts) throw err;
+        const errMsg = err instanceof Error ? err.message : String(err);
         this.logger.warn(
-          `Single concept MCQ API error on attempt 1 for "${dto.title}": ${err.message}. Retrying...`,
+          `Single concept MCQ API error on attempt 1 for "${dto.title}": ${errMsg}. Retrying...`,
         );
       }
     }
@@ -1095,8 +1125,8 @@ export class AiGenerateService {
           signal: controller.signal,
           headers,
         });
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') {
           clearTimeout(timeoutId);
           return false;
         }
@@ -1142,7 +1172,6 @@ export class AiGenerateService {
     }
   }
 
-
   /**
    * Validates all Markdown links in generated concept content.
    * Strips broken/unresolvable links line-by-line while preserving valid content.
@@ -1174,7 +1203,9 @@ export class AiGenerateService {
         const isValid = await this.checkUrlResolves(url);
         urlValidationResults.set(url, isValid);
         if (!isValid) {
-          this.logger.warn(`Stripped invalid link from concept content: "${url}"`);
+          this.logger.warn(
+            `Stripped invalid link from concept content: "${url}"`,
+          );
         }
       }),
     );
@@ -1212,5 +1243,3 @@ export class AiGenerateService {
     return sanitizedContent.trim();
   }
 }
-
-

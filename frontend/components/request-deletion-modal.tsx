@@ -8,9 +8,9 @@ import {
   X,
   AlertTriangle,
   Clock,
-  CheckCircle2,
   ShieldAlert,
 } from 'lucide-react';
+
 import apiClient from '@/lib/api-client';
 import { useSnackbar } from '@/providers/snackbar-provider';
 

@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddConceptContentReview1787000000000
-  implements MigrationInterface
-{
+export class AddConceptContentReview1787000000000 implements MigrationInterface {
   name = 'AddConceptContentReview1787000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -38,9 +36,7 @@ export class AddConceptContentReview1787000000000
     await queryRunner.query(
       `ALTER TABLE "concepts" DROP CONSTRAINT "FK_concepts_reviewed_by_user_id"`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "concepts" DROP COLUMN "reviewed_at"`,
-    );
+    await queryRunner.query(`ALTER TABLE "concepts" DROP COLUMN "reviewed_at"`);
     await queryRunner.query(
       `ALTER TABLE "concepts" DROP COLUMN "reviewed_by_user_id"`,
     );
@@ -53,8 +49,6 @@ export class AddConceptContentReview1787000000000
     await queryRunner.query(
       `ALTER TABLE "concepts" DROP COLUMN "review_status"`,
     );
-    await queryRunner.query(
-      `DROP TYPE "public"."concepts_review_status_enum"`,
-    );
+    await queryRunner.query(`DROP TYPE "public"."concepts_review_status_enum"`);
   }
 }

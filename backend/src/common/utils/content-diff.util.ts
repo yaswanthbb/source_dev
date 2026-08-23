@@ -31,8 +31,8 @@ export function boundedLevenshtein(
   const n = a.length;
   const m = b.length;
 
-  const prev = new Array(n + 1);
-  const curr = new Array(n + 1);
+  const prev = new Array<number>(n + 1);
+  const curr = new Array<number>(n + 1);
 
   for (let i = 0; i <= n; i++) {
     prev[i] = i;
@@ -76,6 +76,10 @@ export function hasSignificantContentChange(
   threshold: number = 40,
 ): boolean {
   if (oldContent === newContent) return false;
-  const distance = boundedLevenshtein(oldContent || '', newContent || '', threshold);
+  const distance = boundedLevenshtein(
+    oldContent || '',
+    newContent || '',
+    threshold,
+  );
   return distance >= threshold;
 }

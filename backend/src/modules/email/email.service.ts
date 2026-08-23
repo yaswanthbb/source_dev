@@ -157,7 +157,9 @@ export class EmailService {
       return true;
     } catch (err: unknown) {
       const error = err as Error;
-      this.logger.error(`Failed to send password reset email: ${error.message}`);
+      this.logger.error(
+        `Failed to send password reset email: ${error.message}`,
+      );
       return false;
     }
   }

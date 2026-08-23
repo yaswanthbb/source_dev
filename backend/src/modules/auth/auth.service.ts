@@ -124,7 +124,6 @@ export class AuthService {
       };
     }
 
-
     // 2. Check if a user with this email already exists
     const existingByEmail =
       await this.usersService.findOneByEmailWithPassword(normalizedEmail);
@@ -163,13 +162,9 @@ export class AuthService {
     };
   }
 
-
-  async forgotPassword(
-    dto: ForgotPasswordDto,
-  ): Promise<{ message: string }> {
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
     const genericResponse = {
-      message:
-        "If an account with this email exists, we've sent a reset code.",
+      message: "If an account with this email exists, we've sent a reset code.",
     };
 
     const user = await this.userRepository.findOne({
@@ -247,9 +242,7 @@ export class AuthService {
     if (otpRecord.attemptsUsed >= 5) {
       otpRecord.used = true;
       await this.otpRepository.save(otpRecord);
-      throw new BadRequestException(
-        'Too many attempts, request a new code',
-      );
+      throw new BadRequestException('Too many attempts, request a new code');
     }
 
     const isMatch = await bcrypt.compare(dto.otp, otpRecord.otpHash);
@@ -282,9 +275,7 @@ export class AuthService {
     return { resetToken };
   }
 
-  async resetPassword(
-    dto: ResetPasswordDto,
-  ): Promise<{ message: string }> {
+  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
     let payload: { sub?: string; email?: string; purpose?: string };
     try {
       payload = this.jwtService.verify(dto.resetToken);

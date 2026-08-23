@@ -23,4 +23,6 @@ export class Roadmap extends BaseEntity {
 
   @OneToMany(() => Module, (module) => module.roadmap)
   modules: Module[];
+
+  moduleCount?: number;
 }

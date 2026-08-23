@@ -10,19 +10,18 @@ import {
   Plus,
   Edit2,
   Trash2,
-  BookOpen,
   Search,
   ExternalLink,
   Check,
   X,
   AlertCircle,
   FolderKanban,
-  FilePlus,
   Link as LinkIcon,
   Sparkles,
   Lock,
   Clock,
 } from 'lucide-react';
+
 import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
@@ -386,11 +385,15 @@ export default function RoadmapManagementPage({ params }: PageProps) {
       const count = res.data?.count ?? 0;
       showSuccess(`Successfully generated ${count} modules!`);
       refetch();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (controller.signal.aborted) return;
+      const axiosErr = err as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
       const msg =
-        err.response?.data?.message ||
-        err.message ||
+        axiosErr.response?.data?.message ||
+        axiosErr.message ||
         'Failed to generate modules.';
       setAiModalState((prev) => ({ ...prev, error: msg }));
     } finally {
@@ -429,11 +432,15 @@ export default function RoadmapManagementPage({ params }: PageProps) {
         }!`,
       );
       refetch();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (controller.signal.aborted) return;
+      const axiosErr = err as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
       const msg =
-        err.response?.data?.message ||
-        err.message ||
+        axiosErr.response?.data?.message ||
+        axiosErr.message ||
         'Failed to generate concepts.';
       setAiModalState((prev) => ({ ...prev, error: msg }));
     } finally {
@@ -464,17 +471,22 @@ export default function RoadmapManagementPage({ params }: PageProps) {
       const count = res.data?.generatedCount ?? 0;
       showSuccess(`Generated and attached MCQs for ${count} concepts!`);
       refetch();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (controller.signal.aborted) return;
+      const axiosErr = err as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
       const msg =
-        err.response?.data?.message ||
-        err.message ||
+        axiosErr.response?.data?.message ||
+        axiosErr.message ||
         'Failed to generate MCQs.';
       setAiModalState((prev) => ({ ...prev, error: msg }));
     } finally {
       abortControllerRef.current = null;
     }
   };
+
 
   if (isLoading) {
     return (

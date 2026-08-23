@@ -24,11 +24,10 @@ const THEME_STORAGE_KEY = 'kis_theme';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('light');
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     try {
+
       const stored = localStorage.getItem(THEME_STORAGE_KEY);
       if (stored === 'dark' || stored === 'light') {
         setThemeState(stored);

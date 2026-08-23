@@ -64,4 +64,6 @@ export class Concept extends BaseEntity {
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'author_id' })
   author: User | null;
+
+  questionCount?: number;
 }

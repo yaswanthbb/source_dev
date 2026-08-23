@@ -28,4 +28,7 @@ export class UpdateConceptDto {
   @IsOptional()
   @IsEnum(ConceptDifficulty)
   difficulty?: ConceptDifficulty;
+
+  @IsOptional()
+  isAiGenerated?: boolean;
 }

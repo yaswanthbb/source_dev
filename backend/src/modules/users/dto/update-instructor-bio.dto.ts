@@ -3,7 +3,8 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateInstructorBioDto {
   @ApiPropertyOptional({
-    example: 'Experienced software engineer with 10+ years in full-stack architecture.',
+    example:
+      'Experienced software engineer with 10+ years in full-stack architecture.',
     description: 'Instructor biography text',
   })
   @IsOptional()

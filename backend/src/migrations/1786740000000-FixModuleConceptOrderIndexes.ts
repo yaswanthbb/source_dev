@@ -16,7 +16,7 @@ export class FixModuleConceptOrderIndexes1786740000000 implements MigrationInter
     `);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(): Promise<void> {
     // No rollback necessary for sequential order index cleanup
   }
 }

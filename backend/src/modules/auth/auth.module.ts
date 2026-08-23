@@ -58,4 +58,3 @@ import { RolesGuard } from './guards/roles.guard';
   ],
 })
 export class AuthModule {}
-

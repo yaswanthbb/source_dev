@@ -151,7 +151,6 @@ export class QaService {
     });
   }
 
-
   async updateQuestion(
     id: string,
     user: Omit<User, 'passwordHash'>,

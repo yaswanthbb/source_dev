@@ -632,10 +632,11 @@ export default function StudentDashboardPage() {
               };
 
               const completedCount =
-                progress.completedConceptsCount ?? (progress as any).completedConcepts ?? 0;
+                progress.completedConceptsCount ?? progress.completedConcepts ?? 0;
               const totalCount = progress.totalConcepts ?? 0;
               const completionPct =
-                progress.completionPercentage ?? (progress as any).percentage ?? 0;
+                progress.completionPercentage ?? progress.percentage ?? 0;
+
 
               return (
                 <div

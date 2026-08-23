@@ -10,7 +10,12 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
@@ -124,8 +129,9 @@ export class AuthController {
       return res.redirect(
         `${frontendUrl}/auth/callback?token=${encodeURIComponent(accessToken)}`,
       );
-    } catch (err: any) {
-      const message = err?.message || 'Authentication failed';
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Authentication failed';
       return res.redirect(
         `${frontendUrl}/auth/callback?error=${encodeURIComponent(message)}`,
       );
@@ -156,8 +162,9 @@ export class AuthController {
       return res.redirect(
         `${frontendUrl}/auth/callback?token=${encodeURIComponent(accessToken)}`,
       );
-    } catch (err: any) {
-      const message = err?.message || 'Authentication failed';
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Authentication failed';
       return res.redirect(
         `${frontendUrl}/auth/callback?error=${encodeURIComponent(message)}`,
       );
@@ -184,4 +191,3 @@ export class AuthController {
     );
   }
 }
-

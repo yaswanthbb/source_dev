@@ -19,4 +19,3 @@ export class CreateQaQuestionDto {
   @IsIn(['instructor', 'ai'])
   target?: 'instructor' | 'ai';
 }
-

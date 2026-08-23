@@ -45,11 +45,11 @@ export class GitHubStrategy extends PassportStrategy(Strategy, 'github') {
           },
         });
         if (res.ok) {
-          const emails: Array<{
+          const emails = (await res.json()) as Array<{
             email: string;
             primary: boolean;
             verified: boolean;
-          }> = await res.json();
+          }>;
           const primaryEmail =
             emails.find((e) => e.primary && e.verified) ||
             emails.find((e) => e.verified) ||

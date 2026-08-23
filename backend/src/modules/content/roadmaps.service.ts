@@ -139,7 +139,7 @@ export class RoadmapsService {
           }
         }
       }
-      (roadmap as any).moduleCount = roadmap.modules ? roadmap.modules.length : 0;
+      roadmap.moduleCount = roadmap.modules ? roadmap.modules.length : 0;
     }
 
     return roadmaps;
@@ -218,20 +218,20 @@ export class RoadmapsService {
           mod.moduleConcepts.sort((a, b) => a.orderIndex - b.orderIndex);
           for (const mc of mod.moduleConcepts) {
             if (mc.concept) {
-              (mc.concept as any).questionCount =
+              mc.concept.questionCount =
                 questionCountMap.get(mc.conceptId) || 0;
             }
-            (mc as any).prerequisites = (mc.prerequisites || [])
-              .filter((p) => {
-                if (!isStudent) return true;
-                const prereqReviewStatus =
-                  p.prerequisiteModuleConcept?.concept?.reviewStatus;
-                return (
-                  !prereqReviewStatus ||
-                  prereqReviewStatus === ConceptReviewStatus.APPROVED
-                );
-              })
-              .map((p) => ({
+            const filteredPrereqs = (mc.prerequisites || []).filter((p) => {
+              if (!isStudent) return true;
+              const prereqReviewStatus =
+                p.prerequisiteModuleConcept?.concept?.reviewStatus;
+              return (
+                !prereqReviewStatus ||
+                prereqReviewStatus === ConceptReviewStatus.APPROVED
+              );
+            });
+            (mc as unknown as { prerequisites: unknown[] }).prerequisites =
+              filteredPrereqs.map((p) => ({
                 moduleConceptId: p.moduleConceptId,
                 prerequisiteConceptId: p.prerequisiteModuleConcept?.conceptId,
                 title: p.prerequisiteModuleConcept?.concept?.title,

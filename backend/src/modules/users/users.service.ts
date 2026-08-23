@@ -45,7 +45,6 @@ export class UsersService {
     return sanitized;
   }
 
-
   async findOneById(id: string): Promise<Omit<User, 'passwordHash'> | null> {
     const user = await this.userRepository.findOne({
       where: { id },
@@ -214,7 +213,6 @@ export class UsersService {
         'This account uses social sign-in and does not have a password set.',
       );
     }
-
 
     const isPasswordValid = await bcrypt.compare(
       dto.currentPassword,

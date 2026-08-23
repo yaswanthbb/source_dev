@@ -59,13 +59,20 @@ function CallbackHandler() {
 
         const targetRoute = getDashboardRoute(user.role);
         router.replace(targetRoute);
-      } catch (err: any) {
-        const backendMessage = err?.response?.data?.message || err?.message;
+      } catch (err: unknown) {
+        const axiosErr = err as {
+          response?: { data?: { message?: string } };
+          message?: string;
+        };
+        const backendMessage =
+          axiosErr?.response?.data?.message || axiosErr?.message;
         setErrorMessage(
-          backendMessage || 'Failed to complete authentication. Please try logging in again.',
+          backendMessage ||
+            'Failed to complete authentication. Please try logging in again.',
         );
         setIsProcessing(false);
       }
+
     };
 
     processAuth();

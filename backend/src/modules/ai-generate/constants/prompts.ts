@@ -120,7 +120,6 @@ Guidelines & Scope:
 - STRICTLY FORBIDDEN: AI clichés and hollow filler phrases such as "In today's fast-paced digital world", "Let's dive into", "delve into", "In conclusion", "In summary", "tapestry", "seamlessly", "it's important to remember", or excessive hedging.
 - Do NOT output preamble, conversational filler, or wrap the whole response in an outer markdown code fence. Output ONLY the raw markdown article starting with the first heading or conceptual introduction.`;
 
-
 export function buildConceptContentUserPrompt(dto: {
   title: string;
   difficulty?: string;
@@ -212,4 +211,3 @@ export function buildQaAnswerUserPrompt(
     : '';
   return `Concept: "${conceptTitle}"${contentSnippet}\n\nStudent Question:\n"${questionBody}"\n\nProvide a clear, helpful answer grounded in this concept.`;
 }
-

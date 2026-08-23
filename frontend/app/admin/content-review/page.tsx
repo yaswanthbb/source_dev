@@ -112,8 +112,9 @@ export default function AdminContentReviewPage() {
       showSuccess(`Approved "${concept?.title || 'Concept'}" — now live for students.`);
       queryClient.invalidateQueries({ queryKey: ['admin', 'content-review', 'pending'] });
     },
-    onError: (err: any) => {
-      showError(err.response?.data?.message || 'Failed to approve concept');
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to approve concept');
     },
   });
 
@@ -128,10 +129,12 @@ export default function AdminContentReviewPage() {
       setRejectionReason('');
       queryClient.invalidateQueries({ queryKey: ['admin', 'content-review', 'pending'] });
     },
-    onError: (err: any) => {
-      showError(err.response?.data?.message || 'Failed to reject concept');
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      showError(axiosErr.response?.data?.message || 'Failed to reject concept');
     },
   });
+
 
   const toggleContentExpand = (id: string) => {
     setExpandedContentIds((prev) => {

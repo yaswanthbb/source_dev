@@ -24,12 +24,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     });
   }
 
-  async validate(
+  validate(
     accessToken: string,
     refreshToken: string,
     profile: Profile,
     done: VerifyCallback,
-  ): Promise<void> {
+  ): void {
     const email =
       profile.emails && profile.emails[0] ? profile.emails[0].value : '';
     const photo =

@@ -6,4 +6,3 @@ export enum AiGenerationType {
   CONCEPT_MCQS = 'concept_mcqs',
   QA_ANSWER = 'qa_answer',
 }
-

@@ -140,18 +140,19 @@ function validateAndParseQuizText(rawText: string, startingOrderIndex: number): 
   // 1. JSON parsing
   if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
     try {
-      const parsed = JSON.parse(trimmed);
-      const rawList = Array.isArray(parsed) ? parsed : [parsed];
+      const parsed: unknown = JSON.parse(trimmed);
+      const rawList: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
       const errors: string[] = [];
       const validatedList: ParsedImportQuestion[] = [];
 
-      rawList.forEach((item, qIdx) => {
+      rawList.forEach((rawItem: unknown, qIdx: number) => {
         const qNum = qIdx + 1;
-        if (!item || typeof item !== 'object') {
-          errors.push(`Question #${qNum}: Expected a JSON object, but received ${typeof item}.`);
+        if (!rawItem || typeof rawItem !== 'object') {
+          errors.push(`Question #${qNum}: Expected a JSON object, but received ${typeof rawItem}.`);
           return;
         }
 
+        const item = rawItem as Record<string, unknown>;
         const questionText = typeof item.questionText === 'string' ? item.questionText.trim() : '';
         if (!questionText) {
           errors.push(`Question #${qNum}: "questionText" is required and cannot be empty.`);
@@ -169,13 +170,14 @@ function validateAndParseQuizText(rawText: string, startingOrderIndex: number): 
         const parsedOptions: Array<{ optionText: string; isCorrect: boolean; orderIndex: number }> = [];
         let correctCount = 0;
 
-        item.options.forEach((opt: any, optIdx: number) => {
+        item.options.forEach((rawOpt: unknown, optIdx: number) => {
           const optNum = optIdx + 1;
-          if (!opt || typeof opt !== 'object') {
+          if (!rawOpt || typeof rawOpt !== 'object') {
             errors.push(`Question #${qNum}, Option #${optNum}: Expected an object with "optionText" and "isCorrect".`);
             return;
           }
 
+          const opt = rawOpt as Record<string, unknown>;
           const optionText = typeof opt.optionText === 'string' ? opt.optionText.trim() : '';
           if (!optionText) {
             errors.push(`Question #${qNum}, Option #${optNum}: "optionText" is required and cannot be empty.`);
@@ -214,17 +216,19 @@ function validateAndParseQuizText(rawText: string, startingOrderIndex: number): 
         totalParsed: rawList.length,
         totalValid: validatedList.length,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       return {
         isValid: false,
         questions: [],
-        errors: [`Invalid JSON Syntax: ${err?.message || 'Check for missing commas, quotes, or unclosed braces.'}`],
-        syntaxError: err?.message || 'JSON Syntax Error',
+        errors: [`Invalid JSON Syntax: ${errMsg || 'Check for missing commas, quotes, or unclosed braces.'}`],
+        syntaxError: errMsg || 'JSON Syntax Error',
         totalParsed: 0,
         totalValid: 0,
       };
     }
   }
+
 
   // 2. Structured text / Markdown fallback parsing
   const blocks = trimmed.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
@@ -362,7 +366,8 @@ export default function EditConceptPage({ params }: PageProps) {
     return (currentMod.moduleConcepts || [])
       .map((mc) => mc.concept?.title)
       .filter((t): t is string => Boolean(t) && t !== title);
-  }, [roadmapDetail, firstAppearsIn?.moduleId, title]);
+  }, [roadmapDetail, firstAppearsIn, title]);
+
 
   // Seed form state on fetch
   useEffect(() => {
@@ -564,11 +569,15 @@ export default function EditConceptPage({ params }: PageProps) {
         showSuccess('Concept article generated successfully!');
       }
       setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (controller.signal.aborted) return;
+      const axiosErr = err as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
       const msg =
-        err.response?.data?.message ||
-        err.message ||
+        axiosErr.response?.data?.message ||
+        axiosErr.message ||
         'Failed to generate concept article.';
       setAiModalState((prev) => ({ ...prev, error: msg }));
     } finally {
@@ -609,17 +618,22 @@ export default function EditConceptPage({ params }: PageProps) {
         showSuccess('MCQs generated and loaded into Auto-Mapper!');
       }
       setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (controller.signal.aborted) return;
+      const axiosErr = err as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
       const msg =
-        err.response?.data?.message ||
-        err.message ||
+        axiosErr.response?.data?.message ||
+        axiosErr.message ||
         'Failed to generate MCQs.';
       setAiModalState((prev) => ({ ...prev, error: msg }));
     } finally {
       abortControllerRef.current = null;
     }
   };
+
 
   // Live Swagger-style validation report
   const validationReport = React.useMemo(

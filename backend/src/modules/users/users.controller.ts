@@ -69,9 +69,17 @@ export class UsersController {
   }
 
   @Patch('me/instructor-bio')
-  @ApiOperation({ summary: 'Update instructor biography (instructors/admins only)' })
-  @ApiResponse({ status: 200, description: 'Instructor bio updated successfully.' })
-  @ApiResponse({ status: 403, description: 'Only instructors/admins can update bio.' })
+  @ApiOperation({
+    summary: 'Update instructor biography (instructors/admins only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Instructor bio updated successfully.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only instructors/admins can update bio.',
+  })
   async updateInstructorBio(
     @CurrentUser() user: User,
     @Body() dto: UpdateInstructorBioDto,

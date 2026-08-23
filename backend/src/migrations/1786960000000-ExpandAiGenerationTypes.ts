@@ -12,7 +12,7 @@ export class ExpandAiGenerationTypes1786960000000 implements MigrationInterface 
     `);
   }
 
-  public async down(_queryRunner: QueryRunner): Promise<void> {
+  public async down(): Promise<void> {
     // Postgres enums do not natively support removing values without recreation.
   }
 }
