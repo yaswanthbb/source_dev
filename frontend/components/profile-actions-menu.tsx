@@ -69,7 +69,7 @@ export function ProfileActionsMenu({
           ) : (
             <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 bg-accent-tint text-accent">
               {isAdmin ? (
-                <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400 stroke-[2.5]" />
+                <Shield className="w-4 h-4 text-accent stroke-[2.5]" />
               ) : user?.name ? (
                 user.name.charAt(0).toUpperCase()
               ) : (
@@ -157,12 +157,13 @@ export function ProfileActionsMenu({
             <Link
               href="/admin/dashboard"
               onClick={() => setIsMenuOpen(false)}
-              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-primary hover:bg-bg hover:text-purple-600 dark:hover:text-purple-400 flex items-center gap-2.5 transition-colors cursor-pointer group"
+              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-primary hover:bg-bg hover:text-accent flex items-center gap-2.5 transition-colors cursor-pointer group"
             >
-              <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400 stroke-[2.5]" />
+              <Shield className="w-4 h-4 text-accent stroke-[2.5]" />
               <span>Switch to Admin Console</span>
             </Link>
           )}
+
 
           {(isInstructor || isAdmin) && currentView !== 'instructor' && (
             <Link

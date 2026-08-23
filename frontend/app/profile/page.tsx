@@ -343,15 +343,14 @@ export default function ProfilePage() {
           <ThemeToggle />
           <span
             className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-              role === 'admin'
-                ? 'bg-purple-tint text-purple-600 dark:text-purple-400 border border-purple-500/20'
-                : role === 'instructor'
+              role === 'instructor'
                 ? 'bg-amber-tint text-amber border border-amber/30'
                 : 'bg-accent-tint text-accent border border-accent/20'
             }`}
           >
             {role}
           </span>
+
         </div>
       </header>
 

@@ -393,11 +393,11 @@ export default function AdminUsersDirectoryPage() {
                       {users.map((u) => {
                         let rolePillStyle = 'bg-bg text-text-secondary border border-border';
                         if (u.role === 'admin') {
-                          rolePillStyle = 'bg-purple-600/20 text-purple-800 dark:bg-purple-500/25 dark:text-purple-300 font-bold border border-purple-600/30';
+                          rolePillStyle = 'bg-accent-tint text-accent font-bold border border-accent/20';
                         } else if (u.role === 'instructor') {
-                          rolePillStyle = 'bg-accent-tint text-accent font-bold';
+                          rolePillStyle = 'bg-amber-tint text-amber font-bold border border-amber/20';
                         } else if (u.role === 'student') {
-                          rolePillStyle = 'bg-green-tint text-green font-semibold';
+                          rolePillStyle = 'bg-accent-tint text-accent font-semibold border border-accent/20';
                         }
 
                         return (
@@ -468,7 +468,7 @@ export default function AdminUsersDirectoryPage() {
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 ) : (
-                                  <span className="text-text-secondary/40 text-[11px] italic px-2">
+                                  <span className="text-text-muted text-[11px] font-medium italic px-2">
                                     Protected
                                   </span>
                                 )}
@@ -477,6 +477,7 @@ export default function AdminUsersDirectoryPage() {
                           </tr>
                         );
                       })}
+
                     </tbody>
                   </table>
                 </div>
@@ -486,11 +487,11 @@ export default function AdminUsersDirectoryPage() {
                   {users.map((u) => {
                     let rolePillStyle = 'bg-bg text-text-secondary border border-border';
                     if (u.role === 'admin') {
-                      rolePillStyle = 'bg-purple-600/20 text-purple-800 dark:bg-purple-500/25 dark:text-purple-300 font-bold border border-purple-600/30';
+                      rolePillStyle = 'bg-accent-tint text-accent font-bold border border-accent/20';
                     } else if (u.role === 'instructor') {
-                      rolePillStyle = 'bg-accent-tint text-accent font-bold';
+                      rolePillStyle = 'bg-amber-tint text-amber font-bold border border-amber/20';
                     } else if (u.role === 'student') {
-                      rolePillStyle = 'bg-green-tint text-green font-semibold';
+                      rolePillStyle = 'bg-accent-tint text-accent font-semibold border border-accent/20';
                     }
 
                     return (
@@ -553,13 +554,14 @@ export default function AdminUsersDirectoryPage() {
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             ) : (
-                              <span className="text-text-secondary/40 text-[10px] italic">Protected</span>
+                              <span className="text-text-muted text-[10px] font-medium italic">Protected</span>
                             )}
                           </div>
                         </div>
                       </div>
                     );
                   })}
+
                 </div>
               </>
             )}

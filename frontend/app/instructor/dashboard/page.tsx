@@ -158,9 +158,10 @@ export default function InstructorDashboardPage() {
             <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
               Q&A Answered
             </span>
-            <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-300 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-accent-tint text-accent flex items-center justify-center">
               <MessageSquare className="w-4 h-4" />
             </div>
+
           </div>
           <div className="text-3xl font-bold font-display text-text-primary">
             {overviewLoading ? '...' : overview?.questionsAnswered ?? 0}
