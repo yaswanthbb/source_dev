@@ -60,28 +60,72 @@ export const entities = [
 
 export const getTypeOrmConfig = (
   configService?: ConfigService,
-): DataSourceOptions => ({
-  type: 'postgres',
-  host: configService
-    ? configService.get<string>('DB_HOST', 'localhost')
-    : process.env.DB_HOST || 'localhost',
-  port: configService
-    ? configService.get<number>('DB_PORT', 5432)
-    : parseInt(process.env.DB_PORT || '5432', 10),
-  username: configService
-    ? configService.get<string>('DB_USERNAME', 'postgres')
-    : process.env.DB_USERNAME || 'postgres',
-  password: configService
-    ? configService.get<string>('DB_PASSWORD', 'postgres')
-    : process.env.DB_PASSWORD || 'postgres',
-  database: configService
-    ? configService.get<string>('DB_DATABASE', 'knowledge_is_power')
-    : process.env.DB_DATABASE || 'knowledge_is_power',
-  entities,
-  synchronize: false,
-  migrations: configService ? [] : [__dirname + '/../migrations/*{.ts,.js}'],
-  migrationsTableName: 'migrations',
-});
+): DataSourceOptions => {
+  const databaseUrl = configService
+    ? configService.get<string>('DATABASE_URL')
+    : process.env.DATABASE_URL;
+
+  const dbSsl = configService
+    ? configService.get<string>('DB_SSL')
+    : process.env.DB_SSL;
+
+  const isProduction =
+    (configService
+      ? configService.get<string>('NODE_ENV')
+      : process.env.NODE_ENV) === 'production';
+
+  // SSL is enabled when DATABASE_URL is set (e.g. Neon), DB_SSL=true, or in production
+  const useSsl =
+    dbSsl === 'true' ||
+    Boolean(
+      databaseUrl &&
+      (databaseUrl.includes('sslmode=require') ||
+        databaseUrl.includes('neon.tech') ||
+        dbSsl !== 'false'),
+    ) ||
+    (isProduction && dbSsl !== 'false');
+
+  const sslConfig = useSsl ? { rejectUnauthorized: false } : false;
+
+  const baseConfig: Partial<DataSourceOptions> = {
+    entities,
+    synchronize: false,
+    migrations: configService ? [] : [__dirname + '/../migrations/*{.ts,.js}'],
+    migrationsTableName: 'migrations',
+  };
+
+  if (databaseUrl) {
+    return {
+      type: 'postgres',
+      url: databaseUrl,
+      ssl: sslConfig,
+      extra: useSsl ? { ssl: { rejectUnauthorized: false } } : undefined,
+      ...baseConfig,
+    } as DataSourceOptions;
+  }
+
+  return {
+    type: 'postgres',
+    host: configService
+      ? configService.get<string>('DB_HOST', 'localhost')
+      : process.env.DB_HOST || 'localhost',
+    port: configService
+      ? configService.get<number>('DB_PORT', 5432)
+      : parseInt(process.env.DB_PORT || '5432', 10),
+    username: configService
+      ? configService.get<string>('DB_USERNAME', 'postgres')
+      : process.env.DB_USERNAME || 'postgres',
+    password: configService
+      ? configService.get<string>('DB_PASSWORD', 'postgres')
+      : process.env.DB_PASSWORD || 'postgres',
+    database: configService
+      ? configService.get<string>('DB_DATABASE', 'knowledge_is_power')
+      : process.env.DB_DATABASE || 'knowledge_is_power',
+    ssl: sslConfig,
+    extra: useSsl ? { ssl: { rejectUnauthorized: false } } : undefined,
+    ...baseConfig,
+  } as DataSourceOptions;
+};
 
 export const typeOrmAsyncConfig: TypeOrmModuleAsyncOptions = {
   inject: [ConfigService],

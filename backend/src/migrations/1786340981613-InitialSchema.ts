@@ -4,9 +4,11 @@ export class InitialSchema1786340981613 implements MigrationInterface {
   name = 'InitialSchema1786340981613';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
     await queryRunner.query(
       `CREATE TYPE "public"."instructor_profiles_status_enum" AS ENUM('pending', 'approved', 'rejected')`,
     );
+
     await queryRunner.query(
       `CREATE TABLE "instructor_profiles" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "bio" text, "status" "public"."instructor_profiles_status_enum" NOT NULL DEFAULT 'pending', "invited_by_user_id" uuid, "approved_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "REL_3fccb84e75aaedf9f9cbdaabf6" UNIQUE ("user_id"), CONSTRAINT "PK_2316af0e9c1cbde4ff47291a975" PRIMARY KEY ("id"))`,
     );
