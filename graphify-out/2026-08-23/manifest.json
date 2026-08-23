@@ -12,9 +12,9 @@
     "semantic_hash": "b6c9c4b64b7092bea720263a47b574cf"
   },
   "backend/package.json": {
-    "mtime": 1787392213.6336153,
-    "seen": 1787397390.869455,
-    "ast_hash": "9c9e496a751810464ba85cdd121ce990",
+    "mtime": 1787501469.8845506,
+    "seen": 1787502764.2167356,
+    "ast_hash": "d71b78671ce14db74fdb8403c739c6fe",
     "semantic_hash": ""
   },
   "backend/src/app.controller.spec.ts": {
@@ -24,10 +24,10 @@
     "semantic_hash": "4a1c0e1133dbda6f6e8f3e60d984eddf"
   },
   "backend/src/app.controller.ts": {
-    "mtime": 1786341985.2226045,
-    "seen": 1787327437.2941012,
-    "ast_hash": "3ab0e83b7d93b85ea489ab994ec79ea1",
-    "semantic_hash": "3ab0e83b7d93b85ea489ab994ec79ea1"
+    "mtime": 1787501404.562552,
+    "seen": 1787502764.2167413,
+    "ast_hash": "2a38f61005a6b2b447b8d344baa7f8ba",
+    "semantic_hash": ""
   },
   "backend/src/app.module.ts": {
     "mtime": 1786979804.1558723,
@@ -114,22 +114,22 @@
     "semantic_hash": "979664fd0cacda7c7d97f2738f09f9fc"
   },
   "backend/src/config/typeorm.config.ts": {
-    "mtime": 1787286376.2175293,
-    "seen": 1787327437.2941496,
-    "ast_hash": "5cbfef6c36c40bfd783989f3f6579df8",
-    "semantic_hash": "5cbfef6c36c40bfd783989f3f6579df8"
+    "mtime": 1787501404.562552,
+    "seen": 1787502764.216769,
+    "ast_hash": "8af4fd00f289ea2022860d53e574241b",
+    "semantic_hash": ""
   },
   "backend/src/main.ts": {
-    "mtime": 1786692905.3744073,
-    "seen": 1787327437.2941527,
-    "ast_hash": "61be53462042751e5538e794fab35d24",
-    "semantic_hash": "61be53462042751e5538e794fab35d24"
+    "mtime": 1787501258.8870099,
+    "seen": 1787502764.216771,
+    "ast_hash": "7a3c344017d4a73062425cd5df08a3ed",
+    "semantic_hash": ""
   },
   "backend/src/migrations/1786340981613-InitialSchema.ts": {
-    "mtime": 1786536924.1099882,
-    "seen": 1787327437.2941556,
-    "ast_hash": "acb897513c13e467eddd24722f709371",
-    "semantic_hash": "acb897513c13e467eddd24722f709371"
+    "mtime": 1787501228.978653,
+    "seen": 1787502764.2167723,
+    "ast_hash": "8df8e8d0652e73a4d8e883236e4995e1",
+    "semantic_hash": ""
   },
   "backend/src/migrations/1786436703834-AddMcqQuiz.ts": {
     "mtime": 1786536924.1099882,

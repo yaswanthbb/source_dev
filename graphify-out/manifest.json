@@ -906,10 +906,10 @@
     "semantic_hash": "acff2a5179731e4b7f9253dfcf4dd3c1"
   },
   "frontend/app/admin/users/page.tsx": {
-    "mtime": 1787032980.913889,
-    "seen": 1787327437.294585,
-    "ast_hash": "2ffa6cbc947f1f99b59d150ffb93febb",
-    "semantic_hash": "2ffa6cbc947f1f99b59d150ffb93febb"
+    "mtime": 1787504989.7989528,
+    "seen": 1787505161.6030736,
+    "ast_hash": "1e043b97030793f81d34ea883892f974",
+    "semantic_hash": ""
   },
   "frontend/app/instructor/concepts/[id]/edit/page.tsx": {
     "mtime": 1787485623.3724859,
@@ -942,10 +942,10 @@
     "semantic_hash": "2721018117971c26b596a9e457e75117"
   },
   "frontend/app/instructor/dashboard/page.tsx": {
-    "mtime": 1786960260.8957138,
-    "seen": 1787327437.2946029,
-    "ast_hash": "87c20c2054ca17cceb3d7488b50551be",
-    "semantic_hash": "87c20c2054ca17cceb3d7488b50551be"
+    "mtime": 1787505023.9364634,
+    "seen": 1787505161.6030817,
+    "ast_hash": "0120343f9d6dbf067be0d353c35e7ff8",
+    "semantic_hash": ""
   },
   "frontend/app/instructor/layout.tsx": {
     "mtime": 1787032488.736265,
@@ -978,9 +978,9 @@
     "semantic_hash": "7c958970f4637ccf46c622dadb6468c9"
   },
   "frontend/app/profile/page.tsx": {
-    "mtime": 1787371742.2323494,
-    "seen": 1787391321.2592907,
-    "ast_hash": "f7c6cdd4555709428c7a344ce64ef7aa",
+    "mtime": 1787505006.5237126,
+    "seen": 1787505161.6030881,
+    "ast_hash": "a344793d86f2ca06ae7aa6633e258127",
     "semantic_hash": ""
   },
   "frontend/app/student/concepts/[id]/page.tsx": {
@@ -1074,10 +1074,10 @@
     "semantic_hash": "025cc405ff25a0fe696c319a49dad077"
   },
   "frontend/components/profile-actions-menu.tsx": {
-    "mtime": 1787313866.1387274,
-    "seen": 1787327437.294673,
-    "ast_hash": "e46f96410c0b28efac542f5940dba8c3",
-    "semantic_hash": "e46f96410c0b28efac542f5940dba8c3"
+    "mtime": 1787505016.060576,
+    "seen": 1787505161.6031053,
+    "ast_hash": "bb71273022a6b8afd6e02b0c16b68ec0",
+    "semantic_hash": ""
   },
   "frontend/components/request-deletion-modal.tsx": {
     "mtime": 1787485321.0926983,
