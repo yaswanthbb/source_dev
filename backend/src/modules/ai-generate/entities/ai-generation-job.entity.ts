@@ -59,4 +59,13 @@ export class AiGenerationJob extends BaseEntity {
 
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string | null;
+
+  @Column({ name: 'failed_count', type: 'int', default: 0 })
+  failedCount: number;
+
+  @Column({ name: 'acknowledged_at', type: 'timestamptz', nullable: true })
+  acknowledgedAt: Date | null;
+
+  @Column({ name: 'retry_of_job_id', type: 'uuid', nullable: true })
+  retryOfJobId: string | null;
 }

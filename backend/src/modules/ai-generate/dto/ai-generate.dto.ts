@@ -108,3 +108,16 @@ export class GenerateConceptMcqsDto {
   @IsString()
   content?: string;
 }
+
+export class AcknowledgeJobsDto {
+  @ApiPropertyOptional({
+    description:
+      'Specific finished job ids to mark as read. Omit to acknowledge all of the user’s unread results.',
+    type: [String],
+    example: ['d9b2d63d-a233-4f9e-bbd8-4d519b7d8e20'],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  jobIds?: string[];
+}
