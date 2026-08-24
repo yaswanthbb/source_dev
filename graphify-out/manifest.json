@@ -198,9 +198,9 @@
     "semantic_hash": "a5c3a2fced7294207c5ed418022811e1"
   },
   "backend/src/modules/ai-generate/ai-generate.controller.ts": {
-    "mtime": 1787567511.2145057,
-    "seen": 1787572136.2669103,
-    "ast_hash": "27f4298135b2aa4498509fa8b6d5da49",
+    "mtime": 1787573973.0587864,
+    "seen": 1787583817.5142808,
+    "ast_hash": "8f20971b8194b72527bd234ac734a311",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.module.ts": {
@@ -210,9 +210,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.ts": {
-    "mtime": 1787567448.898147,
-    "seen": 1787572136.2669117,
-    "ast_hash": "82a4f22bd75e9ec52dc69a8ce5b273a5",
+    "mtime": 1787573893.5892773,
+    "seen": 1787583817.5142834,
+    "ast_hash": "6d6e4ae7ccdbe9c5afb1dcdb4f030912",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.ts": {
@@ -222,9 +222,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/dto/ai-generate.dto.ts": {
-    "mtime": 1787567531.8228211,
-    "seen": 1787572136.2669127,
-    "ast_hash": "234ae38bfdeb179f92e34411600e959e",
+    "mtime": 1787573905.629496,
+    "seen": 1787583817.514286,
+    "ast_hash": "8965f3af7693bdf0b8daf03a38a39849",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/entities/ai-generation-log.entity.ts": {
@@ -924,9 +924,9 @@
     "semantic_hash": ""
   },
   "frontend/app/instructor/content/[roadmapId]/page.tsx": {
-    "mtime": 1787568774.0471172,
-    "seen": 1787572136.2669978,
-    "ast_hash": "853dadb62e92de12a369f917c91d586b",
+    "mtime": 1787582574.4034543,
+    "seen": 1787583817.514445,
+    "ast_hash": "9d8fc77b81074db2b731a7e949f3dc51",
     "semantic_hash": ""
   },
   "frontend/app/instructor/content/new/page.tsx": {
@@ -936,10 +936,10 @@
     "semantic_hash": ""
   },
   "frontend/app/instructor/content/page.tsx": {
-    "mtime": 1786960308.1962595,
-    "seen": 1787327437.2945998,
-    "ast_hash": "2721018117971c26b596a9e457e75117",
-    "semantic_hash": "2721018117971c26b596a9e457e75117"
+    "mtime": 1787578996.6711855,
+    "seen": 1787583817.5144477,
+    "ast_hash": "9065da8b4e5be31fc9566723dbcb9c53",
+    "semantic_hash": ""
   },
   "frontend/app/instructor/dashboard/page.tsx": {
     "mtime": 1787545709.2115896,
@@ -1146,10 +1146,10 @@
     "semantic_hash": "b925d88167660333fb49cd20f43c89d4"
   },
   "frontend/providers/snackbar-provider.tsx": {
-    "mtime": 1786890190.4036734,
-    "seen": 1787327437.294714,
-    "ast_hash": "13ef5f58d534e121ba33225ae9d399ba",
-    "semantic_hash": "13ef5f58d534e121ba33225ae9d399ba"
+    "mtime": 1787582345.6670206,
+    "seen": 1787583817.5145004,
+    "ast_hash": "1080f0776c618477b3030a02165f8687",
+    "semantic_hash": ""
   },
   "frontend/providers/theme-provider.tsx": {
     "mtime": 1787545709.212592,
@@ -1320,9 +1320,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/entities/ai-generation-job.entity.ts": {
-    "mtime": 1787567059.2981396,
-    "seen": 1787572136.2669137,
-    "ast_hash": "990a721a420b35f683e3f679a3e445be",
+    "mtime": 1787573660.825439,
+    "seen": 1787583817.5142875,
+    "ast_hash": "aeb79bc50cef62d6f3fc2288225664b9",
     "semantic_hash": ""
   },
   "frontend/components/ai-jobs-indicator.tsx": {
@@ -1332,9 +1332,27 @@
     "semantic_hash": ""
   },
   "frontend/providers/ai-jobs-provider.tsx": {
-    "mtime": 1787568421.6251743,
-    "seen": 1787572136.267024,
-    "ast_hash": "46df9d4051e18366573e5369c8f08bae",
+    "mtime": 1787574453.360402,
+    "seen": 1787583817.514498,
+    "ast_hash": "cc2199a3214ddd41943b5ab0159e449e",
+    "semantic_hash": ""
+  },
+  "backend/src/migrations/1787700000000-AddAiJobRetryAndAck.ts": {
+    "mtime": 1787573676.2300448,
+    "seen": 1787583817.5142784,
+    "ast_hash": "41ab6110239541b43157bc0f0c667a1e",
+    "semantic_hash": ""
+  },
+  "frontend/components/ai-job-result-modal.tsx": {
+    "mtime": 1787574712.2420187,
+    "seen": 1787583817.5144722,
+    "ast_hash": "44b20b736c5f8b15f6cddde4b2caa62a",
+    "semantic_hash": ""
+  },
+  "frontend/components/ai-job-results-banner.tsx": {
+    "mtime": 1787574749.5124729,
+    "seen": 1787583817.514474,
+    "ast_hash": "aa2e25b7a9187bf0af63ddb9a6e5ab85",
     "semantic_hash": ""
   }
 }
