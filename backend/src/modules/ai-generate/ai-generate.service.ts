@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual, In } from 'typeorm';
+import { Repository, MoreThanOrEqual, In, IsNull } from 'typeorm';
 
 import { AiGenerationLog } from './entities/ai-generation-log.entity';
 import {
@@ -582,16 +582,150 @@ export class AiGenerateService implements OnApplicationBootstrap {
       await this.aiGenerationJobRepository.update(jobId, {
         status: AiGenerationJobStatus.COMPLETED,
         resultSummary: summary,
+        failedCount: summary.failedCount,
         progressTotal: Math.max(
           summary.createdCount + summary.failedCount + summary.skippedCount,
           0,
         ),
         progressCurrent: summary.createdCount + summary.failedCount,
       });
+
+      // Auto-retry (exactly once): if the completed job left some failed items,
+      // spawn a BRAND-NEW job that re-attempts ONLY those items. The retry is
+      // itself a job row (retryOfJobId set) and can never spawn a further retry.
+      if (summary.failedItems.length > 0) {
+        try {
+          const retryJob = await this.aiGenerationJobRepository.save(
+            this.aiGenerationJobRepository.create({
+              requestedByUserId: user.id,
+              jobType,
+              targetId,
+              status: AiGenerationJobStatus.PENDING,
+              progressCurrent: 0,
+              progressTotal: summary.failedItems.length,
+              retryOfJobId: jobId,
+            }),
+          );
+
+          // Hide the original from the results banner — the retry produces the
+          // definitive outcome, so only its single combined card should surface.
+          await this.aiGenerationJobRepository.update(jobId, {
+            acknowledgedAt: new Date(),
+          });
+
+          void this.executeRetryJob(
+            retryJob.id,
+            jobType,
+            targetId,
+            user,
+            targetLabel,
+            summary,
+          ).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logger.error(
+              `Unhandled error in retry job ${retryJob.id}: ${msg}`,
+            );
+          });
+        } catch (retryErr: unknown) {
+          // A failure to SET UP the retry must not corrupt the original's
+          // COMPLETED result. Leave the original unread so its partial result
+          // still surfaces in the banner as a fallback.
+          const msg =
+            retryErr instanceof Error ? retryErr.message : String(retryErr);
+          this.logger.error(`Failed to spawn retry for job ${jobId}: ${msg}`);
+        }
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Generation job ${jobId} failed: ${msg}`);
       await this.aiGenerationJobRepository.update(jobId, {
+        status: AiGenerationJobStatus.FAILED,
+        errorMessage: msg,
+      });
+    }
+  }
+
+  /**
+   * Detached worker for a RETRY job. Re-attempts ONLY the items that failed on
+   * the original run, then records a COMBINED final summary (original successes
+   * + retry outcome) so the single surviving banner card reflects the whole
+   * generation. Structurally cannot spawn another retry.
+   */
+  private async executeRetryJob(
+    retryJobId: string,
+    jobType: AiGenerationJobType,
+    targetId: string,
+    user: User,
+    targetLabel: string,
+    originalSummary: AiGenerationJobResultSummary,
+  ): Promise<void> {
+    await this.aiGenerationJobRepository.update(retryJobId, {
+      status: AiGenerationJobStatus.RUNNING,
+    });
+
+    try {
+      const failedTitles = originalSummary.failedItems.map((f) => f.title);
+
+      let retrySummary: AiGenerationJobResultSummary;
+      switch (jobType) {
+        case AiGenerationJobType.ROADMAP_MODULES:
+          retrySummary = await this.retryRoadmapModulesJob(
+            retryJobId,
+            targetId,
+            user,
+            targetLabel,
+            failedTitles,
+          );
+          break;
+        case AiGenerationJobType.MODULE_CONCEPTS:
+          retrySummary = await this.retryModuleConceptsJob(
+            retryJobId,
+            targetId,
+            user,
+            targetLabel,
+            failedTitles,
+          );
+          break;
+        case AiGenerationJobType.MODULE_MCQS:
+          retrySummary = await this.retryModuleMcqsJob(
+            retryJobId,
+            targetId,
+            user,
+            targetLabel,
+            failedTitles,
+          );
+          break;
+        default:
+          throw new Error(`Unknown job type: ${String(jobType)}`);
+      }
+
+      // Merge the original run's successes with the retry outcome so the single
+      // banner card tells the complete story of this generation.
+      const finalSummary: AiGenerationJobResultSummary = {
+        createdCount: originalSummary.createdCount + retrySummary.createdCount,
+        failedCount: retrySummary.failedItems.length,
+        skippedCount: originalSummary.skippedCount + retrySummary.skippedCount,
+        failedItems: retrySummary.failedItems,
+        targetLabel,
+        itemNoun: originalSummary.itemNoun,
+      };
+
+      await this.aiGenerationJobRepository.update(retryJobId, {
+        status: AiGenerationJobStatus.COMPLETED,
+        resultSummary: finalSummary,
+        failedCount: finalSummary.failedCount,
+        progressTotal: Math.max(
+          retrySummary.createdCount +
+            retrySummary.failedCount +
+            retrySummary.skippedCount,
+          0,
+        ),
+        progressCurrent: retrySummary.createdCount + retrySummary.failedCount,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Retry job ${retryJobId} failed: ${msg}`);
+      await this.aiGenerationJobRepository.update(retryJobId, {
         status: AiGenerationJobStatus.FAILED,
         errorMessage: msg,
       });
@@ -636,6 +770,49 @@ export class AiGenerateService implements OnApplicationBootstrap {
     // Reuse the same owner-or-admin rule used across content endpoints
     this.roadmapsService.checkOwnership(job.requestedByUserId, user);
     return job;
+  }
+
+  /**
+   * Unread terminal (completed/failed) jobs for the current user — the source
+   * for the persistent results banner. Newest first, capped for safety.
+   */
+  async getFinishedResults(user: User): Promise<AiGenerationJob[]> {
+    return this.aiGenerationJobRepository.find({
+      where: {
+        requestedByUserId: user.id,
+        status: In([
+          AiGenerationJobStatus.COMPLETED,
+          AiGenerationJobStatus.FAILED,
+        ]),
+        acknowledgedAt: IsNull(),
+      },
+      order: { createdAt: 'DESC' },
+      take: 20,
+    });
+  }
+
+  /**
+   * Marks finished results as read so they stop re-appearing in the banner.
+   * With no ids, acknowledges ALL of the user's unread terminal results;
+   * otherwise only the given ids (still owner-scoped).
+   */
+  async acknowledgeJobs(
+    user: User,
+    jobIds?: string[],
+  ): Promise<{ acknowledged: number }> {
+    const result = await this.aiGenerationJobRepository.update(
+      {
+        requestedByUserId: user.id,
+        status: In([
+          AiGenerationJobStatus.COMPLETED,
+          AiGenerationJobStatus.FAILED,
+        ]),
+        acknowledgedAt: IsNull(),
+        ...(jobIds && jobIds.length ? { id: In(jobIds) } : {}),
+      },
+      { acknowledgedAt: new Date() },
+    );
+    return { acknowledged: result.affected ?? 0 };
   }
 
   /**
@@ -1046,6 +1223,376 @@ export class AiGenerateService implements OnApplicationBootstrap {
         const error = err as Error;
         this.logger.error(
           `Failed MCQ generation for concept "${concept.title}": ${error.message}`,
+        );
+        failedItems.push({ title: concept.title, reason: error.message });
+      }
+
+      processed++;
+      await this.bumpProgress(jobId, processed);
+    }
+
+    return {
+      createdCount: generatedCount,
+      failedCount: failedItems.length,
+      skippedCount,
+      failedItems,
+      targetLabel,
+      itemNoun: 'MCQ set',
+    };
+  }
+
+  /**
+   * Retry runner: re-attempt the given failed module titles for a roadmap.
+   * Reuses `roadmapsService.createModule`; respects the 6-module cap. Never
+   * generates fresh titles — only re-creates the ones that failed the first run.
+   */
+  private async retryRoadmapModulesJob(
+    jobId: string,
+    roadmapId: string,
+    user: User,
+    targetLabel: string,
+    titles: string[],
+  ): Promise<AiGenerationJobResultSummary> {
+    const roadmap = await this.roadmapRepository.findOne({
+      where: { id: roadmapId },
+      relations: ['modules'],
+    });
+    if (!roadmap) {
+      throw new NotFoundException('Roadmap not found');
+    }
+
+    const existingModules = roadmap.modules || [];
+    const startOrderIndex = existingModules.length;
+    const remainingCount = Math.max(6 - existingModules.length, 0);
+    // Never exceed the 6-module cap when retrying.
+    const titlesToRetry = titles.slice(0, remainingCount);
+
+    await this.aiGenerationJobRepository.update(jobId, {
+      progressTotal: titlesToRetry.length,
+    });
+
+    const failedItems: AiGenerationJobFailedItem[] = [];
+    let createdCount = 0;
+
+    for (let i = 0; i < titlesToRetry.length; i++) {
+      const title = titlesToRetry[i];
+      try {
+        await this.roadmapsService.createModule(roadmapId, user, {
+          title,
+          orderIndex: startOrderIndex + i + 1,
+        });
+        createdCount++;
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.logger.error(
+          `Retry failed creating module "${title}": ${error.message}`,
+        );
+        failedItems.push({ title, reason: error.message });
+      }
+      await this.bumpProgress(jobId, i + 1);
+    }
+
+    return {
+      createdCount,
+      failedCount: failedItems.length,
+      skippedCount: titles.length - titlesToRetry.length,
+      failedItems,
+      targetLabel,
+      itemNoun: 'module',
+    };
+  }
+
+  /**
+   * Retry runner: re-attempt the given failed concept titles for a module.
+   * Rebuilds the same roadmap/sibling context the first run used (seeded with
+   * whatever concepts already exist, including first-run successes). Reuses the
+   * content-generation building blocks; respects the 6-concept cap and quota.
+   */
+  private async retryModuleConceptsJob(
+    jobId: string,
+    moduleId: string,
+    user: User,
+    targetLabel: string,
+    titles: string[],
+  ): Promise<AiGenerationJobResultSummary> {
+    const moduleEntity = await this.moduleRepository.findOne({
+      where: { id: moduleId },
+      relations: ['roadmap', 'moduleConcepts', 'moduleConcepts.concept'],
+    });
+    if (!moduleEntity) {
+      throw new NotFoundException('Module not found');
+    }
+
+    const existingConceptTitles = (moduleEntity.moduleConcepts || [])
+      .map((mc) => mc.concept?.title)
+      .filter((t): t is string => Boolean(t));
+
+    const remainingSlots = Math.max(6 - existingConceptTitles.length, 0);
+    const titlesToRetry = titles.slice(0, remainingSlots);
+
+    await this.aiGenerationJobRepository.update(jobId, {
+      progressTotal: titlesToRetry.length,
+    });
+
+    // Seed sibling awareness with the concepts already on the module so the
+    // retry gets the same context signal the first run built up.
+    const cumulativeSiblingTitles = [...existingConceptTitles];
+    const failedItems: AiGenerationJobFailedItem[] = [];
+    let createdCount = 0;
+    let skippedCount = titles.length - titlesToRetry.length;
+    let processed = 0;
+
+    for (let i = 0; i < titlesToRetry.length; i++) {
+      const title = titlesToRetry[i];
+
+      // Check quota before each individual content call (same as the first run).
+      try {
+        await this.checkRateLimit(user.id, 1);
+      } catch {
+        skippedCount += titlesToRetry.length - processed;
+        break;
+      }
+
+      try {
+        const contentPrompt = buildConceptContentUserPrompt({
+          title,
+          difficulty: 'medium',
+          roadmapTitle: moduleEntity.roadmap?.title,
+          roadmapDescription: moduleEntity.roadmap?.description || undefined,
+          moduleTitle: moduleEntity.title,
+          siblingConceptTitles: cumulativeSiblingTitles,
+        });
+
+        const generatedContent = await this.generateNvidiaCompletion(
+          CONCEPT_CONTENT_SYSTEM_PROMPT,
+          contentPrompt,
+          { maxTokens: 3000, temperature: 0.6 },
+        );
+
+        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT);
+
+        const sanitizedContent =
+          await this.validateAndSanitizeConceptLinks(generatedContent);
+
+        const createdConcept = await this.conceptsService.createConcept(user, {
+          title,
+          content: sanitizedContent,
+          difficulty: ConceptDifficulty.MEDIUM,
+          isAiGenerated: true,
+        });
+
+        await this.roadmapsService.attachConceptToModule(moduleId, user, {
+          conceptId: createdConcept.id,
+        });
+
+        createdCount++;
+        cumulativeSiblingTitles.push(title);
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.logger.error(
+          `Retry failed generating content for concept "${title}": ${error.message}`,
+        );
+        failedItems.push({ title, reason: error.message });
+      }
+
+      processed++;
+      await this.bumpProgress(jobId, processed);
+    }
+
+    return {
+      createdCount,
+      failedCount: failedItems.length,
+      skippedCount,
+      failedItems,
+      targetLabel,
+      itemNoun: 'concept',
+    };
+  }
+
+  /**
+   * Retry runner: re-attempt MCQ generation for the given failed concept titles.
+   * Selects module concepts whose title is in the retry set AND that still lack
+   * MCQs, then reuses the same 2-attempt generate/parse/create loop.
+   */
+  private async retryModuleMcqsJob(
+    jobId: string,
+    moduleId: string,
+    user: User,
+    targetLabel: string,
+    conceptTitles: string[],
+  ): Promise<AiGenerationJobResultSummary> {
+    const moduleEntity = await this.moduleRepository.findOne({
+      where: { id: moduleId },
+      relations: ['roadmap', 'moduleConcepts', 'moduleConcepts.concept'],
+    });
+    if (!moduleEntity) {
+      throw new NotFoundException('Module not found');
+    }
+
+    const emptySummary: AiGenerationJobResultSummary = {
+      createdCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      failedItems: [],
+      targetLabel,
+      itemNoun: 'MCQ set',
+    };
+
+    const moduleConcepts = moduleEntity.moduleConcepts || [];
+    if (moduleConcepts.length === 0) {
+      return emptySummary;
+    }
+
+    // Only re-attempt concepts that failed the first time AND still lack MCQs.
+    const retryTitleSet = new Set(conceptTitles);
+    const conceptIds = moduleConcepts.map((mc) => mc.conceptId);
+    const existingQuestionCounts = await this.mcqQuestionRepository
+      .createQueryBuilder('q')
+      .select('q.concept_id', 'conceptId')
+      .addSelect('COUNT(q.id)', 'count')
+      .where('q.concept_id IN (:...conceptIds)', { conceptIds })
+      .groupBy('q.concept_id')
+      .getRawMany<{ conceptId: string; count: string }>();
+
+    const conceptsWithQuestions = new Set(
+      existingQuestionCounts
+        .filter((row) => parseInt(row.count, 10) > 0)
+        .map((row) => row.conceptId),
+    );
+
+    const conceptsNeedingMcqs = moduleConcepts
+      .filter(
+        (mc) =>
+          mc.concept &&
+          retryTitleSet.has(mc.concept.title) &&
+          !conceptsWithQuestions.has(mc.conceptId),
+      )
+      .map((mc) => mc.concept);
+
+    if (conceptsNeedingMcqs.length === 0) {
+      return emptySummary;
+    }
+
+    await this.aiGenerationJobRepository.update(jobId, {
+      progressTotal: conceptsNeedingMcqs.length,
+    });
+
+    const failedItems: AiGenerationJobFailedItem[] = [];
+    let generatedCount = 0;
+    let skippedCount = 0;
+    let processed = 0;
+
+    for (const concept of conceptsNeedingMcqs) {
+      // Check quota before each concept MCQ generation.
+      try {
+        await this.checkRateLimit(user.id, 1);
+      } catch {
+        skippedCount = conceptsNeedingMcqs.length - processed;
+        break;
+      }
+
+      try {
+        const userPrompt = buildConceptMcqUserPrompt(
+          concept.title,
+          concept.content,
+        );
+
+        let parsedQuestions: ParsedMcqQuestion[] | null = null;
+        let attempt = 0;
+        const maxAttempts = 2; // Initial attempt + 1 automatic retry
+
+        while (attempt < maxAttempts && !parsedQuestions) {
+          attempt++;
+          try {
+            const responseText = await this.generateNvidiaCompletion(
+              CONCEPT_MCQ_SYSTEM_PROMPT,
+              userPrompt,
+              {
+                maxTokens: 2000,
+                temperature: attempt === 1 ? 0.3 : 0.4,
+                responseFormat: { type: 'json_object' },
+              },
+            );
+
+            if (attempt === 1) {
+              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
+            }
+
+            parsedQuestions = this.parseMcqQuestions(
+              responseText,
+              concept.title,
+            );
+            if (!parsedQuestions && attempt < maxAttempts) {
+              this.logger.warn(
+                `Retry parse failed on attempt 1 for concept "${concept.title}". Automatically retrying with fresh completion...`,
+              );
+            }
+          } catch (apiErr: unknown) {
+            if (attempt >= maxAttempts) throw apiErr;
+            const errMsg =
+              apiErr instanceof Error ? apiErr.message : String(apiErr);
+            this.logger.warn(
+              `Retry API error on attempt 1 for concept "${concept.title}": ${errMsg}. Retrying...`,
+            );
+          }
+        }
+
+        if (!parsedQuestions || parsedQuestions.length === 0) {
+          this.logger.error(
+            `Retry invalid MCQ JSON response after ${maxAttempts} attempts for concept "${concept.title}"`,
+          );
+          failedItems.push({
+            title: concept.title,
+            reason: 'Model returned no valid questions after 2 attempts.',
+          });
+          processed++;
+          await this.bumpProgress(jobId, processed);
+          continue;
+        }
+
+        // Validate and create questions sequentially using QuizService
+        let createdForConcept = 0;
+        for (let qIdx = 0; qIdx < parsedQuestions.length; qIdx++) {
+          const q = parsedQuestions[qIdx];
+          if (
+            !q.questionText ||
+            !Array.isArray(q.options) ||
+            q.options.length < 2
+          ) {
+            continue;
+          }
+
+          const correctOptions = q.options.filter(
+            (o: ParsedMcqOption) => o.isCorrect === true,
+          );
+          if (correctOptions.length !== 1) {
+            continue;
+          }
+
+          await this.quizService.createQuestion(concept.id, user, {
+            questionText: q.questionText,
+            orderIndex: qIdx + 1,
+            options: q.options.map((opt: ParsedMcqOption, oIdx: number) => ({
+              optionText: opt.optionText || '',
+              isCorrect: Boolean(opt.isCorrect),
+              orderIndex: oIdx + 1,
+            })),
+          });
+          createdForConcept++;
+        }
+
+        if (createdForConcept > 0) {
+          generatedCount++;
+        } else {
+          failedItems.push({
+            title: concept.title,
+            reason: 'No valid questions passed validation.',
+          });
+        }
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.logger.error(
+          `Retry failed MCQ generation for concept "${concept.title}": ${error.message}`,
         );
         failedItems.push({ title: concept.title, reason: error.message });
       }

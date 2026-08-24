@@ -27,6 +27,7 @@ import {
   GenerateModuleMcqsDto,
   GenerateConceptContentDto,
   GenerateConceptMcqsDto,
+  AcknowledgeJobsDto,
 } from './dto/ai-generate.dto';
 import { AiGenerationJobType } from '../../common/enums/ai-generation-job.enum';
 import { AiGenerationJob } from './entities/ai-generation-job.entity';
@@ -66,6 +67,38 @@ export class AiGenerateController {
   })
   async getActiveJobs(@CurrentUser() user: User): Promise<AiGenerationJob[]> {
     return this.aiGenerateService.getActiveJobs(user);
+  }
+
+  @Get('jobs/results')
+  @ApiOperation({
+    summary:
+      'List unread finished (completed/failed) generation results for the persistent results banner',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of unread finished jobs (newest first).',
+  })
+  async getFinishedResults(
+    @CurrentUser() user: User,
+  ): Promise<AiGenerationJob[]> {
+    return this.aiGenerateService.getFinishedResults(user);
+  }
+
+  @Post('jobs/acknowledge')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Mark finished generation results as read so they stop re-appearing in the banner',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Number of results marked as acknowledged.',
+  })
+  async acknowledgeJobs(
+    @CurrentUser() user: User,
+    @Body() dto: AcknowledgeJobsDto,
+  ): Promise<{ acknowledged: number }> {
+    return this.aiGenerateService.acknowledgeJobs(user, dto.jobIds);
   }
 
   @Get('jobs/:jobId')
