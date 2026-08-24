@@ -3,9 +3,8 @@ import {
   Post,
   Get,
   Body,
+  Param,
   UseGuards,
-  Req,
-  Res,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -15,7 +14,6 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import type { Response, Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -24,18 +22,14 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { User } from '../users/entities/user.entity';
 import { AiGenerateService } from './ai-generate.service';
 import {
-  GenerateRoadmapDescriptionDto,
   GenerateRoadmapModulesDto,
   GenerateModuleConceptsDto,
   GenerateModuleMcqsDto,
   GenerateConceptContentDto,
   GenerateConceptMcqsDto,
 } from './dto/ai-generate.dto';
-import {
-  ROADMAP_DESCRIPTION_SYSTEM_PROMPT,
-  buildRoadmapDescriptionUserPrompt,
-} from './constants/prompts';
-import { AiGenerationType } from '../../common/enums/ai-generation-type.enum';
+import { AiGenerationJobType } from '../../common/enums/ai-generation-job.enum';
+import { AiGenerationJob } from './entities/ai-generation-job.entity';
 
 @ApiTags('AI Generate')
 @ApiBearerAuth('bearer-auth')
@@ -61,76 +55,74 @@ export class AiGenerateController {
     return { remaining, limit: 20 };
   }
 
-  @Post('roadmap-description')
-  @HttpCode(HttpStatus.OK)
+  @Get('jobs/active')
   @ApiOperation({
     summary:
-      'Stream generated roadmap description via Server-Sent Events (live typing)',
+      'List all pending/running AI generation jobs for the current instructor',
   })
   @ApiResponse({
     status: 200,
-    description: 'SSE stream of description text chunks.',
+    description: 'Array of active generation jobs (newest first).',
+  })
+  async getActiveJobs(@CurrentUser() user: User): Promise<AiGenerationJob[]> {
+    return this.aiGenerateService.getActiveJobs(user);
+  }
+
+  @Get('jobs/:jobId')
+  @ApiOperation({
+    summary: 'Get the current status, progress, and result of a generation job',
   })
   @ApiResponse({
-    status: 429,
-    description: 'Daily rate limit of 20 generations exceeded.',
+    status: 200,
+    description: 'The generation job record.',
   })
-  async generateRoadmapDescription(
+  @ApiResponse({ status: 404, description: 'Job not found.' })
+  async getJob(
     @CurrentUser() user: User,
-    @Body() dto: GenerateRoadmapDescriptionDto,
-    @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    await this.aiGenerateService.checkRateLimit(user.id);
-    await this.aiGenerateService.logGeneration(
-      user.id,
-      AiGenerationType.ROADMAP_DESCRIPTION,
-    );
-
-    const abortController = new AbortController();
-    req.on('close', () => abortController.abort());
-
-    const systemPrompt = ROADMAP_DESCRIPTION_SYSTEM_PROMPT;
-    const userPrompt = buildRoadmapDescriptionUserPrompt(dto.title);
-
-    await this.aiGenerateService.streamNvidiaCompletion(
-      systemPrompt,
-      userPrompt,
-      res,
-      { maxTokens: 120 },
-      abortController.signal,
-    );
+    @Param('jobId') jobId: string,
+  ): Promise<AiGenerationJob> {
+    return this.aiGenerateService.getJob(jobId, user);
   }
 
   @Post('roadmap-modules')
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
-    summary: 'Generate and create ordered modules for a roadmap using AI',
+    summary:
+      'Start a background job to generate and create ordered modules for a roadmap',
   })
   @ApiResponse({
-    status: 200,
-    description: 'Created modules returned.',
+    status: 202,
+    description: 'Job accepted. Returns the job id to poll for progress.',
   })
   @ApiResponse({
-    status: 429,
-    description: 'Daily rate limit exceeded.',
+    status: 400,
+    description: 'A generation is already in progress for this roadmap.',
   })
+  @ApiResponse({ status: 429, description: 'Daily rate limit exceeded.' })
   async generateRoadmapModules(
     @CurrentUser() user: User,
     @Body() dto: GenerateRoadmapModulesDto,
-  ) {
-    return this.aiGenerateService.generateRoadmapModules(dto.roadmapId, user);
+  ): Promise<{ jobId: string }> {
+    return this.aiGenerateService.startGenerationJob(
+      AiGenerationJobType.ROADMAP_MODULES,
+      dto.roadmapId,
+      user,
+    );
   }
 
   @Post('module-concepts')
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary:
-      'Generate concept titles and full article content sequentially for a module',
+      'Start a background job to generate concept titles and full article content for a module',
   })
   @ApiResponse({
-    status: 200,
-    description: 'Created concepts with full content attached to module.',
+    status: 202,
+    description: 'Job accepted. Returns the job id to poll for progress.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'A generation is already in progress for this module.',
   })
   @ApiResponse({
     status: 429,
@@ -139,29 +131,38 @@ export class AiGenerateController {
   async generateModuleConcepts(
     @CurrentUser() user: User,
     @Body() dto: GenerateModuleConceptsDto,
-  ) {
-    return this.aiGenerateService.generateModuleConcepts(dto.moduleId, user);
+  ): Promise<{ jobId: string }> {
+    return this.aiGenerateService.startGenerationJob(
+      AiGenerationJobType.MODULE_CONCEPTS,
+      dto.moduleId,
+      user,
+    );
   }
 
   @Post('module-mcqs')
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary:
-      'Generate and attach 5 assessment MCQs for every concept in a module lacking questions',
+      'Start a background job to generate and attach assessment MCQs for every concept in a module lacking questions',
   })
   @ApiResponse({
-    status: 200,
-    description: 'MCQs generated and attached to concepts in the module.',
+    status: 202,
+    description: 'Job accepted. Returns the job id to poll for progress.',
   })
   @ApiResponse({
-    status: 429,
-    description: 'Daily rate limit exceeded.',
+    status: 400,
+    description: 'A generation is already in progress for this module.',
   })
+  @ApiResponse({ status: 429, description: 'Daily rate limit exceeded.' })
   async generateModuleMcqs(
     @CurrentUser() user: User,
     @Body() dto: GenerateModuleMcqsDto,
-  ) {
-    return this.aiGenerateService.generateModuleMcqs(dto.moduleId, user);
+  ): Promise<{ jobId: string }> {
+    return this.aiGenerateService.startGenerationJob(
+      AiGenerationJobType.MODULE_MCQS,
+      dto.moduleId,
+      user,
+    );
   }
 
   @Post('concept-content')

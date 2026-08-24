@@ -7,16 +7,6 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class GenerateRoadmapDescriptionDto {
-  @ApiProperty({
-    description: 'Title of the roadmap to generate a description for',
-    example: 'Distributed Systems & Cloud Architecture in Go',
-  })
-  @IsString()
-  @IsNotEmpty()
-  title: string;
-}
-
 export class GenerateRoadmapModulesDto {
   @ApiProperty({
     description: 'ID of the roadmap to generate modules for',

@@ -6,14 +6,23 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
+  OnApplicationBootstrap,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm';
+import { Repository, MoreThanOrEqual, In } from 'typeorm';
 
-import type { Response } from 'express';
 import { AiGenerationLog } from './entities/ai-generation-log.entity';
+import {
+  AiGenerationJob,
+  AiGenerationJobFailedItem,
+  AiGenerationJobResultSummary,
+} from './entities/ai-generation-job.entity';
 import { AiGenerationType } from '../../common/enums/ai-generation-type.enum';
+import {
+  AiGenerationJobType,
+  AiGenerationJobStatus,
+} from '../../common/enums/ai-generation-job.enum';
 import { ConceptDifficulty } from '../../common/enums/concept-difficulty.enum';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../content/entities/module.entity';
@@ -55,12 +64,14 @@ interface ParsedMcqQuestion {
 const DAILY_LIMIT = 20;
 
 @Injectable()
-export class AiGenerateService {
+export class AiGenerateService implements OnApplicationBootstrap {
   private readonly logger = new Logger(AiGenerateService.name);
 
   constructor(
     @InjectRepository(AiGenerationLog)
     private readonly aiGenerationLogRepository: Repository<AiGenerationLog>,
+    @InjectRepository(AiGenerationJob)
+    private readonly aiGenerationJobRepository: Repository<AiGenerationJob>,
     @InjectRepository(Roadmap)
     private readonly roadmapRepository: Repository<Roadmap>,
     @InjectRepository(ModuleEntity)
@@ -76,6 +87,32 @@ export class AiGenerateService {
     private readonly conceptsService: ConceptsService,
     private readonly quizService: QuizService,
   ) {}
+
+  /**
+   * On startup, reconcile jobs orphaned by a previous process exit.
+   * Because generation runs as detached in-process work (no external queue),
+   * any job still 'pending' or 'running' when the process died can never resume.
+   * We mark them 'failed' so the UI reflects reality instead of a stuck spinner.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    const result = await this.aiGenerationJobRepository.update(
+      {
+        status: In([
+          AiGenerationJobStatus.PENDING,
+          AiGenerationJobStatus.RUNNING,
+        ]),
+      },
+      {
+        status: AiGenerationJobStatus.FAILED,
+        errorMessage: 'Interrupted by a server restart before completion.',
+      },
+    );
+    if (result.affected && result.affected > 0) {
+      this.logger.warn(
+        `Marked ${result.affected} orphaned AI generation job(s) as failed after restart.`,
+      );
+    }
+  }
 
   /**
    * Check if the user has reached their daily limit (UTC calendar day).
@@ -227,183 +264,6 @@ export class AiGenerateService {
     };
     const rawContent = data.choices?.[0]?.message?.content || '';
     return this.cleanModelOutput(rawContent);
-  }
-
-  /**
-   * Proxies streaming completion request to NVIDIA NIM API and pipes SSE chunks to client response.
-   * Kept for Roadmap Description generation.
-   */
-  async streamNvidiaCompletion(
-    systemPrompt: string,
-    userPrompt: string,
-    res: Response,
-    options?: { maxTokens?: number; temperature?: number },
-    signal?: AbortSignal,
-  ): Promise<void> {
-    const apiKey = this.configService.get<string>('NVIDIA_API_KEY')?.trim();
-    const apiUrl =
-      this.configService.get<string>('NVIDIA_API_URL')?.trim() ||
-      'https://integrate.api.nvidia.com/v1/chat/completions';
-    const modelId =
-      this.configService.get<string>('NVIDIA_MODEL_ID')?.trim() ||
-      'meta/llama-3.1-70b-instruct';
-
-    if (!apiKey) {
-      throw new InternalServerErrorException(
-        'NVIDIA API key (NVIDIA_API_KEY) is not configured on the server.',
-      );
-    }
-
-    const maxTokens = options?.maxTokens ?? 2048;
-    const temperature = options?.temperature ?? 0.6;
-
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders?.();
-
-    let nvidiaRes: globalThis.Response;
-
-    try {
-      nvidiaRes = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-        },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          stream: true,
-          temperature,
-          top_p: 0.9,
-          max_tokens: maxTokens,
-        }),
-        signal,
-      });
-    } catch (err: unknown) {
-      const error = err as Error;
-      this.logger.error(
-        `Failed to connect to NVIDIA NIM API: ${error.message}`,
-      );
-      if (!res.headersSent) {
-        throw new HttpException(
-          `Unable to reach NVIDIA NIM API: ${error.message}`,
-          HttpStatus.BAD_GATEWAY,
-        );
-      }
-      res.write(
-        `data: ${JSON.stringify({ error: `Connection failed: ${error.message}` })}\n\n`,
-      );
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    }
-
-    if (!nvidiaRes.ok) {
-      const errorBody = await nvidiaRes.text();
-      this.logger.error(
-        `NVIDIA NIM API returned error HTTP ${nvidiaRes.status}: ${errorBody}`,
-      );
-      res.write(
-        `data: ${JSON.stringify({ error: `NVIDIA API Error (${nvidiaRes.status}): ${errorBody}` })}\n\n`,
-      );
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    }
-
-    if (!nvidiaRes.body) {
-      res.write(
-        `data: ${JSON.stringify({ error: 'Empty response body from NVIDIA API' })}\n\n`,
-      );
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    }
-
-    const reader = nvidiaRes.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith(':')) continue;
-
-          if (trimmed === 'data: [DONE]') {
-            res.write('data: [DONE]\n\n');
-            res.end();
-            return;
-          }
-
-          if (trimmed.startsWith('data: ')) {
-            const jsonStr = trimmed.slice(6);
-            try {
-              const parsed = JSON.parse(jsonStr) as {
-                choices?: Array<{ delta?: { content?: string } }>;
-              };
-              const deltaContent = parsed.choices?.[0]?.delta?.content;
-              if (deltaContent) {
-                res.write(
-                  `data: ${JSON.stringify({ content: deltaContent })}\n\n`,
-                );
-              }
-            } catch {
-              // Non-JSON line, continue buffering
-            }
-          }
-        }
-      }
-
-      if (buffer.trim()) {
-        const trimmed = buffer.trim();
-        if (trimmed === 'data: [DONE]') {
-          res.write('data: [DONE]\n\n');
-        } else if (trimmed.startsWith('data: ')) {
-          try {
-            const parsed = JSON.parse(trimmed.slice(6)) as {
-              choices?: Array<{ delta?: { content?: string } }>;
-            };
-            const deltaContent = parsed.choices?.[0]?.delta?.content;
-            if (deltaContent) {
-              res.write(
-                `data: ${JSON.stringify({ content: deltaContent })}\n\n`,
-              );
-            }
-          } catch {
-            // ignore malformed tail
-          }
-        }
-      }
-
-      res.write('data: [DONE]\n\n');
-      res.end();
-    } catch (err: unknown) {
-      const error = err as Error;
-      this.logger.warn(
-        `Stream reading error or client abort: ${error.message}`,
-      );
-      try {
-        res.write('data: [DONE]\n\n');
-        res.end();
-      } catch {
-        // response may already be closed
-      }
-    }
   }
 
   /**
@@ -560,36 +420,246 @@ export class AiGenerateService {
   }
 
   /**
-   * Part 3: Generate Modules for a Roadmap (up to 6 total modules)
+   * Entry point for the 3 batch generators. Runs synchronous pre-checks
+   * (existence, ownership, capacity, rate-limit, duplicate-job) so the caller
+   * gets an immediate error, then creates a job row and kicks off the actual
+   * generation as detached in-process work (NOT awaited). Returns the job id.
    */
-  async generateRoadmapModules(
+  async startGenerationJob(
+    jobType: AiGenerationJobType,
+    targetId: string,
+    user: User,
+  ): Promise<{ jobId: string }> {
+    // 1. Validate target + capacity + quota (throws 404 / 403 / 400 / 429)
+    const { targetLabel } = await this.validateJobStart(jobType, targetId, user);
+
+    // 2. Reject if a generation is already pending/running for this target
+    const existing = await this.aiGenerationJobRepository.findOne({
+      where: {
+        targetId,
+        status: In([
+          AiGenerationJobStatus.PENDING,
+          AiGenerationJobStatus.RUNNING,
+        ]),
+      },
+    });
+    if (existing) {
+      const noun =
+        jobType === AiGenerationJobType.ROADMAP_MODULES ? 'roadmap' : 'module';
+      throw new BadRequestException(
+        `A generation is already in progress for this ${noun}. Please wait for it to finish.`,
+      );
+    }
+
+    // 3. Create the job row
+    const job = await this.aiGenerationJobRepository.save(
+      this.aiGenerationJobRepository.create({
+        requestedByUserId: user.id,
+        jobType,
+        targetId,
+        status: AiGenerationJobStatus.PENDING,
+        progressCurrent: 0,
+        progressTotal: 0,
+      }),
+    );
+
+    // 4. Fire-and-forget: run the generation without awaiting the HTTP response
+    void this.executeJob(job.id, jobType, targetId, user, targetLabel).catch(
+      (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Unhandled error in generation job ${job.id}: ${msg}`);
+      },
+    );
+
+    return { jobId: job.id };
+  }
+
+  /**
+   * Synchronous pre-flight validation shared by all 3 job types.
+   * Returns a human-readable label for the target (used in completion toasts).
+   */
+  private async validateJobStart(
+    jobType: AiGenerationJobType,
+    targetId: string,
+    user: User,
+  ): Promise<{ targetLabel: string }> {
+    if (jobType === AiGenerationJobType.ROADMAP_MODULES) {
+      const roadmap = await this.roadmapRepository.findOne({
+        where: { id: targetId },
+        relations: ['modules'],
+      });
+      if (!roadmap) {
+        throw new NotFoundException('Roadmap not found');
+      }
+      this.roadmapsService.checkOwnership(roadmap.createdById, user);
+      const existingModules = roadmap.modules || [];
+      if (existingModules.length >= 6) {
+        throw new BadRequestException(
+          'Roadmap module limit reached (6/6). Cannot generate more modules.',
+        );
+      }
+      await this.checkRateLimit(user.id, 1);
+      return { targetLabel: roadmap.title };
+    }
+
+    // Module-based jobs (concepts / mcqs)
+    const moduleEntity = await this.moduleRepository.findOne({
+      where: { id: targetId },
+      relations: ['roadmap', 'moduleConcepts', 'moduleConcepts.concept'],
+    });
+    if (!moduleEntity) {
+      throw new NotFoundException('Module not found');
+    }
+    this.roadmapsService.checkOwnership(moduleEntity.roadmap?.createdById, user);
+
+    if (jobType === AiGenerationJobType.MODULE_CONCEPTS) {
+      const existingConceptTitles = (moduleEntity.moduleConcepts || [])
+        .map((mc) => mc.concept?.title)
+        .filter((t): t is string => Boolean(t));
+      if (existingConceptTitles.length >= 6) {
+        throw new BadRequestException(
+          'Concept limit reached (6/6) for this module. Cannot generate more concepts.',
+        );
+      }
+      const remainingSlots = 6 - existingConceptTitles.length;
+      // 1 title-list call + up to remainingSlots content calls
+      await this.checkRateLimit(user.id, remainingSlots + 1);
+    } else {
+      // MODULE_MCQS
+      await this.checkRateLimit(user.id, 1);
+    }
+
+    return { targetLabel: moduleEntity.title };
+  }
+
+  /**
+   * Detached worker: marks the job running, dispatches to the per-type runner,
+   * and records the final result (completed + summary, or failed + errorMessage
+   * for a catastrophic failure before any items could be processed).
+   */
+  private async executeJob(
+    jobId: string,
+    jobType: AiGenerationJobType,
+    targetId: string,
+    user: User,
+    targetLabel: string,
+  ): Promise<void> {
+    await this.aiGenerationJobRepository.update(jobId, {
+      status: AiGenerationJobStatus.RUNNING,
+    });
+
+    try {
+      let summary: AiGenerationJobResultSummary;
+      switch (jobType) {
+        case AiGenerationJobType.ROADMAP_MODULES:
+          summary = await this.runRoadmapModulesJob(
+            jobId,
+            targetId,
+            user,
+            targetLabel,
+          );
+          break;
+        case AiGenerationJobType.MODULE_CONCEPTS:
+          summary = await this.runModuleConceptsJob(
+            jobId,
+            targetId,
+            user,
+            targetLabel,
+          );
+          break;
+        case AiGenerationJobType.MODULE_MCQS:
+          summary = await this.runModuleMcqsJob(
+            jobId,
+            targetId,
+            user,
+            targetLabel,
+          );
+          break;
+        default:
+          throw new Error(`Unknown job type: ${String(jobType)}`);
+      }
+
+      await this.aiGenerationJobRepository.update(jobId, {
+        status: AiGenerationJobStatus.COMPLETED,
+        resultSummary: summary,
+        progressTotal: Math.max(
+          summary.createdCount + summary.failedCount + summary.skippedCount,
+          0,
+        ),
+        progressCurrent: summary.createdCount + summary.failedCount,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Generation job ${jobId} failed: ${msg}`);
+      await this.aiGenerationJobRepository.update(jobId, {
+        status: AiGenerationJobStatus.FAILED,
+        errorMessage: msg,
+      });
+    }
+  }
+
+  /**
+   * Persists incremental progress after each individual item completes.
+   */
+  private async bumpProgress(jobId: string, current: number): Promise<void> {
+    await this.aiGenerationJobRepository.update(jobId, {
+      progressCurrent: current,
+    });
+  }
+
+  /**
+   * All pending/running jobs for the current user, newest first.
+   */
+  async getActiveJobs(user: User): Promise<AiGenerationJob[]> {
+    return this.aiGenerationJobRepository.find({
+      where: {
+        requestedByUserId: user.id,
+        status: In([
+          AiGenerationJobStatus.PENDING,
+          AiGenerationJobStatus.RUNNING,
+        ]),
+      },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * A single job by id. Only the requester (or an admin) may read it.
+   */
+  async getJob(jobId: string, user: User): Promise<AiGenerationJob> {
+    const job = await this.aiGenerationJobRepository.findOne({
+      where: { id: jobId },
+    });
+    if (!job) {
+      throw new NotFoundException('Generation job not found');
+    }
+    // Reuse the same owner-or-admin rule used across content endpoints
+    this.roadmapsService.checkOwnership(job.requestedByUserId, user);
+    return job;
+  }
+
+  /**
+   * Runner: Generate Modules for a Roadmap (up to 6 total modules).
+   * Updates job progress after each module is created.
+   */
+  private async runRoadmapModulesJob(
+    jobId: string,
     roadmapId: string,
     user: User,
-  ): Promise<{ modules: ModuleEntity[]; count: number }> {
-    await this.checkRateLimit(user.id, 1);
-
+    targetLabel: string,
+  ): Promise<AiGenerationJobResultSummary> {
     const roadmap = await this.roadmapRepository.findOne({
       where: { id: roadmapId },
       relations: ['modules'],
     });
-
     if (!roadmap) {
       throw new NotFoundException('Roadmap not found');
     }
 
-    this.roadmapsService.checkOwnership(roadmap.createdById, user);
-
     const existingModules = roadmap.modules || [];
-    if (existingModules.length >= 6) {
-      throw new BadRequestException(
-        'Roadmap module limit reached (6/6). Cannot generate more modules.',
-      );
-    }
-
     const remainingCount = 6 - existingModules.length;
     const existingTitles = existingModules.map((m) => m.title);
 
-    const systemPrompt = ROADMAP_MODULES_SYSTEM_PROMPT;
     const userPrompt = buildRoadmapModulesUserPrompt(
       roadmap.title,
       roadmap.description || undefined,
@@ -598,7 +668,7 @@ export class AiGenerateService {
     );
 
     const responseText = await this.generateNvidiaCompletion(
-      systemPrompt,
+      ROADMAP_MODULES_SYSTEM_PROMPT,
       userPrompt,
       { maxTokens: 400, temperature: 0.5 },
     );
@@ -608,71 +678,74 @@ export class AiGenerateService {
     const parsedTitles = this.parseStringArray(responseText);
     const moduleTitles = parsedTitles.slice(0, remainingCount);
     if (moduleTitles.length === 0) {
+      // Catastrophic: nothing could be processed
       throw new HttpException(
         'AI failed to produce a valid list of module titles. Please try again.',
         HttpStatus.BAD_GATEWAY,
       );
     }
 
-    const createdModules: ModuleEntity[] = [];
+    await this.aiGenerationJobRepository.update(jobId, {
+      progressTotal: moduleTitles.length,
+    });
+
     const startOrderIndex = existingModules.length;
+    const failedItems: AiGenerationJobFailedItem[] = [];
+    let createdCount = 0;
 
     for (let i = 0; i < moduleTitles.length; i++) {
       const title = moduleTitles[i];
-      const created = await this.roadmapsService.createModule(roadmapId, user, {
-        title,
-        orderIndex: startOrderIndex + i + 1,
-      });
-      createdModules.push(created);
+      try {
+        await this.roadmapsService.createModule(roadmapId, user, {
+          title,
+          orderIndex: startOrderIndex + i + 1,
+        });
+        createdCount++;
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.logger.error(
+          `Failed creating module "${title}": ${error.message}`,
+        );
+        failedItems.push({ title, reason: error.message });
+      }
+      await this.bumpProgress(jobId, i + 1);
     }
 
     return {
-      modules: createdModules,
-      count: createdModules.length,
+      createdCount,
+      failedCount: failedItems.length,
+      skippedCount: 0,
+      failedItems,
+      targetLabel,
+      itemNoun: 'module',
     };
   }
 
+
   /**
-   * Part 4: Generate Concepts (with content) for a Module in sequence (up to 6 total concepts)
+   * Runner: Generate Concepts (with content) for a Module in sequence
+   * (up to 6 total concepts). Updates job progress after each concept
+   * is processed (created or failed).
    */
-  async generateModuleConcepts(
+  private async runModuleConceptsJob(
+    jobId: string,
     moduleId: string,
     user: User,
-  ): Promise<{
-    createdConcepts: Concept[];
-    totalRequested: number;
-    createdCount: number;
-    skippedCount: number;
-    error?: string;
-  }> {
+    targetLabel: string,
+  ): Promise<AiGenerationJobResultSummary> {
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id: moduleId },
       relations: ['roadmap', 'moduleConcepts', 'moduleConcepts.concept'],
     });
-
     if (!moduleEntity) {
       throw new NotFoundException('Module not found');
     }
-
-    this.roadmapsService.checkOwnership(
-      moduleEntity.roadmap?.createdById,
-      user,
-    );
 
     const existingConceptTitles = (moduleEntity.moduleConcepts || [])
       .map((mc) => mc.concept?.title)
       .filter((t): t is string => Boolean(t));
 
-    if (existingConceptTitles.length >= 6) {
-      throw new BadRequestException(
-        'Concept limit reached (6/6) for this module. Cannot generate more concepts.',
-      );
-    }
-
     const remainingSlots = 6 - existingConceptTitles.length;
-
-    // Upfront check: require at least (remainingSlots + 1) slots (1 title + remainingSlots content)
-    await this.checkRateLimit(user.id, remainingSlots + 1);
 
     // Fetch all sibling modules belonging to this roadmap to enforce scope isolation and position pacing
     const allRoadmapModules = await this.moduleRepository.find({
@@ -687,7 +760,6 @@ export class AiGenerateService {
       .map((m) => ({ title: m.title, orderIndex: m.orderIndex }));
 
     // Phase 1: Generate concept title list with roadmap arc, top-up target, and sibling module awareness
-    const systemPrompt = MODULE_CONCEPTS_SYSTEM_PROMPT;
     const userPrompt = buildModuleConceptsUserPrompt({
       roadmapTitle: moduleEntity.roadmap?.title,
       roadmapDescription: moduleEntity.roadmap?.description || undefined,
@@ -700,7 +772,7 @@ export class AiGenerateService {
     });
 
     const titlesResponse = await this.generateNvidiaCompletion(
-      systemPrompt,
+      MODULE_CONCEPTS_SYSTEM_PROMPT,
       userPrompt,
       { maxTokens: 400, temperature: 0.5 },
     );
@@ -710,17 +782,23 @@ export class AiGenerateService {
     const parsedTitles = this.parseStringArray(titlesResponse);
     const conceptTitles = parsedTitles.slice(0, remainingSlots);
     if (conceptTitles.length === 0) {
+      // Catastrophic: nothing could be processed
       throw new HttpException(
         'AI failed to produce a valid list of concept titles. Please try again.',
         HttpStatus.BAD_GATEWAY,
       );
     }
 
+    await this.aiGenerationJobRepository.update(jobId, {
+      progressTotal: conceptTitles.length,
+    });
+
     // Phase 2: Generate full content for each concept sequentially with sibling awareness
-    const createdConcepts: Concept[] = [];
     const cumulativeSiblingTitles = [...existingConceptTitles];
+    const failedItems: AiGenerationJobFailedItem[] = [];
+    let createdCount = 0;
     let skippedCount = 0;
-    let quotaError: string | undefined;
+    let processed = 0;
 
     for (let i = 0; i < conceptTitles.length; i++) {
       const title = conceptTitles[i];
@@ -729,8 +807,7 @@ export class AiGenerateService {
       try {
         await this.checkRateLimit(user.id, 1);
       } catch {
-        quotaError = 'Daily AI generation limit reached mid-batch.';
-        skippedCount = conceptTitles.length - createdConcepts.length;
+        skippedCount = conceptTitles.length - processed;
         break;
       }
 
@@ -769,64 +846,60 @@ export class AiGenerateService {
           conceptId: createdConcept.id,
         });
 
-        createdConcepts.push(createdConcept);
+        createdCount++;
         cumulativeSiblingTitles.push(title);
       } catch (err: unknown) {
         const error = err as Error;
         this.logger.error(
           `Failed generating content for concept "${title}": ${error.message}`,
         );
-        // Continue with remaining concepts if one fails
+        failedItems.push({ title, reason: error.message });
       }
+
+      processed++;
+      await this.bumpProgress(jobId, processed);
     }
 
     return {
-      createdConcepts,
-      totalRequested: conceptTitles.length,
-      createdCount: createdConcepts.length,
-      skippedCount:
-        skippedCount > 0
-          ? skippedCount
-          : conceptTitles.length - createdConcepts.length,
-      error: quotaError,
+      createdCount,
+      failedCount: failedItems.length,
+      skippedCount,
+      failedItems,
+      targetLabel,
+      itemNoun: 'concept',
     };
   }
 
   /**
-   * Part 5: Generate MCQs for a Module (for concepts lacking MCQs)
+   * Runner: Generate MCQs for a Module (for concepts lacking MCQs).
+   * Updates job progress after each concept is processed.
    */
-  async generateModuleMcqs(
+  private async runModuleMcqsJob(
+    jobId: string,
     moduleId: string,
     user: User,
-  ): Promise<{
-    generatedCount: number;
-    totalConcepts: number;
-    skippedCount: number;
-    failedCount: number;
-    error?: string;
-  }> {
+    targetLabel: string,
+  ): Promise<AiGenerationJobResultSummary> {
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id: moduleId },
       relations: ['roadmap', 'moduleConcepts', 'moduleConcepts.concept'],
     });
-
     if (!moduleEntity) {
       throw new NotFoundException('Module not found');
     }
 
-    this.roadmapsService.checkOwnership(
-      moduleEntity.roadmap?.createdById,
-      user,
-    );
+    const emptySummary: AiGenerationJobResultSummary = {
+      createdCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      failedItems: [],
+      targetLabel,
+      itemNoun: 'MCQ set',
+    };
 
     const moduleConcepts = moduleEntity.moduleConcepts || [];
     if (moduleConcepts.length === 0) {
-      return {
-        generatedCount: 0,
-        totalConcepts: 0,
-        skippedCount: 0,
-        failedCount: 0,
-      };
+      return emptySummary;
     }
 
     // Find concepts in this module that do NOT have any questions
@@ -850,27 +923,24 @@ export class AiGenerateService {
       .map((mc) => mc.concept);
 
     if (conceptsNeedingMcqs.length === 0) {
-      return {
-        generatedCount: 0,
-        totalConcepts: 0,
-        skippedCount: 0,
-        failedCount: 0,
-      };
+      return emptySummary;
     }
 
+    await this.aiGenerationJobRepository.update(jobId, {
+      progressTotal: conceptsNeedingMcqs.length,
+    });
+
+    const failedItems: AiGenerationJobFailedItem[] = [];
     let generatedCount = 0;
-    let failedCount = 0;
     let skippedCount = 0;
-    let quotaError: string | undefined;
+    let processed = 0;
 
     for (const concept of conceptsNeedingMcqs) {
       // Check quota before each concept MCQ generation
       try {
         await this.checkRateLimit(user.id, 1);
       } catch {
-        quotaError = 'Daily AI generation limit reached mid-batch.';
-        skippedCount =
-          conceptsNeedingMcqs.length - (generatedCount + failedCount);
+        skippedCount = conceptsNeedingMcqs.length - processed;
         break;
       }
 
@@ -924,7 +994,12 @@ export class AiGenerateService {
           this.logger.error(
             `Invalid MCQ JSON response after ${maxAttempts} attempts for concept "${concept.title}"`,
           );
-          failedCount++;
+          failedItems.push({
+            title: concept.title,
+            reason: 'Model returned no valid questions after 2 attempts.',
+          });
+          processed++;
+          await this.bumpProgress(jobId, processed);
           continue;
         }
 
@@ -962,23 +1037,30 @@ export class AiGenerateService {
         if (createdForConcept > 0) {
           generatedCount++;
         } else {
-          failedCount++;
+          failedItems.push({
+            title: concept.title,
+            reason: 'No valid questions passed validation.',
+          });
         }
       } catch (err: unknown) {
         const error = err as Error;
         this.logger.error(
           `Failed MCQ generation for concept "${concept.title}": ${error.message}`,
         );
-        failedCount++;
+        failedItems.push({ title: concept.title, reason: error.message });
       }
+
+      processed++;
+      await this.bumpProgress(jobId, processed);
     }
 
     return {
-      generatedCount,
-      totalConcepts: conceptsNeedingMcqs.length,
+      createdCount: generatedCount,
+      failedCount: failedItems.length,
       skippedCount,
-      failedCount,
-      error: quotaError,
+      failedItems,
+      targetLabel,
+      itemNoun: 'MCQ set',
     };
   }
 

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { AiGenerationLog } from './entities/ai-generation-log.entity';
+import { AiGenerationJob } from './entities/ai-generation-job.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../content/entities/module.entity';
 import { Concept } from '../content/entities/concept.entity';
@@ -16,6 +17,7 @@ import { AiGenerateController } from './ai-generate.controller';
   imports: [
     TypeOrmModule.forFeature([
       AiGenerationLog,
+      AiGenerationJob,
       Roadmap,
       ModuleEntity,
       Concept,

@@ -1,18 +1,3 @@
-export const ROADMAP_DESCRIPTION_SYSTEM_PROMPT = `You are an expert curriculum designer and senior technical instructor. Your task is to write a brief, course-catalog-style introduction for a learning roadmap that clearly conveys the learning progression arc.
-
-Guidelines & Progression Arc:
-- Write exactly 2-4 sentences, as a single short paragraph (no more than roughly 60 words).
-- If the roadmap title implies a progression (e.g. contains words like "basics to advanced", "beginner to expert", "zero to hero", "fundamentals to mastery", "from scratch", or similar framing), the description MUST explicitly convey a clear starting point and ending point—not just a list of topics covered, but the actual shape of the journey.
-- If the title implies starting from scratch or "basics", the description must make clear the reader needs ZERO prior knowledge of the subject—state plainly what the absolute starting point looks like (e.g. "starting with what a repository even is" rather than jumping straight into terminology-heavy concepts).
-- The description should read as a journey with a beginning, middle, and end—not a bag of vocabulary terms from the subject clustered together. A reader should be able to tell roughly where the foundational material ends and the advanced material begins just from reading it.
-- Maintain a direct, natural instructor voice with crisp, varied phrasing.
-- STRICTLY AVOID generic AI fluff, hype words, and cliché transitions. Do NOT use phrases like "In today's fast-paced world", "dive into", "delve into", "In conclusion", "embark on a journey", "unlock your potential", "testament", or "furthermore".
-- Do not include bullet points, headings, meta-commentary, introductory remarks (e.g., "Here is the description:"), or markdown code fences. Output ONLY the single short paragraph of plain text.`;
-
-export function buildRoadmapDescriptionUserPrompt(title: string): string {
-  return `Generate a brief course-catalog description (2-4 sentences, single short paragraph, ~60 words) that clearly states the starting point, learning arc, and final outcome for a learning roadmap titled: "${title}".`;
-}
-
 export const ROADMAP_MODULES_SYSTEM_PROMPT = `You are an expert curriculum designer and principal engineer organizing a technical roadmap into a coherent sequence of learning modules that forms a genuine step-by-step progression.
 
 Rules & Guidelines:
