@@ -25,6 +25,8 @@ import { getToken, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { AiJobsProvider } from '@/providers/ai-jobs-provider';
+import { AiJobsIndicator } from '@/components/ai-jobs-indicator';
 
 interface FullUser extends User {
   instructorProfile?: {
@@ -227,7 +229,8 @@ export default function InstructorAppShellLayout({
   }
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col lg:flex-row relative">
+    <AiJobsProvider>
+      <div className="min-h-screen bg-bg flex flex-col lg:flex-row relative">
       {/* Ambient Dark Mode Glow Orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10 hidden dark:block" aria-hidden="true">
         <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-indigo-600/15 blur-[120px]" />
@@ -250,6 +253,7 @@ export default function InstructorAppShellLayout({
         </Link>
 
         <div className="flex items-center gap-1.5">
+          <AiJobsIndicator />
           <ThemeToggle />
           <button
             type="button"
@@ -412,6 +416,8 @@ export default function InstructorAppShellLayout({
                 </Link>
               );
             })}
+
+            <AiJobsIndicator />
           </nav>
         </div>
 
@@ -441,7 +447,10 @@ export default function InstructorAppShellLayout({
               <span className="font-display">Sidebar</span>
             </button>
 
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <AiJobsIndicator />
+              <ThemeToggle />
+            </div>
           </div>
         )}
 
@@ -456,6 +465,7 @@ export default function InstructorAppShellLayout({
         onClose={() => setShowLogoutModal(false)}
         onConfirm={handleLogout}
       />
-    </div>
+      </div>
+    </AiJobsProvider>
   );
 }

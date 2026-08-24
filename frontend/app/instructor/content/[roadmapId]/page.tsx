@@ -1,6 +1,6 @@
 'use client';
 
-import React, { use, useState, useRef } from 'react';
+import React, { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +19,7 @@ import {
   Link as LinkIcon,
   Sparkles,
   Lock,
+  Loader2,
   Clock,
 } from 'lucide-react';
 
@@ -26,13 +27,8 @@ import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
 import { ConfirmModal } from '@/components/confirm-modal';
-import { useAiStream } from '@/hooks/use-ai-stream';
-import { AiGenerateButton } from '@/components/ai-generate-button';
-import {
-  AiGeneratingModal,
-  AiGenerationContextType,
-} from '@/components/ai-generating-modal';
 import { AiQuotaBadge } from '@/components/ai-quota-badge';
+import { useAiJobs, type AiGenerationJob } from '@/providers/ai-jobs-provider';
 
 interface PageProps {
   params: Promise<{ roadmapId: string }>;
@@ -75,6 +71,28 @@ interface RoadmapDetail {
   modules?: RoadmapModule[];
 }
 
+function JobProgressPill({ job }: { job: AiGenerationJob }) {
+  const label =
+    job.jobType === 'module_mcqs'
+      ? 'Generating MCQs'
+      : job.jobType === 'roadmap_modules'
+        ? 'Generating modules'
+        : 'Generating concepts';
+  const progress =
+    job.progressTotal > 0
+      ? `${job.progressCurrent} of ${job.progressTotal}`
+      : 'starting…';
+
+  return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-tint text-accent border border-accent/20 text-xs font-semibold">
+      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      <span>
+        {label} — {progress}
+      </span>
+    </span>
+  );
+}
+
 export default function RoadmapManagementPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const roadmapId = resolvedParams.roadmapId;
@@ -82,6 +100,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   const queryClient = useQueryClient();
 
   const { showSuccess, showError } = useSnackbar();
+  const { getJobForTarget, refresh } = useAiJobs();
 
   // Current user query for role checks
   const { data: currentUser } = useQuery<User>({
@@ -109,31 +128,6 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
-
-  const {
-    isStreaming: isStreamingRoadmapDesc,
-    startStream: startRoadmapDescStream,
-    abortStream: abortRoadmapDescStream,
-  } = useAiStream();
-
-  const handleGenerateEditDescription = () => {
-    if (!editTitle.trim()) {
-      showError('Please enter a roadmap title first.');
-      return;
-    }
-    startRoadmapDescStream(
-      '/ai-generate/roadmap-description',
-      { title: editTitle.trim() },
-      {
-        onChunk: (_delta, accumulated) => {
-          setEditDescription(accumulated);
-        },
-        onError: (err) => {
-          showError(err);
-        },
-      },
-    );
-  };
 
   const updateRoadmapMutation = useMutation({
     mutationFn: async (payload: { title: string; description?: string }) => {
@@ -335,157 +329,45 @@ export default function RoadmapManagementPage({ params }: PageProps) {
     return allConcepts.filter((c) => c.title.toLowerCase().includes(q));
   }, [allConcepts, conceptSearchQuery]);
 
-  // AI Cascading Generation & Modal State
+  // AI Background Generation — fire-and-forget. Progress is tracked globally by the
+  // AiJobsProvider (polls GET /ai-generate/jobs/active) and surfaced inline below.
   const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
-  const [aiModalState, setAiModalState] = useState<{
-    isOpen: boolean;
-    contextType: AiGenerationContextType;
-    title?: string;
-    subtitle?: string;
-    error?: string | null;
-  }>({
-    isOpen: false,
-    contextType: 'modules',
-  });
 
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const BACKGROUND_STARTED_MESSAGE =
+    "Generation started in the background — you can keep working, we'll notify you when it's done";
 
-  const handleCancelAiGeneration = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
-  };
-
-  const handleCloseAiError = () => {
-    setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
-  };
-
-  const handleGenerateModules = async () => {
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setAiModalState({
-      isOpen: true,
-      contextType: 'modules',
-      title: 'Generating Curriculum Modules',
-      subtitle: `Structuring modules for "${roadmap?.title}"`,
-      error: null,
-    });
-
-    try {
-      const res = await apiClient.post(
-        '/ai-generate/roadmap-modules',
-        { roadmapId },
-        { signal: controller.signal },
-      );
-      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
-      setQuotaRefreshKey((k) => k + 1);
-      const count = res.data?.count ?? 0;
-      showSuccess(`Successfully generated ${count} modules!`);
-      refetch();
-    } catch (err: unknown) {
-      if (controller.signal.aborted) return;
-      const axiosErr = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      const msg =
-        axiosErr.response?.data?.message ||
-        axiosErr.message ||
-        'Failed to generate modules.';
-      setAiModalState((prev) => ({ ...prev, error: msg }));
-    } finally {
-      abortControllerRef.current = null;
-    }
-  };
-
-  const handleGenerateConcepts = async (
-    moduleId: string,
-    moduleTitle: string,
+  const startBackgroundGeneration = async (
+    endpoint: string,
+    payload: Record<string, string>,
   ) => {
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setAiModalState({
-      isOpen: true,
-      contextType: 'concepts',
-      title: 'Generating Concepts & Full Content',
-      subtitle: `Writing lessons for module "${moduleTitle}"`,
-      error: null,
-    });
-
     try {
-      const res = await apiClient.post(
-        '/ai-generate/module-concepts',
-        { moduleId },
-        { signal: controller.signal },
-      );
-      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
+      await apiClient.post(endpoint, payload);
+      showSuccess(BACKGROUND_STARTED_MESSAGE);
       setQuotaRefreshKey((k) => k + 1);
-      const count = res.data?.createdCount ?? 0;
-      const skipped = res.data?.skippedCount ?? 0;
-      showSuccess(
-        `Generated ${count} concepts with full content${
-          skipped > 0 ? ` (${skipped} skipped due to quota)` : ''
-        }!`,
-      );
-      refetch();
+      // The job row already exists behind the 202 — refetch now so the indicator
+      // and inline progress show immediately instead of after the next 5s poll.
+      refresh();
     } catch (err: unknown) {
-      if (controller.signal.aborted) return;
       const axiosErr = err as {
         response?: { data?: { message?: string } };
         message?: string;
       };
-      const msg =
+      showError(
         axiosErr.response?.data?.message ||
-        axiosErr.message ||
-        'Failed to generate concepts.';
-      setAiModalState((prev) => ({ ...prev, error: msg }));
-    } finally {
-      abortControllerRef.current = null;
-    }
-  };
-
-  const handleGenerateMcqs = async (moduleId: string, moduleTitle: string) => {
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setAiModalState({
-      isOpen: true,
-      contextType: 'mcqs',
-      title: 'Generating Assessment MCQs',
-      subtitle: `Formulating quizzes for concepts in "${moduleTitle}"`,
-      error: null,
-    });
-
-    try {
-      const res = await apiClient.post(
-        '/ai-generate/module-mcqs',
-        { moduleId },
-        { signal: controller.signal },
+          axiosErr.message ||
+          'Failed to start generation.',
       );
-      setAiModalState((prev) => ({ ...prev, isOpen: false, error: null }));
-      setQuotaRefreshKey((k) => k + 1);
-      const count = res.data?.generatedCount ?? 0;
-      showSuccess(`Generated and attached MCQs for ${count} concepts!`);
-      refetch();
-    } catch (err: unknown) {
-      if (controller.signal.aborted) return;
-      const axiosErr = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      const msg =
-        axiosErr.response?.data?.message ||
-        axiosErr.message ||
-        'Failed to generate MCQs.';
-      setAiModalState((prev) => ({ ...prev, error: msg }));
-    } finally {
-      abortControllerRef.current = null;
     }
   };
+
+  const handleGenerateModules = () =>
+    startBackgroundGeneration('/ai-generate/roadmap-modules', { roadmapId });
+
+  const handleGenerateConcepts = (moduleId: string) =>
+    startBackgroundGeneration('/ai-generate/module-concepts', { moduleId });
+
+  const handleGenerateMcqs = (moduleId: string) =>
+    startBackgroundGeneration('/ai-generate/module-mcqs', { moduleId });
 
 
   if (isLoading) {
@@ -518,6 +400,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   }
 
   const modules = roadmap.modules || [];
+  const modulesJob = getJobForTarget(roadmapId);
 
   return (
     <div className="space-y-8 max-w-4xl pb-16">
@@ -572,29 +455,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               />
             </div>
             <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-text-primary uppercase tracking-wider">
-                  Description
-                </label>
-                {(editDescription.trim() === '' || isStreamingRoadmapDesc) && (
-                  <AiGenerateButton
-                    onClick={handleGenerateEditDescription}
-                    isStreaming={isStreamingRoadmapDesc}
-                    onAbort={abortRoadmapDescStream}
-                    disabled={!editTitle.trim()}
-                    title={
-                      !editTitle.trim()
-                        ? 'Enter a title first'
-                        : 'Generate description with AI'
-                    }
-                    label="AI Generate"
-                  />
-                )}
-              </div>
+              <label className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                Learning Path Brief
+              </label>
               <textarea
                 rows={3}
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Describe how you want this roadmap structured — e.g. 'Start from complete basics with zero assumed knowledge, progress through intermediate topics, and end with production-level advanced content.' This guides the AI when generating modules and concepts below."
                 className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-sm focus:outline-none focus:border-accent resize-y"
               />
             </div>
@@ -665,7 +533,9 @@ export default function RoadmapManagementPage({ params }: PageProps) {
           </h2>
 
           <div className="flex items-center gap-2">
-            {modules.length >= 6 ? (
+            {modulesJob ? (
+              <JobProgressPill job={modulesJob} />
+            ) : modules.length >= 6 ? (
               <span
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface border border-border text-text-muted font-semibold text-xs opacity-60 cursor-not-allowed select-none"
                 title="Module limit reached (6/6)"
@@ -788,6 +658,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               const needsMcqs = hasConcepts && !allHaveMcqs;
               const isEditingThisModule = editingModuleId === moduleItem.id;
               const isAttachingToThis = attachingModuleId === moduleItem.id;
+              const moduleJob = getJobForTarget(moduleItem.id);
 
               return (
                 <div
@@ -848,11 +719,15 @@ export default function RoadmapManagementPage({ params }: PageProps) {
 
                     {/* Actions & Dynamic State Machine */}
                     <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                      {moduleJob ? (
+                        <JobProgressPill job={moduleJob} />
+                      ) : (
+                        <>
                       {/* 0 Concepts */}
                       {!hasConcepts && (
                         <button
                           type="button"
-                          onClick={() => handleGenerateConcepts(moduleItem.id, moduleItem.title)}
+                          onClick={() => handleGenerateConcepts(moduleItem.id)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent text-white hover:bg-accent/90 text-xs font-semibold shadow-xs transition-all cursor-pointer"
                           title="Generate concept titles and full article content for this module"
                         >
@@ -866,7 +741,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                         <>
                           <button
                             type="button"
-                            onClick={() => handleGenerateConcepts(moduleItem.id, moduleItem.title)}
+                            onClick={() => handleGenerateConcepts(moduleItem.id)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
                             title={`Generate ${6 - conceptsInModule.length} more concept articles to reach the 6-concept cap`}
                           >
@@ -879,7 +754,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                           {needsMcqs ? (
                             <button
                               type="button"
-                              onClick={() => handleGenerateMcqs(moduleItem.id, moduleItem.title)}
+                              onClick={() => handleGenerateMcqs(moduleItem.id)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
                               title="Generate assessment MCQs for concepts lacking quizzes"
                             >
@@ -916,7 +791,7 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                               {needsMcqs && (
                                 <button
                                   type="button"
-                                  onClick={() => handleGenerateMcqs(moduleItem.id, moduleItem.title)}
+                                  onClick={() => handleGenerateMcqs(moduleItem.id)}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
                                   title="Generate assessment MCQs for concepts lacking quizzes"
                                 >
@@ -926,6 +801,8 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                               )}
                             </>
                           )}
+                        </>
+                      )}
                         </>
                       )}
 
@@ -1212,17 +1089,6 @@ export default function RoadmapManagementPage({ params }: PageProps) {
             conceptTitle: '',
           })
         }
-      />
-
-      {/* AI Cascading Generation Modal */}
-      <AiGeneratingModal
-        isOpen={aiModalState.isOpen}
-        contextType={aiModalState.contextType}
-        title={aiModalState.title}
-        subtitle={aiModalState.subtitle}
-        error={aiModalState.error}
-        onCancel={handleCancelAiGeneration}
-        onCloseError={handleCloseAiError}
       />
     </div>
   );

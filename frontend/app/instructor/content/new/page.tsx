@@ -6,8 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Layers, Sparkles } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { useAiStream } from '@/hooks/use-ai-stream';
-import { AiGenerateButton } from '@/components/ai-generate-button';
 import { AiQuotaBadge } from '@/components/ai-quota-badge';
 import { useSnackbar } from '@/providers/snackbar-provider';
 
@@ -15,12 +13,11 @@ export default function CreateRoadmapPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useSnackbar();
-  const { isStreaming, startStream, abortStream } = useAiStream();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
+  const [quotaRefreshKey] = useState(0);
 
   const createMutation = useMutation({
     mutationFn: async (payload: { title: string; description?: string }) => {
@@ -39,28 +36,6 @@ export default function CreateRoadmapPage() {
       showError(msg);
     },
   });
-
-  const handleGenerateDescription = () => {
-    if (!title.trim()) {
-      showError('Please enter a roadmap title first.');
-      return;
-    }
-    startStream(
-      '/ai-generate/roadmap-description',
-      { title: title.trim() },
-      {
-        onChunk: (_delta, accumulated) => {
-          setDescription(accumulated);
-        },
-        onDone: () => {
-          setQuotaRefreshKey((k) => k + 1);
-        },
-        onError: (err) => {
-          showError(err);
-        },
-      },
-    );
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,30 +99,14 @@ export default function CreateRoadmapPage() {
           </div>
 
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
-                Description (Optional)
-              </label>
-              {(description.trim() === '' || isStreaming) && (
-                <AiGenerateButton
-                  onClick={handleGenerateDescription}
-                  isStreaming={isStreaming}
-                  onAbort={abortStream}
-                  disabled={!title.trim()}
-                  title={
-                    !title.trim()
-                      ? 'Enter a roadmap title first'
-                      : 'Generate description with AI'
-                  }
-                  label="AI Generate"
-                />
-              )}
-            </div>
+            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
+              Learning Path Brief
+            </label>
             <textarea
               rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Provide an overview of the curriculum, prerequisites, and learning objectives..."
+              placeholder="Describe how you want this roadmap structured — e.g. 'Start from complete basics with zero assumed knowledge, progress through intermediate topics, and end with production-level advanced content.' This guides the AI when generating modules and concepts below."
               className="w-full px-4 py-3 rounded-xl border border-border bg-bg text-text-primary placeholder:text-text-secondary/50 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all resize-y"
             />
           </div>
