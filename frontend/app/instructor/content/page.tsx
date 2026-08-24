@@ -18,6 +18,7 @@ import apiClient from '@/lib/api-client';
 import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
 import { ConfirmModal } from '@/components/confirm-modal';
+import { AiJobResultsBanner } from '@/components/ai-job-results-banner';
 
 interface RoadmapItem {
   id: string;
@@ -160,6 +161,9 @@ export default function InstructorContentDirectoryPage() {
 
   return (
     <div className="space-y-10 pb-16">
+      {/* Cross-session results banner — re-shows finished job outcomes until dismissed */}
+      <AiJobResultsBanner />
+
       {/* Header & Quick Action Buttons */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

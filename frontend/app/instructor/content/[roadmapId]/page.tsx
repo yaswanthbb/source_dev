@@ -28,6 +28,7 @@ import { User, getUser } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { AiQuotaBadge } from '@/components/ai-quota-badge';
+import { AiJobResultsBanner } from '@/components/ai-job-results-banner';
 import { useAiJobs, type AiGenerationJob } from '@/providers/ai-jobs-provider';
 
 interface PageProps {
@@ -332,6 +333,9 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   // AI Background Generation — fire-and-forget. Progress is tracked globally by the
   // AiJobsProvider (polls GET /ai-generate/jobs/active) and surfaced inline below.
   const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
+  // Which Generate action is currently being kicked off (POST in flight), so its
+  // button can show a spinner + "Starting…" until the background job takes over.
+  const [startingKey, setStartingKey] = useState<string | null>(null);
 
   const BACKGROUND_STARTED_MESSAGE =
     "Generation started in the background — you can keep working, we'll notify you when it's done";
@@ -339,7 +343,9 @@ export default function RoadmapManagementPage({ params }: PageProps) {
   const startBackgroundGeneration = async (
     endpoint: string,
     payload: Record<string, string>,
+    startKey: string,
   ) => {
+    setStartingKey(startKey);
     try {
       await apiClient.post(endpoint, payload);
       showSuccess(BACKGROUND_STARTED_MESSAGE);
@@ -357,17 +363,46 @@ export default function RoadmapManagementPage({ params }: PageProps) {
           axiosErr.message ||
           'Failed to start generation.',
       );
+    } finally {
+      setStartingKey(null);
     }
   };
 
   const handleGenerateModules = () =>
-    startBackgroundGeneration('/ai-generate/roadmap-modules', { roadmapId });
+    startBackgroundGeneration(
+      '/ai-generate/roadmap-modules',
+      { roadmapId },
+      'modules',
+    );
 
   const handleGenerateConcepts = (moduleId: string) =>
-    startBackgroundGeneration('/ai-generate/module-concepts', { moduleId });
+    startBackgroundGeneration(
+      '/ai-generate/module-concepts',
+      { moduleId },
+      `concepts:${moduleId}`,
+    );
 
   const handleGenerateMcqs = (moduleId: string) =>
-    startBackgroundGeneration('/ai-generate/module-mcqs', { moduleId });
+    startBackgroundGeneration(
+      '/ai-generate/module-mcqs',
+      { moduleId },
+      `mcqs:${moduleId}`,
+    );
+
+  // Renders a Generate button's inner content — spinner while its action is
+  // starting, otherwise the Sparkles icon + the given label.
+  const generateBtnInner = (startKey: string, label: React.ReactNode) =>
+    startingKey === startKey ? (
+      <>
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span>Starting…</span>
+      </>
+    ) : (
+      <>
+        <Sparkles className="w-3.5 h-3.5" />
+        {label}
+      </>
+    );
 
 
   if (isLoading) {
@@ -404,6 +439,9 @@ export default function RoadmapManagementPage({ params }: PageProps) {
 
   return (
     <div className="space-y-8 max-w-4xl pb-16">
+      {/* Cross-session results banner — re-shows finished job outcomes until dismissed */}
+      <AiJobResultsBanner />
+
       {/* Back Link & Quota Header */}
       <div className="flex items-center justify-between gap-4">
         <Link
@@ -547,23 +585,26 @@ export default function RoadmapManagementPage({ params }: PageProps) {
               <button
                 type="button"
                 onClick={handleGenerateModules}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer"
+                disabled={startingKey === 'modules'}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 title={`Generate ${6 - modules.length} more curriculum module titles to reach the 6-module cap`}
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>
-                  Generate {6 - modules.length} More Module{6 - modules.length > 1 ? 's' : ''} with AI
-                </span>
+                {generateBtnInner(
+                  'modules',
+                  <span>
+                    Generate {6 - modules.length} More Module{6 - modules.length > 1 ? 's' : ''} with AI
+                  </span>,
+                )}
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleGenerateModules}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer"
+                disabled={startingKey === 'modules'}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white font-semibold text-xs transition-all shadow-xs cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 title="Use AI to generate curriculum module titles for this roadmap"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Generate Modules with AI</span>
+                {generateBtnInner('modules', <span>Generate Modules with AI</span>)}
               </button>
             )}
 
@@ -728,11 +769,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                         <button
                           type="button"
                           onClick={() => handleGenerateConcepts(moduleItem.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent text-white hover:bg-accent/90 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                          disabled={startingKey === `concepts:${moduleItem.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent text-white hover:bg-accent/90 text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                           title="Generate concept titles and full article content for this module"
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Generate Concepts with AI</span>
+                          {generateBtnInner(
+                            `concepts:${moduleItem.id}`,
+                            <span>Generate Concepts with AI</span>,
+                          )}
                         </button>
                       )}
 
@@ -742,24 +786,30 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                           <button
                             type="button"
                             onClick={() => handleGenerateConcepts(moduleItem.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                            disabled={startingKey === `concepts:${moduleItem.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent-tint text-accent border border-accent/20 hover:bg-accent hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                             title={`Generate ${6 - conceptsInModule.length} more concept articles to reach the 6-concept cap`}
                           >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>
-                              Generate {6 - conceptsInModule.length} More Concept{6 - conceptsInModule.length > 1 ? 's' : ''} with AI
-                            </span>
+                            {generateBtnInner(
+                              `concepts:${moduleItem.id}`,
+                              <span>
+                                Generate {6 - conceptsInModule.length} More Concept{6 - conceptsInModule.length > 1 ? 's' : ''} with AI
+                              </span>,
+                            )}
                           </button>
 
                           {needsMcqs ? (
                             <button
                               type="button"
                               onClick={() => handleGenerateMcqs(moduleItem.id)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                              disabled={startingKey === `mcqs:${moduleItem.id}`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                               title="Generate assessment MCQs for concepts lacking quizzes"
                             >
-                              <Sparkles className="w-3.5 h-3.5" />
-                              <span>Generate MCQs with AI</span>
+                              {generateBtnInner(
+                                `mcqs:${moduleItem.id}`,
+                                <span>Generate MCQs with AI</span>,
+                              )}
                             </button>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-green bg-green-tint border border-green/20">
@@ -792,11 +842,14 @@ export default function RoadmapManagementPage({ params }: PageProps) {
                                 <button
                                   type="button"
                                   onClick={() => handleGenerateMcqs(moduleItem.id)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                                  disabled={startingKey === `mcqs:${moduleItem.id}`}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-tint text-amber border border-amber/30 hover:bg-amber hover:text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                   title="Generate assessment MCQs for concepts lacking quizzes"
                                 >
-                                  <Sparkles className="w-3.5 h-3.5" />
-                                  <span>Generate MCQs with AI</span>
+                                  {generateBtnInner(
+                                    `mcqs:${moduleItem.id}`,
+                                    <span>Generate MCQs with AI</span>,
+                                  )}
                                 </button>
                               )}
                             </>
