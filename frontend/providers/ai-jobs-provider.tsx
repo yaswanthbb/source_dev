@@ -47,6 +47,9 @@ export interface AiGenerationJob {
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  failedCount?: number;
+  acknowledgedAt?: string | null;
+  retryOfJobId?: string | null;
 }
 
 export interface AiJobsContextValue {
@@ -56,6 +59,10 @@ export interface AiJobsContextValue {
   getJobForTarget: (targetId: string) => AiGenerationJob | undefined;
   /** Force an immediate refetch of the active-jobs list (e.g. right after kicking off a job). */
   refresh: () => void;
+  /** Unread finished (completed/failed) results for the persistent banner, newest first. */
+  finishedResults: AiGenerationJob[];
+  /** Mark finished results as read. With no ids, acknowledges all unread results. */
+  acknowledge: (jobIds?: string[]) => Promise<void>;
 }
 
 const EMPTY_JOBS: AiGenerationJob[] = [];
@@ -74,7 +81,7 @@ function pluralize(noun: string, count: number): string {
   return count === 1 ? noun : `${noun}s`;
 }
 
-function buildCompletionMessage(job: AiGenerationJob): string {
+export function buildCompletionMessage(job: AiGenerationJob): string {
   const summary = job.resultSummary;
   if (!summary) return 'AI generation completed.';
 
@@ -109,6 +116,25 @@ export function AiJobsProvider({ children }: { children: React.ReactNode }) {
 
   const activeJobs = data ?? EMPTY_JOBS;
 
+  // Unread finished results power the persistent banner. Poll while any job is
+  // active (a fresh result may land any second) and re-fetch on window focus so
+  // reopening the tab re-shows outcomes the user never saw.
+  const { data: resultsData, refetch: refetchResultsQuery } = useQuery<
+    AiGenerationJob[]
+  >({
+    queryKey: ['ai-jobs', 'results'],
+    queryFn: async () =>
+      (await apiClient.get<AiGenerationJob[]>('/ai-generate/jobs/results')).data,
+    refetchInterval: activeJobs.length > 0 ? 5000 : false,
+    refetchOnWindowFocus: true,
+  });
+
+  const finishedResults = resultsData ?? EMPTY_JOBS;
+
+  const refetchResults = useCallback(() => {
+    void refetchResultsQuery();
+  }, [refetchResultsQuery]);
+
   // Track which job ids were active on the previous poll, and which we've already
   // announced, so a job disappearing from the active list fires exactly one toast.
   const prevActiveIdsRef = useRef<Set<string>>(new Set());
@@ -121,11 +147,7 @@ export function AiJobsProvider({ children }: { children: React.ReactNode }) {
           await apiClient.get<AiGenerationJob>(`/ai-generate/jobs/${jobId}`)
         ).data;
 
-        if (job.status === 'completed') {
-          showSuccess(buildCompletionMessage(job));
-        } else if (job.status === 'failed') {
-          showError(job.errorMessage || 'AI generation failed.');
-        } else {
+        if (job.status !== 'completed' && job.status !== 'failed') {
           // Not terminal yet (rare poll race) — allow a later poll to retry.
           announcedIdsRef.current.delete(jobId);
           return;
@@ -134,6 +156,17 @@ export function AiJobsProvider({ children }: { children: React.ReactNode }) {
         // Refresh any open roadmap/module or concept lists so new content appears.
         queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
         queryClient.invalidateQueries({ queryKey: ['concepts'] });
+
+        // A job the backend already acknowledged is a superseded original whose
+        // failed items are being retried. The retry produces the definitive
+        // toast, so stay silent here — but content was still refreshed above.
+        if (job.acknowledgedAt) return;
+
+        if (job.status === 'completed') {
+          showSuccess(buildCompletionMessage(job));
+        } else {
+          showError(job.errorMessage || 'AI generation failed.');
+        }
       } catch {
         // Best-effort notification; allow a retry on the next poll if it failed.
         announcedIdsRef.current.delete(jobId);
@@ -154,8 +187,14 @@ export function AiJobsProvider({ children }: { children: React.ReactNode }) {
       void announceFinished(id);
     });
 
+    // A job that just left the active list may have produced a bannerable
+    // result (or spawned a retry) — refresh the results list promptly.
+    if (disappeared.length > 0) {
+      refetchResults();
+    }
+
     prevActiveIdsRef.current = currentIds;
-  }, [activeJobs, announceFinished]);
+  }, [activeJobs, announceFinished, refetchResults]);
 
   const getJobForTarget = useCallback(
     (targetId: string) => activeJobs.find((j) => j.targetId === targetId),
@@ -166,8 +205,32 @@ export function AiJobsProvider({ children }: { children: React.ReactNode }) {
     void refetch();
   }, [refetch]);
 
+  const acknowledge = useCallback(
+    async (jobIds?: string[]) => {
+      const ids = jobIds && jobIds.length ? jobIds : undefined;
+      // Optimistically drop the acknowledged cards so the banner updates instantly.
+      queryClient.setQueryData<AiGenerationJob[]>(['ai-jobs', 'results'], (prev) =>
+        prev ? (ids ? prev.filter((j) => !ids.includes(j.id)) : []) : prev,
+      );
+      try {
+        await apiClient.post('/ai-generate/jobs/acknowledge', { jobIds: ids });
+      } finally {
+        refetchResults();
+      }
+    },
+    [queryClient, refetchResults],
+  );
+
   return (
-    <AiJobsContext.Provider value={{ activeJobs, getJobForTarget, refresh }}>
+    <AiJobsContext.Provider
+      value={{
+        activeJobs,
+        getJobForTarget,
+        refresh,
+        finishedResults,
+        acknowledge,
+      }}
+    >
       {children}
     </AiJobsContext.Provider>
   );

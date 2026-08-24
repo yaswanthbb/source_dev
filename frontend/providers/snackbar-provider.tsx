@@ -97,19 +97,19 @@ export function SnackbarProvider({ children }: { children: React.ReactNode }) {
           className="fixed top-16 sm:top-20 left-4 right-4 sm:left-auto sm:right-6 z-50 pointer-events-auto w-auto sm:max-w-md animate-in slide-in-from-top-2 sm:slide-in-from-right-5 fade-in duration-200"
         >
           <div
-            className={`px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl border shadow-xl flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold backdrop-blur-md transition-all ${
+            className={`px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl border shadow-xl flex items-start justify-between gap-3 text-xs sm:text-sm font-semibold backdrop-blur-md transition-all ${
               snackbar.variant === 'success'
                 ? 'bg-green-tint/95 border-green/30 text-green shadow-green/10'
                 : 'bg-red-tint/95 border-red/30 text-red shadow-red/10'
             }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-start gap-2.5 min-w-0">
               {snackbar.variant === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green flex-shrink-0" />
+                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green flex-shrink-0 mt-0.5" />
               ) : (
-                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red flex-shrink-0" />
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red flex-shrink-0 mt-0.5" />
               )}
-              <span className="truncate leading-snug">{snackbar.message}</span>
+              <span className="leading-snug break-words">{snackbar.message}</span>
             </div>
 
             <button
