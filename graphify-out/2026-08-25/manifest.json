@@ -858,21 +858,21 @@
     "semantic_hash": "60cf2eb3a35666419fa6b845702d5e84"
   },
   "frontend/app/(auth)/forgot-password/page.tsx": {
-    "mtime": 1787632635.6661775,
-    "seen": 1787633084.3802857,
-    "ast_hash": "add200c9da4a6d927741ee188cd28358",
-    "semantic_hash": ""
+    "mtime": 1787286442.1976283,
+    "seen": 1787327437.294557,
+    "ast_hash": "03d9f38e81c46875f510e5e84ec59318",
+    "semantic_hash": "03d9f38e81c46875f510e5e84ec59318"
   },
   "frontend/app/(auth)/login/page.tsx": {
-    "mtime": 1787632644.7992167,
-    "seen": 1787633084.380287,
-    "ast_hash": "d8c4bc51711d495519a1d0917568cd81",
+    "mtime": 1787331614.2481768,
+    "seen": 1787332996.496069,
+    "ast_hash": "be1bd3bb4299946db07ec79af564ace0",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/register/page.tsx": {
-    "mtime": 1787632654.0185912,
-    "seen": 1787633084.3802876,
-    "ast_hash": "e06f0ba2ecdaf8da151ceb4ccbbc247a",
+    "mtime": 1787331634.411305,
+    "seen": 1787332996.4960704,
+    "ast_hash": "acef3533d8feddfc65fe4b3ac4e8cca6",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/reset-password/page.tsx": {
