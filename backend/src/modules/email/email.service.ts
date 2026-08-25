@@ -149,7 +149,7 @@ export class EmailService {
       await this.transporter.sendMail({
         from: `"Knowledge is Power" <${this.emailUser}>`,
         to: toEmail,
-        subject: `${otp} is your KIS password reset code`,
+        subject: `${otp} is your KIP password reset code`,
         html: htmlTemplate,
       });
 
