@@ -1,98 +1,342 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+<!--
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  INTRO IS A DRAFT — rewrite the "What this is" section in your own    │
+  │  voice before you call this final. It should sound like you, not me.  │
+  └─────────────────────────────────────────────────────────────────────┘
+-->
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+# Knowledge Is Power
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+**A self-directed learning platform for practical, build-it-yourself knowledge — with AI-assisted authoring, spaced repetition, and a full student / instructor / admin workflow.**
 
-## Description
+![License: TBD](https://img.shields.io/badge/license-TBD-lightgrey)
+![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+<!-- No CI badge on purpose — there's no pipeline yet, so a green "build passing" badge would be a lie. -->
 
-## Project setup
+---
 
-```bash
-$ npm install
+## What this is
+
+<!-- DRAFT — personalize this whole section. Facts are right; the voice is mine, not yours. -->
+
+Most learning sites are built to get you through an exam. This one isn't. Knowledge Is Power (KIP) is for the stuff you actually use — how Git branching really works, how to reason about a full-stack app, the things you learn by doing rather than by memorizing for a test next Tuesday. Instructors build structured tracks, students work through them at their own pace, and progress is measured by what you've genuinely completed, not by a score.
+
+The other half of the project is the authoring side. Writing good course material by hand is slow, so instructors can hand the AI a topic and get a full draft — modules, concepts, quiz questions — back as a background job, then edit it down. Nothing an author or the AI produces goes straight to students, though: there's a review step in between (more on why below).
+
+It's a three-role system end to end — students, instructors, and admins each get their own portal — and it's a real, deployed app, not a demo. Which also means it has real rough edges, and this README tries to be honest about those instead of pretending they aren't there.
+
+---
+
+## Features
+
+Organized by who's using it, because the three portals really are different apps sharing a backend.
+
+### 🎓 Students
+
+- **Roadmaps → Modules → Concepts.** Work through published learning tracks structured as a clear hierarchy (see [Architecture](#architecture)).
+- **Concept reading view** with full GitHub-Flavored Markdown — code blocks, tables, headings, auto-generated in-page table of contents.
+- **MCQ quizzes** attached to concepts, with per-option explanations shown on submit.
+- **Spaced-repetition review.** Concepts you've completed resurface as due review items over time, so things stick instead of evaporating a week later.
+- **Progress tracking.** Every concept is _not started_ / _in progress_ / _completed_, and each roadmap shows a live completion percentage.
+- **Gamification** — XP (scaled by concept difficulty, awarded once per concept), daily learning streaks (current + longest), and badges that unlock automatically as you hit milestones.
+- **Prerequisite gating.** A concept can be locked until you finish the concepts it depends on, and the UI tells you which one is blocking you.
+- **Q&A per concept.** Ask a question right from the reading view; instructors answer it from their side.
+- **Accounts** — email/password, Google & GitHub OAuth, password reset via emailed OTP, profile pictures, and a self-service account-deletion request flow. Dark mode included.
+
+### ✍️ Instructors
+
+- **Content authoring studio** for roadmaps, modules, concepts, and quizzes.
+- **AI-assisted generation.** Describe what you want; the backend generates modules / concepts / MCQs as a background job you can poll and review. Per-user quota keeps it in check.
+- **Module-scoped prerequisites** — wire up dependencies between concepts within a module (again, see [Architecture](#architecture) for why it's scoped this way).
+- **Instructor analytics** — enrollment and completion per concept, plus drop-off spots where students stall.
+- **Q&A queue** — a feed of unanswered student questions to respond to.
+- Instructor accounts are **approved by an admin** before they can publish (via an application flow), so "instructor" isn't self-serve.
+
+### 🛠️ Admins
+
+- **User directory & management** across all roles.
+- **Instructor approval queue** — review and approve/reject people applying to author content.
+- **Content review workflow** — approve or reject concepts (with feedback) before they reach students. Re-review only re-triggers on _substantive_ content changes, not typo fixes.
+- Full access to instructor tooling and analytics.
+
+---
+
+## Tech Stack
+
+Versions are pulled straight from the two `package.json` files. A couple are ahead of what you might expect (Next 16, React 19) — that's intentional, they're what the project runs on.
+
+### Backend
+
+- **[NestJS](https://nestjs.com/) 11** — `@nestjs/common`, `core`, `platform-express` (`^11.0.1`), plus `config ^4`, `jwt ^11`, `passport ^11.0.5`, `swagger ^11.4.6`
+- **[TypeORM](https://typeorm.io/) `^0.3.20`** with **`pg ^8.13.1`** (PostgreSQL driver)
+- **Auth** — `passport ^0.7.0`, `passport-jwt ^4.0.1`, `passport-google-oauth20 ^2.0.0`, `passport-github2 ^0.1.12`, `bcrypt ^5.1.1`
+- **Validation** — `class-validator ^0.14.1`, `class-transformer ^0.5.1`
+- **Email** — `nodemailer ^9.0.5`
+- **Language / tooling** — TypeScript `^5.7.3`, Jest `^30`, ESLint `^9`, Prettier `^3`
+
+### Frontend
+
+- **[Next.js](https://nextjs.org/) `^16.3.1`** (App Router) + **React `^19.2.8`**
+- **[TanStack Query](https://tanstack.com/query) `^5.101.4`** for server state (+ devtools)
+- **Forms** — `react-hook-form ^7.85.0` + `@hookform/resolvers ^5.8.0` + `zod ^4.4.3`
+- **HTTP** — `axios ^1.19.0`
+- **Markdown** — `react-markdown ^10.1.0` + `remark-gfm ^4.0.1`
+- **UI** — `lucide-react ^1.31.0` icons, **Tailwind CSS v4** (`@tailwindcss/postcss`)
+- **Language** — TypeScript `^5`
+
+### Database
+
+- **PostgreSQL**, schema managed entirely through **TypeORM migrations** (16 and counting — see [`backend/src/migrations`](backend/src/migrations)).
+
+### Infrastructure
+
+- **[Render](https://render.com/)** — backend API
+- **[Vercel](https://vercel.com/)** — frontend
+- **[Neon](https://neon.tech/)** — managed PostgreSQL
+- **AI** — an NVIDIA-hosted LLM, configured via `NVIDIA_API_URL` / `NVIDIA_MODEL_ID` / `NVIDIA_API_KEY`
+
+---
+
+## Architecture
+
+Two apps, one database. The Next.js frontend talks to the NestJS REST API over HTTP; the API owns all business logic and Postgres access.
+
+```
+        ┌───────────────────────── Next.js (App Router) ─────────────────────────┐
+        │                                                                         │
+        │   /(auth)          /student          /instructor          /admin        │
+        │   login, OTP,      read, quiz,        authoring studio,    users,        │
+        │   OAuth callback   review, Q&A,       AI generation,       instructor    │
+        │                    dashboard          analytics, Q&A       approval,     │
+        │                                                            content review│
+        └───────────────────────────────────┬─────────────────────────────────────┘
+                                             │  axios + TanStack Query (JWT bearer)
+                                             ▼
+        ┌────────────────────────── NestJS REST API ──────────────────────────────┐
+        │  auth · users · content · quiz · assignments · progress · gamification   │
+        │  review · qa · ai-generate · analytics · instructor-analytics · email    │
+        │                       (Swagger docs at /api/docs)                        │
+        └───────────────────────────────────┬─────────────────────────────────────┘
+                                             │  TypeORM
+                                             ▼
+                                   ┌──────────────────┐
+                                   │   PostgreSQL     │
+                                   └──────────────────┘
 ```
 
-## Compile and run the project
+### The content model (the part worth understanding)
 
-```bash
-# development
-$ npm run start
+Content is a three-level hierarchy:
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```
+Roadmap  ──<  Module  ──<  Concept  ──<  MCQ questions + assignments
+ (track)     (chapter)    (lesson)
 ```
 
-## Run tests
+The non-obvious bit: **a Concept is attached to a Module through a join** (`ModuleConcept`) rather than owned by it. So the same concept can appear in more than one module or roadmap without being duplicated. Write "How Git stores commits" once, reuse it wherever it's relevant.
+
+That reuse is exactly why **prerequisites are module-scoped, not global.** If prerequisites lived on the concept itself, a concept reused in two different tracks would drag the same prerequisites into both — which is usually wrong, because what you need to know _before_ a concept depends on the path you took to get there. So a prerequisite is defined on the concept's _placement within a module_, not on the concept globally. (This wasn't the original design — there's a whole migration, `RestructureModuleScopedPrerequisites`, that moved it there once the reuse case made the global version untenable.)
+
+### Two different "reviews"
+
+Worth clearing up, because the word is overloaded here:
+
+- **Spaced-repetition review** is a _student_ feature — completed concepts resurface for recall practice.
+- **Content review** is an _admin_ workflow — concepts carry a review status and land in an approval queue before students can see them.
+
+The content review workflow exists specifically _because_ of AI authoring. Generating a module in one shot is fast, but fast and correct aren't the same thing, and you don't want an unvetted hallucination showing up in someone's lesson. So there's a human gate: pending → approved/rejected, with feedback. And because authors edit constantly, re-review only fires when a change is **substantive** — detected with a bounded Levenshtein diff — so fixing a typo doesn't send a concept back to the queue.
+
+### AI generation runs as background jobs (and why there's no queue)
+
+LLM generation takes anywhere from a few seconds to a couple of minutes. Blocking an HTTP request that long is miserable UX and fragile. The textbook answer is a job queue — Redis + BullMQ, or a hosted queue — but that's a whole extra service to pay for, run, and monitor, and Render's free tier doesn't give you an always-on worker to consume it anyway.
+
+So instead, a generation request creates a job row, kicks off a **detached async worker inside the API process**, and returns immediately. The client polls the job by id (`pending → running → completed / failed`) and shows progress. Failed items can be retried manually.
+
+The honest tradeoff: **there's no durable recovery.** If the API process restarts while a job is `running`, that in-memory worker is gone — the job is orphaned mid-flight and someone has to retry it. Fine at this scale; it's called out in [Known Limitations](#roadmap--known-limitations) so nobody's surprised.
+
+### Auth note
+
+The backend authorizes on the **live role from the database**, not whatever role is baked into the JWT — so a role change takes effect on the next request, not on the next login. The only stale copy is the role cached in the browser's `localStorage`, and a client-side `SessionSync` reconciles that against the server.
+
+---
+
+## Getting Started
+
+Assumes you've never seen this repo before. You'll need **Node.js 20+**, **npm**, and a **PostgreSQL** database (local, or a Neon connection string).
+
+### 1. Clone
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+git clone <your-repo-url> knowledge_is_power
+cd knowledge_is_power
 ```
+
+### 2. Backend
+
+```bash
+cd backend
+npm install
+
+# create your env file and fill it in (see the Environment Variables table)
+cp .env.example .env
+```
+
+Make sure Postgres is running and the database named in your `.env` exists, then run the migrations and start the API:
+
+```bash
+npm run typeorm:migration:run   # apply all 16 migrations
+npm run start:dev               # watch mode
+```
+
+The API comes up on **http://localhost:3000**, with Swagger docs at **http://localhost:3000/api/docs**.
+
+### 3. Frontend
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+
+cp .env.example .env.local
+# set NEXT_PUBLIC_API_URL=http://localhost:3000
+```
+
+Run it on a **different port** than the API (the backend's CORS config already whitelists `localhost:3001`):
+
+```bash
+npm run dev -- -p 3001
+```
+
+Open **http://localhost:3001**.
+
+### 4. OAuth (optional)
+
+Email/password login works out of the box. Google/GitHub login only works once you set real `*_CLIENT_ID` / `*_CLIENT_SECRET` values — without them the strategies load with placeholders and the buttons won't complete a login. The callback URLs default to the backend (`http://localhost:3000/auth/{google,github}/callback`); register those in the respective OAuth app.
+
+---
+
+## Environment Variables
+
+> Derived from actual usage in the source (`ConfigService.get(...)` / `process.env`). Cross-check against your real `.env.example` files, which weren't readable in the environment this was written in.
+
+### Backend (`backend/.env`)
+
+| Variable               | Description                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `NODE_ENV`             | `development` or `production`; loosens CORS and toggles DB SSL in dev                       |
+| `PORT`                 | Port the API listens on (default `3000`)                                                    |
+| `FRONTEND_URL`         | Frontend base URL — used in email links and as a CORS origin fallback                       |
+| `CORS_ORIGINS`         | Comma-separated allowed browser origins (falls back to `FRONTEND_URL` + localhost defaults) |
+| `DATABASE_URL`         | Full Postgres connection string (used in production, e.g. Neon)                             |
+| `DB_HOST`              | Postgres host (used when `DATABASE_URL` isn't set)                                          |
+| `DB_PORT`              | Postgres port                                                                               |
+| `DB_USERNAME`          | Postgres user                                                                               |
+| `DB_PASSWORD`          | Postgres password                                                                           |
+| `DB_DATABASE`          | Database name                                                                               |
+| `DB_SSL`               | `true` to require SSL (needed for hosted Postgres like Neon)                                |
+| `JWT_SECRET`           | Secret for signing/verifying JWT access tokens                                              |
+| `GOOGLE_CLIENT_ID`     | Google OAuth client ID _(optional)_                                                         |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret _(optional)_                                                     |
+| `GOOGLE_CALLBACK_URL`  | Google OAuth redirect URI _(optional)_                                                      |
+| `GITHUB_CLIENT_ID`     | GitHub OAuth client ID _(optional)_                                                         |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret _(optional)_                                                     |
+| `GITHUB_CALLBACK_URL`  | GitHub OAuth redirect URI _(optional)_                                                      |
+| `EMAIL_USER`           | Sender email account (Nodemailer) — used for password-reset OTPs                            |
+| `EMAIL_APP_PASSWORD`   | App password for the sender account                                                         |
+| `NVIDIA_API_KEY`       | API key for the NVIDIA inference endpoint                                                   |
+| `NVIDIA_API_URL`       | Base URL of the inference endpoint                                                          |
+| `NVIDIA_MODEL_ID`      | Model identifier used for generation                                                        |
+
+### Frontend (`frontend/.env.local`)
+
+| Variable              | Description                                                       |
+| --------------------- | ----------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL` | Base URL of the backend API (defaults to `http://localhost:3000`) |
+
+---
+
+## Project Structure
+
+```
+knowledge_is_power/
+├── backend/                       # NestJS API
+│   └── src/
+│       ├── main.ts                # bootstrap: CORS, validation, Swagger
+│       ├── app.module.ts
+│       ├── common/                # shared entities, enums, utils (BaseEntity, roles…)
+│       ├── config/                # typeorm.config.ts (datasource for CLI + app)
+│       ├── migrations/            # 16 TypeORM migrations
+│       └── modules/
+│           ├── auth/              # JWT + OAuth, guards, decorators, strategies
+│           ├── users/             # accounts, roles, instructor profiles
+│           ├── content/           # roadmaps, modules, concepts, prerequisites
+│           ├── quiz/              # MCQ questions & attempts
+│           ├── assignments/
+│           ├── progress/          # per-concept status, roadmap %
+│           ├── gamification/      # XP, streaks, badges
+│           ├── review/            # spaced-repetition review (student)
+│           ├── qa/                # per-concept Q&A
+│           ├── ai-generate/       # background AI authoring jobs
+│           ├── analytics/         # student-facing analytics
+│           ├── instructor-analytics/
+│           └── email/             # Nodemailer (OTP, notifications)
+│
+├── frontend/                      # Next.js App Router
+│   └── app/
+│       ├── (auth)/                # login, register, forgot/reset password
+│       ├── auth/callback/         # OAuth redirect handler
+│       ├── student/               # reading, quiz, review, roadmaps, Q&A, dashboard
+│       ├── instructor/            # authoring, content, dashboard, Q&A
+│       ├── admin/                 # users, instructors, content-review, dashboard
+│       └── profile/
+│   ├── components/                # modals, banners, theme toggle, sidebar…
+│   ├── lib/                       # api-client, auth, hooks, content-diff
+│   └── providers/                 # query, session-sync, snackbar, theme, ai-jobs
+│
+└── INSTRUCTOR_GUIDE.md            # deep dive on authoring + the XP/streak/badge rules
+```
+
+---
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Runs on free tiers across three services:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+- **Backend → Render.** Migrations apply against the compiled build with `npm run typeorm:migration:run:prod`.
+- **Frontend → Vercel.** Set `NEXT_PUBLIC_API_URL` to the deployed backend URL.
+- **Database → Neon.** Point `DATABASE_URL` at it and set `DB_SSL=true`.
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+**The free-tier catch:** Render spins the backend down after inactivity, so the first request after an idle stretch pays a cold-start penalty of several seconds while it wakes up. Neon has similar idle suspend behavior. Fine for a portfolio/low-traffic app; something to know before you demo it live to someone.
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## Roadmap / Known Limitations
 
-Check out a few resources that may come in handy when working with NestJS:
+Being straight about what isn't done:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+- **No real automated test suite yet.** The Jest + supertest tooling is wired up, but only the two NestJS scaffold specs exist and the frontend has none. This is the top thing to fix.
+- **No CI pipeline** (hence no build badge — see the top of this file).
+- **AI jobs don't survive a restart.** They run in-process with no durable queue, so a backend restart mid-generation orphans the job. Manual retry exists; automatic recovery doesn't. See [Architecture](#ai-generation-runs-as-background-jobs-and-why-theres-no-queue).
+- **Single AI provider, hard-wired.** Generation targets NVIDIA's endpoint via env vars; there's no provider abstraction to swap in another model host.
+- **Free-tier cold starts** on Render/Neon, as above.
+- **Email depends on a Gmail-style app password** through Nodemailer — fine for low volume, not a transactional-email setup.
 
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Copyright © 2026 Yaswanth Bolisetty.
+
+All rights reserved. This project is proprietary software.
+You may view the source code, but you may not use, copy,
+modify, distribute, or commercially exploit it without
+prior written permission.
+
+## Acknowledgments
+
+- Built on **[NestJS](https://nestjs.com/)** and **[Next.js](https://nextjs.org/)**.
+- Content authors: see **[`INSTRUCTOR_GUIDE.md`](INSTRUCTOR_GUIDE.md)** for the full curriculum model and the exact XP / streak / badge rules.
