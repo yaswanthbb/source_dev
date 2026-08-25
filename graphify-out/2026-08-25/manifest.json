@@ -960,10 +960,10 @@
     "semantic_hash": ""
   },
   "frontend/app/layout.tsx": {
-    "mtime": 1787032434.5889356,
-    "seen": 1787327437.2946117,
-    "ast_hash": "20695a750ed7c3e5b2b43fbb0fdb6f87",
-    "semantic_hash": "20695a750ed7c3e5b2b43fbb0fdb6f87"
+    "mtime": 1787637110.0358095,
+    "seen": 1787637123.2441792,
+    "ast_hash": "7d420b23b05e03f3a33ead305e4e545b",
+    "semantic_hash": ""
   },
   "frontend/app/not-found.tsx": {
     "mtime": 1786717397.4865875,
@@ -1104,9 +1104,9 @@
     "semantic_hash": "8a8da53a238b3252d971d0bfeda6ca44"
   },
   "frontend/lib/auth.ts": {
-    "mtime": 1787371718.6429956,
-    "seen": 1787391321.259305,
-    "ast_hash": "36e8567cbcc90b86066898dd38d2beff",
+    "mtime": 1787637110.0358725,
+    "seen": 1787637123.2441974,
+    "ast_hash": "be2ed64c207be3c5df598e3f0452423e",
     "semantic_hash": ""
   },
   "frontend/lib/content-diff.ts": {
@@ -1353,6 +1353,12 @@
     "mtime": 1787574749.5124729,
     "seen": 1787583817.514474,
     "ast_hash": "aa2e25b7a9187bf0af63ddb9a6e5ab85",
+    "semantic_hash": ""
+  },
+  "frontend/providers/session-sync.tsx": {
+    "mtime": 1787637110.0397146,
+    "seen": 1787637123.2442029,
+    "ast_hash": "62315c801a6fd03394cec65aacaaf4c7",
     "semantic_hash": ""
   }
 }
