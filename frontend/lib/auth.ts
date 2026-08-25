@@ -22,6 +22,15 @@ export interface User {
 const TOKEN_KEY = 'kip_token';
 const USER_KEY = 'kip_user';
 
+/** Dispatched on this tab whenever the auth token is set or cleared, so
+ *  listeners (e.g. SessionSync) can react to login/logout without a reload. */
+export const AUTH_CHANGED_EVENT = 'kip-auth-changed';
+
+const notifyAuthChanged = (): void => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+};
+
 export const getToken = (): string | null => {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TOKEN_KEY);
@@ -30,11 +39,13 @@ export const getToken = (): string | null => {
 export const setToken = (token: string): void => {
   if (typeof window === 'undefined') return;
   localStorage.setItem(TOKEN_KEY, token);
+  notifyAuthChanged();
 };
 
 export const clearToken = (): void => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(TOKEN_KEY);
+  notifyAuthChanged();
 };
 
 export const getUser = (): User | null => {

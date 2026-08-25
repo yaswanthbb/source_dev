@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, Space_Grotesk, Outfit, Rubik } from 'next/font/google';
 import { QueryProvider } from '../providers/query-provider';
 import { SnackbarProvider } from '../providers/snackbar-provider';
+import { SessionSync } from '../providers/session-sync';
 import { ThemeProvider } from '../providers/theme-provider';
 import { ScrollProgressBar } from '@/components/scroll-progress-bar';
 import './globals.css';
@@ -76,7 +77,10 @@ export default function RootLayout({
         <ScrollProgressBar />
         <ThemeProvider>
           <QueryProvider>
-            <SnackbarProvider>{children}</SnackbarProvider>
+            <SnackbarProvider>
+              <SessionSync />
+              {children}
+            </SnackbarProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>
