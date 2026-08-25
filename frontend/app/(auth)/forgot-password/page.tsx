@@ -95,7 +95,7 @@ export default function ForgotPasswordPage() {
     formState: { errors: emailErrors, isSubmitting: isSubmittingEmail },
   } = useForm<EmailStepFormData>({
     resolver: zodResolver(emailStepSchema),
-    mode: 'onBlur',
+    mode: 'onSubmit',
   });
 
   // Step 2: OTP Form
@@ -106,7 +106,7 @@ export default function ForgotPasswordPage() {
     formState: { errors: otpErrors, isSubmitting: isSubmittingOtp },
   } = useForm<OtpStepFormData>({
     resolver: zodResolver(otpStepSchema),
-    mode: 'onBlur',
+    mode: 'onSubmit',
   });
 
   // Step 3: Password Form
@@ -116,7 +116,7 @@ export default function ForgotPasswordPage() {
     formState: { errors: passwordErrors, isSubmitting: isSubmittingPassword },
   } = useForm<PasswordStepFormData>({
     resolver: zodResolver(passwordStepSchema),
-    mode: 'onBlur',
+    mode: 'onSubmit',
   });
 
   // -------------------------------------------------------------------------

@@ -29,6 +29,7 @@ lerna-debug.log*
 # OS & Editor
 .DS_Store
 .idea/
+.claude/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json

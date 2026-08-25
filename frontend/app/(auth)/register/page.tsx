@@ -38,10 +38,10 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isValid, isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    mode: 'onBlur',
+    mode: 'onSubmit',
     reValidateMode: 'onChange',
   });
 
@@ -206,7 +206,6 @@ export default function RegisterPage() {
               <input
                 id="name"
                 type="text"
-                autoFocus
                 autoComplete="name"
                 placeholder="Jane Doe"
                 {...register('name')}
@@ -292,7 +291,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={!isValid || isSubmitting}
+              disabled={isSubmitting}
               className="w-full py-3.5 px-4 bg-accent hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl text-sm transition-all duration-150 shadow-sm flex items-center justify-center cursor-pointer mt-2"
             >
               {isSubmitting ? (
