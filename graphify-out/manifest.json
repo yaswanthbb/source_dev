@@ -12,9 +12,9 @@
     "semantic_hash": "b6c9c4b64b7092bea720263a47b574cf"
   },
   "backend/package.json": {
-    "mtime": 1787545709.2084038,
-    "seen": 1787572136.2668812,
-    "ast_hash": "d71b78671ce14db74fdb8403c739c6fe",
+    "mtime": 1787654901.0487175,
+    "seen": 1787657296.1686068,
+    "ast_hash": "83a79dae68a9c6e240221f412a059efb",
     "semantic_hash": ""
   },
   "backend/src/app.controller.spec.ts": {
@@ -1359,6 +1359,108 @@
     "mtime": 1787637110.0397146,
     "seen": 1787637123.2442029,
     "ast_hash": "62315c801a6fd03394cec65aacaaf4c7",
+    "semantic_hash": ""
+  },
+  "backend/src/common/testing/factories.ts": {
+    "mtime": 1787654216.7091365,
+    "seen": 1787657296.1686196,
+    "ast_hash": "65b07be692ea038f352ea2345d312c84",
+    "semantic_hash": ""
+  },
+  "backend/src/common/testing/mock-repository.ts": {
+    "mtime": 1787656643.3110173,
+    "seen": 1787657296.1686208,
+    "ast_hash": "52b5d86bb60f6a6e9f6d2fd6ec0f7746",
+    "semantic_hash": ""
+  },
+  "backend/src/common/utils/content-diff.util.spec.ts": {
+    "mtime": 1787654293.9213762,
+    "seen": 1787657296.1686213,
+    "ast_hash": "05cac9afe2225dba5cdcbe344423e60b",
+    "semantic_hash": ""
+  },
+  "backend/src/common/utils/slugify.util.spec.ts": {
+    "mtime": 1787654293.9363759,
+    "seen": 1787657296.1686232,
+    "ast_hash": "6e04c97b5eed1c146bdef61e1ed6bdf7",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/ai-generate.service.spec.ts": {
+    "mtime": 1787655763.4551234,
+    "seen": 1787657296.168639,
+    "ast_hash": "1aab3bb71bb0a79b27581f3caa18237d",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/constants/prompts.spec.ts": {
+    "mtime": 1787655622.6862502,
+    "seen": 1787657296.16864,
+    "ast_hash": "d3cf841ea91ebf301999b9f467a5a33b",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/analytics/analytics.service.spec.ts": {
+    "mtime": 1787656212.9417849,
+    "seen": 1787657296.1686451,
+    "ast_hash": "80e8310025cbeafb693b0e69a2440664",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/auth/auth.service.spec.ts": {
+    "mtime": 1787654884.826061,
+    "seen": 1787657296.168652,
+    "ast_hash": "e9ece7193a39fd7819c1db04bf66a9d6",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/content/concepts.service.spec.ts": {
+    "mtime": 1787654821.8392127,
+    "seen": 1787657296.1686664,
+    "ast_hash": "71f2681d1120d083716d9864e6cf6b4b",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/content/roadmaps.service.spec.ts": {
+    "mtime": 1787655572.4419913,
+    "seen": 1787657296.1686783,
+    "ast_hash": "e04c58211daa403816a955cf00d17a49",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/gamification/gamification.service.spec.ts": {
+    "mtime": 1787655059.5865924,
+    "seen": 1787657296.168685,
+    "ast_hash": "851bc1a5956e8991ebe704d6e0d2a5e4",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/instructor-analytics/instructor-analytics.service.spec.ts": {
+    "mtime": 1787656246.926301,
+    "seen": 1787657296.1686876,
+    "ast_hash": "6c4118b74ebf2e0569206630de31861a",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/progress/progress.service.spec.ts": {
+    "mtime": 1787654767.889986,
+    "seen": 1787657296.1686912,
+    "ast_hash": "92da324d94e8f994f45a89984c24534b",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/qa/qa.service.spec.ts": {
+    "mtime": 1787656282.6306295,
+    "seen": 1787657296.1686978,
+    "ast_hash": "77128455bcbc6c38e83deb1da3f291f1",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/quiz/quiz.service.spec.ts": {
+    "mtime": 1787654654.5092313,
+    "seen": 1787657296.1687055,
+    "ast_hash": "2c4d55e43a6c9e6963eef562e2453725",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/review/review.service.spec.ts": {
+    "mtime": 1787654710.8523552,
+    "seen": 1787657296.1687093,
+    "ast_hash": "561e41b18c8fbb4f7f830ae4044ab89d",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/users/users.service.spec.ts": {
+    "mtime": 1787655509.6082652,
+    "seen": 1787657296.1687202,
+    "ast_hash": "75a0e3a8fa7f25b95df06303b65323ac",
     "semantic_hash": ""
   }
 }

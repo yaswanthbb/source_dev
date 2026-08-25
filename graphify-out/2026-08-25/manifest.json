@@ -516,9 +516,9 @@
     "semantic_hash": "3be49e42cc79fae8d789162b8730a012"
   },
   "backend/src/modules/email/email.service.ts": {
-    "mtime": 1787545709.2099228,
-    "seen": 1787572136.2669547,
-    "ast_hash": "e47a7c5b51bc376fd89ec97fd40ed999",
+    "mtime": 1787651179.3793764,
+    "seen": 1787651266.1922321,
+    "ast_hash": "6aca29f8491cee0b265c2ee8642a0779",
     "semantic_hash": ""
   },
   "backend/src/modules/gamification/dto/get-activity-query.dto.ts": {
@@ -960,9 +960,9 @@
     "semantic_hash": ""
   },
   "frontend/app/layout.tsx": {
-    "mtime": 1787637110.0358095,
-    "seen": 1787637123.2441792,
-    "ast_hash": "7d420b23b05e03f3a33ead305e4e545b",
+    "mtime": 1787651201.3400466,
+    "seen": 1787651266.192279,
+    "ast_hash": "7145a1f764d52cb7c755a2482fbabce7",
     "semantic_hash": ""
   },
   "frontend/app/not-found.tsx": {
@@ -1152,9 +1152,9 @@
     "semantic_hash": ""
   },
   "frontend/providers/theme-provider.tsx": {
-    "mtime": 1787545709.212592,
-    "seen": 1787572136.267026,
-    "ast_hash": "f3f3a7fb52a25cd162a5963370717bd5",
+    "mtime": 1787651193.2776992,
+    "seen": 1787651266.1923018,
+    "ast_hash": "e620f60907736e4164fe710d5eed5f0e",
     "semantic_hash": ""
   },
   "frontend/tailwind.config.ts": {
@@ -1170,16 +1170,16 @@
     "semantic_hash": "02fc19ad21338c2ab820a70136310db4"
   },
   "INSTRUCTOR_GUIDE.md": {
-    "mtime": 1786723974.6070118,
-    "seen": 1787327437.2947268,
-    "ast_hash": "195e4f14e5e3f1ad4c496cb195451a88",
-    "semantic_hash": "195e4f14e5e3f1ad4c496cb195451a88"
+    "mtime": 1787651129.433996,
+    "seen": 1787651266.192304,
+    "ast_hash": "832e76674d0898d61dce646291604ebf",
+    "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1786341940.4841397,
-    "seen": 1787327437.29473,
-    "ast_hash": "f9b30a57e215bc0b63868065fc71a1ac",
-    "semantic_hash": "f9b30a57e215bc0b63868065fc71a1ac"
+    "mtime": 1787650267.3423777,
+    "seen": 1787651266.1923044,
+    "ast_hash": "cf71d86b5023618c5c66f9c8de63d618",
+    "semantic_hash": ""
   },
   "frontend/AGENTS.md": {
     "mtime": 1786690659.8913589,
