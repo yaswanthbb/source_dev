@@ -1,32 +1,37 @@
-<!--
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  INTRO IS A DRAFT — rewrite the "What this is" section in your own    │
-  │  voice before you call this final. It should sound like you, not me.  │
-  └─────────────────────────────────────────────────────────────────────┘
--->
-
 # Knowledge Is Power
 
 **A self-directed learning platform for practical, build-it-yourself knowledge — with AI-assisted authoring, spaced repetition, and a full student / instructor / admin workflow.**
 
-![License: TBD](https://img.shields.io/badge/license-TBD-lightgrey)
+![License: Proprietary](https://img.shields.io/badge/license-proprietary-red)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
-
-<!-- No CI badge on purpose — there's no pipeline yet, so a green "build passing" badge would be a lie. -->
 
 ---
 
 ## What this is
 
-<!-- DRAFT — personalize this whole section. Facts are right; the voice is mine, not yours. -->
+In the age of AI and the internet, learning a skill or acquiring knowledge is easier and more efficient than ever before. If you want to learn something, you can use AI, read articles, go through documentation, watch videos, and find almost anything you need online.
 
-Most learning sites are built to get you through an exam. This one isn't. Knowledge Is Power (KIP) is for the stuff you actually use — how Git branching really works, how to reason about a full-stack app, the things you learn by doing rather than by memorizing for a test next Tuesday. Instructors build structured tracks, students work through them at their own pace, and progress is measured by what you've genuinely completed, not by a score.
+But let's say I want to learn a skill or understand a concept properly. I want to learn the basics, get some practice, and then go deeper into the subject. Prompting my way through everything isn't very efficient, and honestly, it isn't that fun either.
 
-The other half of the project is the authoring side. Writing good course material by hand is slow, so instructors can hand the AI a topic and get a full draft — modules, concepts, quiz questions — back as a background job, then edit it down. Nothing an author or the AI produces goes straight to students, though: there's a review step in between (more on why below).
+On the other hand, if I want to learn by reading articles, documentation, and other resources, that experience isn't exactly friction-free either. A lot of the content out there is disconnected. You might find a great article explaining one concept, but then have no idea what you should learn next, or how that concept connects to everything else.
 
-It's a three-role system end to end — students, instructors, and admins each get their own portal — and it's a real, deployed app, not a demo. Which also means it has real rough edges, and this README tries to be honest about those instead of pretending they aren't there.
+So I thought: what if I created a platform where experienced senior developers could write content in a course-like format, without making it as heavy as a traditional video course?
+
+Instead of writing random, disconnected articles on Medium or elsewhere, senior developers could write courses where each concept is connected to the next. You learn step by step, build your understanding gradually, practice what you've learned, and then go deeper.
+
+The platform also includes MCQs and review sections so you can test yourself and reinforce the concepts you've learned instead of just reading them once and forgetting them.
+
+I also added AI features like **Ask AI**, as well as AI-generated modules, concepts, and MCQs. This means students can also become instructors and create their own courses and learning roadmaps with the help of AI, instead of simply prompting their way through studying.
+
+At the same time, AI can help real instructors fill in gaps when they're writing a course. If an instructor doesn't know how to explain a particular topic or wants to add a concept they haven't covered before, AI can help generate a starting point that they can then edit and improve.
+
+So, in a way, the platform tries to solve **two problems at once**:
+
+1. **For learners:** give them a structured, connected, and interactive way to learn instead of jumping between random articles, documentation, and AI prompts.
+
+2. **For instructors:** give experienced developers a way to turn their knowledge into structured courses and learning roadmaps without having to produce a full video course from scratch.
 
 ---
 
@@ -319,7 +324,7 @@ Runs on free tiers across three services:
 Being straight about what isn't done:
 
 - **No real automated test suite yet.** The Jest + supertest tooling is wired up, but only the two NestJS scaffold specs exist and the frontend has none. This is the top thing to fix.
-- **No CI pipeline** (hence no build badge — see the top of this file).
+- **No CI pipeline** (hence no build badge).
 - **AI jobs don't survive a restart.** They run in-process with no durable queue, so a backend restart mid-generation orphans the job. Manual retry exists; automatic recovery doesn't. See [Architecture](#ai-generation-runs-as-background-jobs-and-why-theres-no-queue).
 - **Single AI provider, hard-wired.** Generation targets NVIDIA's endpoint via env vars; there's no provider abstraction to swap in another model host.
 - **Free-tier cold starts** on Render/Neon, as above.
