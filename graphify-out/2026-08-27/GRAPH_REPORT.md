@@ -1,7 +1,7 @@
-# Graph Report - knowledge_is_power  (2026-08-27)
+# Graph Report - knowledge_is_power  (2026-08-25)
 
 ## Corpus Check
-- 237 files · ~207,508 words
+- 235 files · ~204,724 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e54a82b1`
+- Built from commit: `610673bf`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -189,19 +189,19 @@
 7. `AiGenerateService` - 38 edges
 8. `UsersService` - 38 edges
 9. `Module` - 33 edges
-10. `UserConceptProgress` - 31 edges
+10. `Roadmap` - 31 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `NestJS Backend Application` --conceptually_related_to--> `Next.js Frontend Application`  [INFERRED]
   README.md → frontend/README.md
 - `StudentReviewPage()` --calls--> `useSnackbar()`  [EXTRACTED]
   frontend/app/student/review/page.tsx → frontend/providers/snackbar-provider.tsx
-- `XpEvent` --references--> `XpSource`  [EXTRACTED]
-  backend/src/modules/gamification/entities/xp-event.entity.ts → backend/src/common/enums/xp-source.enum.ts
+- `exclude` --extends--> `!**/*.spec.ts`  [EXTRACTED]
+  backend/tsconfig.build.json → backend/package.json
+- `GetUsersQueryDto` --references--> `InstructorStatus`  [EXTRACTED]
+  backend/src/modules/users/dto/get-users-query.dto.ts → backend/src/common/enums/instructor-status.enum.ts
 - `ModuleConcept` --inherits--> `BaseEntity`  [EXTRACTED]
   backend/src/modules/content/entities/module-concept.entity.ts → backend/src/common/entities/base.entity.ts
-- `ModuleConcept` --references--> `Concept`  [EXTRACTED]
-  backend/src/modules/content/entities/module-concept.entity.ts → backend/src/modules/content/entities/concept.entity.ts
 
 ## Import Cycles
 - None detected.
@@ -470,7 +470,7 @@ Cohesion: 0.08
 Nodes (29): AiGenerationJobStatus, AiGenerationJobType, AiGenerationType, AiGenerateService, ParsedMcqOption, ParsedMcqQuestion, buildConceptContentUserPrompt(), buildConceptMcqUserPrompt() (+21 more)
 
 ## Knowledge Gaps
-- **318 isolated node(s):** `FIXED_DATE`, `ParsedMcqOption`, `ParsedMcqQuestion`, `JwtPayload`, `MostMissedOption` (+313 more)
+- **318 isolated node(s):** `name`, `version`, `description`, `author`, `private` (+313 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **99 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -478,12 +478,12 @@ Nodes (29): AiGenerationJobStatus, AiGenerationJobType, AiGenerationType, AiGene
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `User` connect `User` to `UsersService`, `UserConceptProgress`, `concept.entity.ts`, `ConceptsService`, `ReviewService`, `qa.service.ts`, `Concept`, `assignments.module.ts`, `roadmaps.controller.ts`, `ReviewItem`, `user.entity.ts`, `CurrentUser`, `ai-generate.controller.ts`, `ai-generate.service.ts`, `app.module.ts`, `factories.ts`, `auth.module.ts`, `QuizController`, `quiz.controller.ts`, `users.controller.ts`, `auth.controller.ts`?**
-  _High betweenness centrality (0.109) - this node is a cross-community bridge._
+  _High betweenness centrality (0.131) - this node is a cross-community bridge._
 - **Why does `UsersService` connect `UsersService` to `concept.entity.ts`, `users.controller.ts`, `auth.module.ts`, `auth.controller.ts`, `app.module.ts`, `AuthService`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
-- **Why does `Concept` connect `Concept` to `UserConceptProgress`, `concept.entity.ts`, `ConceptsService`, `qa.service.ts`, `assignments.module.ts`, `user.entity.ts`, `ai-generate.service.ts`, `app.module.ts`, `factories.ts`, `AdminContentReviewController`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **What connects `FIXED_DATE`, `ParsedMcqOption`, `ParsedMcqQuestion` to the rest of the system?**
+  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `UsersController` connect `UsersService` to `users.controller.ts`, `app.module.ts`?**
+  _High betweenness centrality (0.026) - this node is a cross-community bridge._
+- **What connects `name`, `version`, `description` to the rest of the system?**
   _318 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `UsersService` be split into smaller, more focused modules?**
   _Cohesion score 0.06630211893369788 - nodes in this community are weakly interconnected._
