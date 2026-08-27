@@ -12,9 +12,9 @@
     "semantic_hash": "b6c9c4b64b7092bea720263a47b574cf"
   },
   "backend/package.json": {
-    "mtime": 1787654901.0487175,
-    "seen": 1787657296.1686068,
-    "ast_hash": "83a79dae68a9c6e240221f412a059efb",
+    "mtime": 1787809861.6626844,
+    "seen": 1787810141.5498405,
+    "ast_hash": "387c2a4948505ab59f4ea47d4de6f579",
     "semantic_hash": ""
   },
   "backend/src/app.controller.spec.ts": {
@@ -1128,10 +1128,10 @@
     "semantic_hash": "9b77af189a21a7a64e4bd7a426f64176"
   },
   "frontend/package.json": {
-    "mtime": 1786703303.6394713,
-    "seen": 1787327437.294705,
-    "ast_hash": "221657c7458ea38501a5b5e1ec4d5c27",
-    "semantic_hash": "221657c7458ea38501a5b5e1ec4d5c27"
+    "mtime": 1787809883.0679386,
+    "seen": 1787810141.5500004,
+    "ast_hash": "0983c98cf2a47871e371ceb3b4fba571",
+    "semantic_hash": ""
   },
   "frontend/postcss.config.mjs": {
     "mtime": 1786690659.8925664,
@@ -1463,16 +1463,10 @@
     "ast_hash": "f8fdf6377ab6a93914dff17b6c773aa8",
     "semantic_hash": ""
   },
-  "KIP_GIT_BRANCH_TAG_GUIDE.md": {
-    "mtime": 1787724751.2194905,
-    "seen": 1787808936.892534,
-    "ast_hash": "c69eda68732b18a5394d3e5b91e94ca7",
-    "semantic_hash": ""
-  },
-  "V1_RELEASE_RUNBOOK.md": {
-    "mtime": 1787658748.372639,
-    "seen": 1787808936.8925354,
-    "ast_hash": "f49c1af7a0aadb3169d176c8f5cab278",
+  "CHANGELOG.md": {
+    "mtime": 1787810039.0012574,
+    "seen": 1787810141.5500069,
+    "ast_hash": "1090a75f34d7da5de98f58ad53761099",
     "semantic_hash": ""
   }
 }

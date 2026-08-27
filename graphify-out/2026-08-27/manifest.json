@@ -210,9 +210,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.ts": {
-    "mtime": 1787573893.5892773,
-    "seen": 1787583817.5142834,
-    "ast_hash": "6d6e4ae7ccdbe9c5afb1dcdb4f030912",
+    "mtime": 1787808891.7825744,
+    "seen": 1787808936.8924148,
+    "ast_hash": "8ae81214d836cfc13db2fe5cf7ba3f3c",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.ts": {
@@ -564,8 +564,8 @@
     "semantic_hash": "4ec97753dace62517fe8d78568d48ca6"
   },
   "backend/src/modules/gamification/gamification.service.ts": {
-    "mtime": 1786795850.317781,
-    "seen": 1787327437.2943766,
+    "mtime": 1787718530.4835176,
+    "seen": 1787808936.8924625,
     "ast_hash": "ba864271161e9f2562679b3490e9518d",
     "semantic_hash": "ba864271161e9f2562679b3490e9518d"
   },
@@ -1362,9 +1362,9 @@
     "semantic_hash": ""
   },
   "backend/src/common/testing/factories.ts": {
-    "mtime": 1787654216.7091365,
-    "seen": 1787657296.1686196,
-    "ast_hash": "65b07be692ea038f352ea2345d312c84",
+    "mtime": 1787808891.5231824,
+    "seen": 1787808936.8923955,
+    "ast_hash": "41e75e2f9b551a81b962145ce144b27f",
     "semantic_hash": ""
   },
   "backend/src/common/testing/mock-repository.ts": {
@@ -1398,9 +1398,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/analytics/analytics.service.spec.ts": {
-    "mtime": 1787656212.9417849,
-    "seen": 1787657296.1686451,
-    "ast_hash": "80e8310025cbeafb693b0e69a2440664",
+    "mtime": 1787808891.8455753,
+    "seen": 1787808936.8924232,
+    "ast_hash": "25ae7fcadf3158f40e83f705188574b8",
     "semantic_hash": ""
   },
   "backend/src/modules/auth/auth.service.spec.ts": {
@@ -1416,15 +1416,15 @@
     "semantic_hash": ""
   },
   "backend/src/modules/content/roadmaps.service.spec.ts": {
-    "mtime": 1787655572.4419913,
-    "seen": 1787657296.1686783,
-    "ast_hash": "e04c58211daa403816a955cf00d17a49",
+    "mtime": 1787808892.1108022,
+    "seen": 1787808936.892455,
+    "ast_hash": "7520badf27a11d86c424a2c8346aae20",
     "semantic_hash": ""
   },
   "backend/src/modules/gamification/gamification.service.spec.ts": {
-    "mtime": 1787655059.5865924,
-    "seen": 1787657296.168685,
-    "ast_hash": "851bc1a5956e8991ebe704d6e0d2a5e4",
+    "mtime": 1787808892.2135808,
+    "seen": 1787808936.892462,
+    "ast_hash": "59c6cfc0b48449a6bf4a8ab84899a3a8",
     "semantic_hash": ""
   },
   "backend/src/modules/instructor-analytics/instructor-analytics.service.spec.ts": {
@@ -1440,27 +1440,39 @@
     "semantic_hash": ""
   },
   "backend/src/modules/qa/qa.service.spec.ts": {
-    "mtime": 1787656282.6306295,
-    "seen": 1787657296.1686978,
-    "ast_hash": "77128455bcbc6c38e83deb1da3f291f1",
+    "mtime": 1787808892.4194698,
+    "seen": 1787808936.8924744,
+    "ast_hash": "12c0df164b3eefc1e9e0b1f7e8bda7f1",
     "semantic_hash": ""
   },
   "backend/src/modules/quiz/quiz.service.spec.ts": {
-    "mtime": 1787654654.5092313,
-    "seen": 1787657296.1687055,
-    "ast_hash": "2c4d55e43a6c9e6963eef562e2453725",
+    "mtime": 1787808892.4695847,
+    "seen": 1787808936.8924818,
+    "ast_hash": "35dcaf6dc9967ece7cf5159d1e8de77d",
     "semantic_hash": ""
   },
   "backend/src/modules/review/review.service.spec.ts": {
-    "mtime": 1787654710.8523552,
-    "seen": 1787657296.1687093,
-    "ast_hash": "561e41b18c8fbb4f7f830ae4044ab89d",
+    "mtime": 1787808892.5158217,
+    "seen": 1787808936.8924854,
+    "ast_hash": "4fd08c8dfaa12c39bd2310f266068062",
     "semantic_hash": ""
   },
   "backend/src/modules/users/users.service.spec.ts": {
-    "mtime": 1787655509.6082652,
-    "seen": 1787657296.1687202,
-    "ast_hash": "75a0e3a8fa7f25b95df06303b65323ac",
+    "mtime": 1787808892.5765862,
+    "seen": 1787808936.892493,
+    "ast_hash": "f8fdf6377ab6a93914dff17b6c773aa8",
+    "semantic_hash": ""
+  },
+  "KIP_GIT_BRANCH_TAG_GUIDE.md": {
+    "mtime": 1787724751.2194905,
+    "seen": 1787808936.892534,
+    "ast_hash": "c69eda68732b18a5394d3e5b91e94ca7",
+    "semantic_hash": ""
+  },
+  "V1_RELEASE_RUNBOOK.md": {
+    "mtime": 1787658748.372639,
+    "seen": 1787808936.8925354,
+    "ast_hash": "f49c1af7a0aadb3169d176c8f5cab278",
     "semantic_hash": ""
   }
 }
