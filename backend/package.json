@@ -1,6 +1,6 @@
 {
   "name": "knowledge_is_power",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "",
   "author": "",
   "private": true,
@@ -23,7 +23,6 @@
     "typeorm:migration:run:prod": "typeorm migration:run -d dist/config/typeorm.config.js",
     "typeorm:migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts"
   },
-
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",
