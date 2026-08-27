@@ -131,7 +131,9 @@ export function makeOption(overrides: Partial<McqOption> = {}): McqOption {
   } as unknown as McqOption;
 }
 
-export function makeQuestion(overrides: Partial<McqQuestion> = {}): McqQuestion {
+export function makeQuestion(
+  overrides: Partial<McqQuestion> = {},
+): McqQuestion {
   return {
     id: 'question-1',
     conceptId: 'concept-1',
@@ -158,7 +160,9 @@ export function makeAttempt(overrides: Partial<McqAttempt> = {}): McqAttempt {
   } as unknown as McqAttempt;
 }
 
-export function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
+export function makeReviewItem(
+  overrides: Partial<ReviewItem> = {},
+): ReviewItem {
   return {
     id: 'review-1',
     userId: 'user-1',

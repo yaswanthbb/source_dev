@@ -431,7 +431,11 @@ export class AiGenerateService implements OnApplicationBootstrap {
     user: User,
   ): Promise<{ jobId: string }> {
     // 1. Validate target + capacity + quota (throws 404 / 403 / 400 / 429)
-    const { targetLabel } = await this.validateJobStart(jobType, targetId, user);
+    const { targetLabel } = await this.validateJobStart(
+      jobType,
+      targetId,
+      user,
+    );
 
     // 2. Reject if a generation is already pending/running for this target
     const existing = await this.aiGenerationJobRepository.findOne({
@@ -467,7 +471,9 @@ export class AiGenerateService implements OnApplicationBootstrap {
     void this.executeJob(job.id, jobType, targetId, user, targetLabel).catch(
       (err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(`Unhandled error in generation job ${job.id}: ${msg}`);
+        this.logger.error(
+          `Unhandled error in generation job ${job.id}: ${msg}`,
+        );
       },
     );
 
@@ -510,7 +516,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
     if (!moduleEntity) {
       throw new NotFoundException('Module not found');
     }
-    this.roadmapsService.checkOwnership(moduleEntity.roadmap?.createdById, user);
+    this.roadmapsService.checkOwnership(
+      moduleEntity.roadmap?.createdById,
+      user,
+    );
 
     if (jobType === AiGenerationJobType.MODULE_CONCEPTS) {
       const existingConceptTitles = (moduleEntity.moduleConcepts || [])
@@ -897,7 +906,6 @@ export class AiGenerateService implements OnApplicationBootstrap {
       itemNoun: 'module',
     };
   }
-
 
   /**
    * Runner: Generate Concepts (with content) for a Module in sequence

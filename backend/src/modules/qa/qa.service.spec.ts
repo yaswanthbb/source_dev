@@ -127,9 +127,9 @@ describe('QaService', () => {
     it('throws NotFound when the concept is missing', async () => {
       conceptRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.getQuestionsForConcept('c1'),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getQuestionsForConcept('c1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('flattens questions, labels AI answers, and sorts answers oldest-first', async () => {

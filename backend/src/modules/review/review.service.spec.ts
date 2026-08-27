@@ -45,7 +45,10 @@ describe('ReviewService', () => {
           provide: getRepositoryToken(McqQuestion),
           useValue: createMockRepository(),
         },
-        { provide: getRepositoryToken(XpEvent), useValue: createMockRepository() },
+        {
+          provide: getRepositoryToken(XpEvent),
+          useValue: createMockRepository(),
+        },
       ],
     }).compile();
 

@@ -270,9 +270,9 @@ describe('UsersService', () => {
         status: InstructorStatus.APPROVED,
       });
 
-      await expect(
-        service.approveInstructor('user-1'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.approveInstructor('user-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('promotes the user and approves the profile', async () => {

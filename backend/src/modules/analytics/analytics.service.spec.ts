@@ -206,8 +206,16 @@ describe('AnalyticsService', () => {
         }),
       );
       conceptRepo.find.mockResolvedValue([
-        makeConcept({ id: 'c1', title: 'C1', difficulty: ConceptDifficulty.EASY }),
-        makeConcept({ id: 'c2', title: 'C2', difficulty: ConceptDifficulty.HARD }),
+        makeConcept({
+          id: 'c1',
+          title: 'C1',
+          difficulty: ConceptDifficulty.EASY,
+        }),
+        makeConcept({
+          id: 'c2',
+          title: 'C2',
+          difficulty: ConceptDifficulty.HARD,
+        }),
       ]);
 
       const result = await service.getConceptAnalytics();

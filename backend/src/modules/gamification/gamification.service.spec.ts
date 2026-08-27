@@ -40,9 +40,18 @@ describe('GamificationService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GamificationService,
-        { provide: getRepositoryToken(XpEvent), useValue: createMockRepository() },
-        { provide: getRepositoryToken(Streak), useValue: createMockRepository() },
-        { provide: getRepositoryToken(Badge), useValue: createMockRepository() },
+        {
+          provide: getRepositoryToken(XpEvent),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(Streak),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(Badge),
+          useValue: createMockRepository(),
+        },
         {
           provide: getRepositoryToken(UserBadge),
           useValue: createMockRepository(),
@@ -199,7 +208,9 @@ describe('GamificationService', () => {
   describe('checkAndAwardBadges', () => {
     const primeXp = (sum: string | undefined) =>
       xpRepo.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({ raw: sum === undefined ? undefined : { sum } }),
+        createMockQueryBuilder({
+          raw: sum === undefined ? undefined : { sum },
+        }),
       );
 
     it('returns early and reads nothing else when no badges are configured', async () => {

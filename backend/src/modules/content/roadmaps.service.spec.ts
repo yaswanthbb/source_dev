@@ -311,7 +311,9 @@ describe('RoadmapsService', () => {
         .mockResolvedValueOnce({ id: 'mc-target' })
         .mockResolvedValueOnce({ id: 'mc-prereq' });
       // The reverse link already exists.
-      prereqRepo.findOne.mockResolvedValueOnce({ moduleConceptId: 'mc-prereq' });
+      prereqRepo.findOne.mockResolvedValueOnce({
+        moduleConceptId: 'mc-prereq',
+      });
 
       await expect(
         service.attachPrerequisiteToModuleConcept('m1', 'cA', 'cB', owner),
@@ -339,17 +341,17 @@ describe('RoadmapsService', () => {
 
   describe('deleteRoadmap', () => {
     it('forbids a non-admin', async () => {
-      await expect(
-        service.deleteRoadmap('r1', owner),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.deleteRoadmap('r1', owner)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
 
     it('throws NotFound for a missing roadmap', async () => {
       roadmapRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.deleteRoadmap('r1', admin),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.deleteRoadmap('r1', admin)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('removes the roadmap for an admin', async () => {

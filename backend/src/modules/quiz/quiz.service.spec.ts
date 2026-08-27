@@ -104,7 +104,9 @@ describe('QuizService', () => {
     });
 
     it('rejects fewer than two options', async () => {
-      conceptRepo.findOne.mockResolvedValue(makeConcept({ authorId: 'author-1' }));
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({ authorId: 'author-1' }),
+      );
 
       await expect(
         service.createQuestion('concept-1', owner, {
@@ -115,7 +117,9 @@ describe('QuizService', () => {
     });
 
     it('rejects when there is not exactly one correct option', async () => {
-      conceptRepo.findOne.mockResolvedValue(makeConcept({ authorId: 'author-1' }));
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({ authorId: 'author-1' }),
+      );
 
       await expect(
         service.createQuestion('concept-1', owner, {
@@ -129,7 +133,9 @@ describe('QuizService', () => {
     });
 
     it('creates the question + options and resets the concept to PENDING review', async () => {
-      conceptRepo.findOne.mockResolvedValue(makeConcept({ authorId: 'author-1' }));
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({ authorId: 'author-1' }),
+      );
       questionRepo.save.mockImplementation((q) => ({ ...q, id: 'question-1' }));
       optionRepo.save.mockImplementation((opts) => opts);
 
@@ -337,10 +343,9 @@ describe('QuizService', () => {
         selectedOptionId: 'c',
       } as any);
 
-      expect(progressService.markConceptCompletedFromAssignment).toHaveBeenCalledWith(
-        'student-1',
-        'concept-1',
-      );
+      expect(
+        progressService.markConceptCompletedFromAssignment,
+      ).toHaveBeenCalledWith('student-1', 'concept-1');
     });
   });
 
@@ -354,7 +359,9 @@ describe('QuizService', () => {
     });
 
     it('strips isCorrect from options for students', async () => {
-      conceptRepo.findOne.mockResolvedValue(makeConcept({ authorId: 'author-1' }));
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({ authorId: 'author-1' }),
+      );
 
       const result = await service.getQuestionsForConcept('concept-1', student);
 
@@ -362,7 +369,9 @@ describe('QuizService', () => {
     });
 
     it('retains isCorrect for the author', async () => {
-      conceptRepo.findOne.mockResolvedValue(makeConcept({ authorId: 'author-1' }));
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({ authorId: 'author-1' }),
+      );
 
       const result = await service.getQuestionsForConcept('concept-1', owner);
 
