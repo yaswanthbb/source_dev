@@ -6,7 +6,8 @@ import {
 } from '@nestjs/typeorm';
 import * as dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ path: process.env.ENV_FILE_PATH || '.env' });
+
 
 import { User } from '../modules/users/entities/user.entity';
 import { InstructorProfile } from '../modules/users/entities/instructor-profile.entity';
