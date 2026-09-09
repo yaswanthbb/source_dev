@@ -12,6 +12,7 @@ import apiClient from '@/lib/api-client';
 import { setToken, setUser, User } from '@/lib/auth';
 import { useSnackbar } from '@/providers/snackbar-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { CenteredTerminalLoader } from '@/components/loaders/centered-terminal-loader';
 
 const loginSchema = z.object({
   email: z
@@ -30,6 +31,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [bootingUser, setBootingUser] = useState<User | null>(null);
 
   const {
     register,
@@ -69,8 +71,15 @@ export default function LoginPage() {
       setToken(accessToken);
       setUser(user);
 
-      const targetRoute = getDashboardRoute(user.role);
-      router.replace(targetRoute);
+      // Mark that user just logged in so the destination dashboard skips redundant minimal loader
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem('kip_just_logged_in', String(Date.now()));
+        } catch {}
+      }
+
+      // Display role-tailored Centered Terminal Loader for at least 5s before entering dashboard
+      setBootingUser(user);
     } catch (err: unknown) {
       const axiosError = err as {
         response?: { data?: { message?: string | string[] } };
@@ -88,6 +97,24 @@ export default function LoginPage() {
       showError(errorText);
     }
   };
+
+  if (bootingUser) {
+    return (
+      <CenteredTerminalLoader
+        portal={bootingUser.role}
+        minDuration={5000}
+        onComplete={() => {
+          if (typeof window !== 'undefined') {
+            try {
+              sessionStorage.setItem('kip_just_logged_in', String(Date.now()));
+            } catch {}
+          }
+          const targetRoute = getDashboardRoute(bootingUser.role);
+          router.replace(targetRoute);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg flex flex-col justify-between">

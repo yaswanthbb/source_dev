@@ -19,38 +19,47 @@ import {
   PanelLeftOpen,
   Menu,
   X,
+  Map,
+  Sparkles,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { getToken, clearAuth, User } from '@/lib/auth';
+import { getToken, getUser, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AiJobsProvider } from '@/providers/ai-jobs-provider';
 import { AiJobsIndicator } from '@/components/ai-jobs-indicator';
+import { MinimalTerminalLoader } from '@/components/loaders/minimal-terminal-loader';
 
 interface FullUser extends User {
   instructorProfile?: {
     id?: string;
     status?: 'pending' | 'approved' | 'rejected';
-    bio?: string;
+    bio?: string | null;
+    createdAt?: string;
     approvedAt?: string | null;
   };
 }
 
 const INSTRUCTOR_NAV_ITEMS = [
   {
-    name: 'Dashboard',
+    name: 'Studio',
     href: '/instructor/dashboard',
     icon: LayoutDashboard,
   },
   {
-    name: 'My Content',
-    href: '/instructor/content',
-    icon: FolderKanban,
+    name: 'Roadmaps',
+    href: '/instructor/roadmaps',
+    icon: Map,
   },
   {
-    name: 'Q&A Discussions',
-    href: '/instructor/qa',
+    name: 'AI Assist',
+    href: '/instructor/ai-assist',
+    icon: Sparkles,
+  },
+  {
+    name: 'Feedback',
+    href: '/instructor/feedback',
     icon: MessageSquare,
   },
 ];
@@ -63,10 +72,36 @@ export default function InstructorAppShellLayout({
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [isTokenChecked, setIsTokenChecked] = useState(false);
+  const [isTokenChecked, setIsTokenChecked] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!getToken();
+    }
+    return false;
+  });
+  const [isLoaderDone, setIsLoaderDone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const val = sessionStorage.getItem('kip_just_logged_in');
+        if (val && Date.now() - parseInt(val, 10) < 30000) {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  });
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Clean up the login marker after a brief period
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        sessionStorage.removeItem('kip_just_logged_in');
+      } catch {}
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Auto-close mobile drawer on route change
   useEffect(() => {
@@ -101,6 +136,7 @@ export default function InstructorAppShellLayout({
       }
     },
     enabled: isTokenChecked,
+    initialData: () => (getUser() as FullUser) || undefined,
     staleTime: 30000,
   });
 
@@ -117,15 +153,18 @@ export default function InstructorAppShellLayout({
     }
   }, [user, router]);
 
+  const isDataReady = isTokenChecked && (!!user || !userLoading);
+
   // Loading state while checking token and fetching profile
-  if (!isTokenChecked || userLoading) {
+  if (!isDataReady || !isLoaderDone) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin" />
-          <p className="text-xs text-text-secondary font-medium">Verifying instructor credentials...</p>
-        </div>
-      </div>
+      <MinimalTerminalLoader
+        minDuration={2000}
+        isAsyncComplete={isDataReady}
+        onComplete={() => setIsLoaderDone(true)}
+        title="instructor // verify_credentials"
+        stage="COURSE_01"
+      />
     );
   }
 

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { MinimalTerminalLoader } from '@/components/loaders/minimal-terminal-loader';
 
-export default function StudentRouteLoading() {
+export default function AdminRouteLoading() {
   const [shouldSkip] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -23,8 +23,8 @@ export default function StudentRouteLoading() {
   return (
     <MinimalTerminalLoader
       minDuration={2000}
-      title="student // runtime_sync"
-      stage="STAGE_02"
+      title="admin // telemetry_sync"
+      stage="ROOT_01"
     />
   );
 }

@@ -21,10 +21,11 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { getToken, clearAuth, User } from '@/lib/auth';
+import { getToken, getUser, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { MinimalTerminalLoader } from '@/components/loaders/minimal-terminal-loader';
 
 const ADMIN_NAV_ITEMS = [
   {
@@ -57,10 +58,36 @@ export default function AdminAppShellLayout({
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [isTokenChecked, setIsTokenChecked] = useState(false);
+  const [isTokenChecked, setIsTokenChecked] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!getToken();
+    }
+    return false;
+  });
+  const [isLoaderDone, setIsLoaderDone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const val = sessionStorage.getItem('kip_just_logged_in');
+        if (val && Date.now() - parseInt(val, 10) < 30000) {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  });
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Clean up the login marker after a brief period
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        sessionStorage.removeItem('kip_just_logged_in');
+      } catch {}
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Auto-close mobile drawer on route change
   useEffect(() => {
@@ -90,6 +117,7 @@ export default function AdminAppShellLayout({
       return response.data;
     },
     enabled: isTokenChecked,
+    initialData: () => getUser() || undefined,
     staleTime: 30000,
   });
 
@@ -106,14 +134,17 @@ export default function AdminAppShellLayout({
     }
   }, [user, router]);
 
-  if (!isTokenChecked || userLoading) {
+  const isDataReady = isTokenChecked && (!!user || !userLoading);
+
+  if (!isDataReady || !isLoaderDone) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin" />
-          <p className="text-xs text-text-secondary font-medium">Verifying administrator credentials...</p>
-        </div>
-      </div>
+      <MinimalTerminalLoader
+        minDuration={2000}
+        isAsyncComplete={isDataReady}
+        onComplete={() => setIsLoaderDone(true)}
+        title="admin // verify_credentials"
+        stage="ROOT_01"
+      />
     );
   }
 

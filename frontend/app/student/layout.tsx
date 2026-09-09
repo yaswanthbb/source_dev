@@ -26,6 +26,7 @@ import { ConceptSyllabusSidebar } from "@/components/concept-syllabus-sidebar";
 import { LogoutConfirmationModal } from "@/components/logout-confirmation-modal";
 import { ProfileActionsMenu } from "@/components/profile-actions-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { MinimalTerminalLoader } from "@/components/loaders/minimal-terminal-loader";
 
 const NAV_ITEMS = [
   {
@@ -59,7 +60,33 @@ export default function StudentAppShellLayout({
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useSnackbar();
-  const [isAuthChecked, setIsAuthChecked] = useState(false);
+  const [isAuthChecked, setIsAuthChecked] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!getToken();
+    }
+    return false;
+  });
+  const [isLoaderDone, setIsLoaderDone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const val = sessionStorage.getItem('kip_just_logged_in');
+        if (val && Date.now() - parseInt(val, 10) < 30000) {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  });
+
+  // Clean up the login marker after a brief period
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        sessionStorage.removeItem('kip_just_logged_in');
+      } catch {}
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Modal & Drawer States
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -128,11 +155,15 @@ export default function StudentAppShellLayout({
     router.replace("/login");
   };
 
-  if (!isAuthChecked) {
+  if (!isAuthChecked || !isLoaderDone) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin" />
-      </div>
+      <MinimalTerminalLoader
+        minDuration={2000}
+        isAsyncComplete={isAuthChecked}
+        onComplete={() => setIsLoaderDone(true)}
+        title="student // auth_guard"
+        stage="STAGE_01"
+      />
     );
   }
 
