@@ -864,15 +864,15 @@
     "semantic_hash": ""
   },
   "frontend/app/(auth)/login/page.tsx": {
-    "mtime": 1788950365.3955798,
-    "seen": 1788951909.427008,
-    "ast_hash": "86feba59fc6194e433681748e3f4b810",
+    "mtime": 1789023280.4533482,
+    "seen": 1789023315.465771,
+    "ast_hash": "d8402213b3d50d511c78428542d2b83e",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/register/page.tsx": {
-    "mtime": 1788863721.5996046,
-    "seen": 1788946888.4833803,
-    "ast_hash": "e06f0ba2ecdaf8da151ceb4ccbbc247a",
+    "mtime": 1789021215.0656724,
+    "seen": 1789022680.2445188,
+    "ast_hash": "787ede06af25d0b6ab6d3856b3611d4a",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/reset-password/page.tsx": {

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import apiClient from "@/lib/api-client";
 import { setToken, setUser, User } from "@/lib/auth";
-import { useSnackbar } from "@/providers/snackbar-provider";
 import { useTheme } from "@/providers/theme-provider";
 import { CenteredTerminalLoader } from "@/components/loaders/centered-terminal-loader";
 import "@/components/home/retro-terminal.css";
@@ -15,7 +14,6 @@ type LoginStage = "EMAIL" | "VERIFYING" | "PASSWORD";
 export default function LoginPage() {
   const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
-  const { showError } = useSnackbar();
 
   // Form & Terminal Stage States
   const [stage, setStage] = useState<LoginStage>("EMAIL");
@@ -36,10 +34,123 @@ export default function LoginPage() {
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const verificationTimerRef = useRef<NodeJS.Timeout[]>([]);
+  const bootTimerRef = useRef<NodeJS.Timeout[]>([]);
 
-  // Focus email input on initial mount
+  // Dynamic Shell Boot States
+  const FULL_COMMAND = "kip-auth --login";
+  const [bootPhase, setBootPhase] = useState<"PROMPT" | "TYPING" | "READY">("PROMPT");
+  const [typedCommand, setTypedCommand] = useState("");
+
+  // Dynamic OAuth Dispatch States
+  interface OAuthState {
+    provider: "google" | "github";
+    typed: string;
+    phase: "TYPING" | "STREAMING";
+    streamStep: number;
+    wasAborted: boolean;
+  }
+  const [oauthState, setOauthState] = useState<OAuthState | null>(null);
+  const oauthTimerRef = useRef<NodeJS.Timeout[]>([]);
+  const oauthStateRef = useRef<OAuthState | null>(oauthState);
+  oauthStateRef.current = oauthState;
+
+  // Skip boot typing animation if user interacts early
+  const skipBootAnimation = useCallback(() => {
+    if (bootPhase !== "READY") {
+      bootTimerRef.current.forEach(clearTimeout);
+      bootTimerRef.current = [];
+      setBootPhase("READY");
+      setTypedCommand(FULL_COMMAND);
+      setTimeout(() => emailInputRef.current?.focus(), 30);
+    }
+  }, [bootPhase, FULL_COMMAND]);
+
+  // Boot Sequence: 0.5s pause with prompt, then types "kip-auth --login", then reveals interactive username prompt
   useEffect(() => {
-    emailInputRef.current?.focus();
+    const tStart = setTimeout(() => {
+      setBootPhase("TYPING");
+      const chars = FULL_COMMAND.split("");
+      chars.forEach((_, idx) => {
+        const tChar = setTimeout(() => {
+          setTypedCommand(FULL_COMMAND.slice(0, idx + 1));
+          if (idx === chars.length - 1) {
+            const tEnd = setTimeout(() => {
+              setBootPhase("READY");
+              setTimeout(() => {
+                emailInputRef.current?.focus();
+              }, 40);
+            }, 120);
+            bootTimerRef.current.push(tEnd);
+          }
+        }, (idx + 1) * 26);
+        bootTimerRef.current.push(tChar);
+      });
+    }, 500);
+
+    bootTimerRef.current.push(tStart);
+
+    return () => {
+      bootTimerRef.current.forEach(clearTimeout);
+      bootTimerRef.current = [];
+      oauthTimerRef.current.forEach(clearTimeout);
+      oauthTimerRef.current = [];
+    };
+  }, [FULL_COMMAND]);
+
+  // Detect back-navigation or bfcache restore from OAuth redirect
+  useEffect(() => {
+    const handleCheckInFlight = (isFromPageShow = false) => {
+      let inFlight: string | null = null;
+      try {
+        inFlight = sessionStorage.getItem("kip_oauth_in_flight");
+        if (inFlight) {
+          sessionStorage.removeItem("kip_oauth_in_flight");
+        }
+      } catch {}
+
+      if (inFlight || (isFromPageShow && oauthStateRef.current)) {
+        oauthTimerRef.current.forEach(clearTimeout);
+        oauthTimerRef.current = [];
+        setOauthState(null);
+        setBootPhase("READY");
+        setTypedCommand("kip-auth --login");
+        setStage("EMAIL");
+        setStepIdentityOk(false);
+        setStepSecurityOk(false);
+        setPassword("");
+        setPasswordError(null);
+        setEmailError(null);
+        setIsSubmitting(false);
+        setStreamMessage(null);
+        const providerName =
+          inFlight === "google"
+            ? "Google"
+            : inFlight === "github"
+              ? "GitHub"
+              : oauthStateRef.current?.provider === "google"
+                ? "Google"
+                : oauthStateRef.current?.provider === "github"
+                  ? "GitHub"
+                  : "OAuth";
+        setServerError(
+          `[ERR_SESSION_ABORTED]: ${providerName} handshake terminated. Reverted to interactive root login.`,
+        );
+        setTimeout(() => {
+          emailInputRef.current?.focus();
+        }, 80);
+      }
+    };
+
+    // Check immediately on mount (for full navigation back)
+    handleCheckInFlight(false);
+
+    // Also check on pageshow (e.g. back-forward cache restore)
+    const onPageShow = (e: PageTransitionEvent) => {
+      handleCheckInFlight(e.persisted);
+    };
+
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   // Compute consistent deterministic UID from email for authentic UNIX feel
@@ -82,7 +193,40 @@ export default function LoginPage() {
 
   // Reset or abort session (^C / Escape)
   const handleAbortOrReset = useCallback(() => {
+    if (oauthState) {
+      clearTimers();
+      oauthTimerRef.current.forEach(clearTimeout);
+      oauthTimerRef.current = [];
+      try {
+        sessionStorage.removeItem("kip_oauth_in_flight");
+      } catch {}
+      const cancelledProvider =
+        oauthState.provider === "google" ? "Google" : "GitHub";
+      setOauthState(null);
+      setBootPhase("READY");
+      setTypedCommand(FULL_COMMAND);
+      setStage("EMAIL");
+      setStepIdentityOk(false);
+      setStepSecurityOk(false);
+      setPassword("");
+      setPasswordError(null);
+      setEmailError(null);
+      setStreamMessage(null);
+      setIsSubmitting(false);
+      setServerError(
+        `[ERR_SESSION_ABORTED]: ${cancelledProvider} dispatch aborted via SIGINT (^C). Root shell ready.`,
+      );
+      setTimeout(() => {
+        emailInputRef.current?.focus();
+      }, 50);
+      return;
+    }
+
     clearTimers();
+    if (bootPhase !== "READY") {
+      skipBootAnimation();
+      return;
+    }
     if (stageRef.current === "PASSWORD" || stageRef.current === "VERIFYING") {
       // ESC to abort: return to EMAIL stage keeping email for easy editing
       setStage("EMAIL");
@@ -100,22 +244,134 @@ export default function LoginPage() {
       // stage === 'EMAIL': ESC to clear the email input
       handleClearEmail();
     }
-  }, [handleClearEmail]);
+  }, [FULL_COMMAND, bootPhase, handleClearEmail, oauthState, skipBootAnimation]);
 
-  // Global keyboard shortcuts (ESC to clear/abort, ^C to reset/abort)
+  // Trigger Dynamic OAuth Flow (kip auth -google / kip auth -github)
+  const handleTriggerOAuth = useCallback(
+    (provider: "google" | "github") => {
+      if (oauthState || isSubmitting) return;
+
+      clearTimers();
+      oauthTimerRef.current.forEach(clearTimeout);
+      oauthTimerRef.current = [];
+
+      const wasAborted =
+        email.length > 0 || stage === "PASSWORD" || stage === "VERIFYING";
+
+      setOauthState({
+        provider,
+        typed: "",
+        phase: "TYPING",
+        streamStep: 0,
+        wasAborted,
+      });
+
+      const commandStr =
+        provider === "google" ? "kip auth -google" : "kip auth -github";
+      const chars = commandStr.split("");
+
+      const tStart = setTimeout(() => {
+        chars.forEach((_, idx) => {
+          const tChar = setTimeout(() => {
+            setOauthState((prev) =>
+              prev ? { ...prev, typed: commandStr.slice(0, idx + 1) } : null,
+            );
+
+            if (idx === chars.length - 1) {
+              // Finish typing command, reveal stream step 1
+              const t1 = setTimeout(() => {
+                setOauthState((prev) =>
+                  prev ? { ...prev, phase: "STREAMING", streamStep: 1 } : null,
+                );
+
+                // Stream step 2
+                const t2 = setTimeout(() => {
+                  setOauthState((prev) =>
+                    prev ? { ...prev, streamStep: 2 } : null,
+                  );
+
+                  // Stream step 3 (gateway redirecting)
+                  const t3 = setTimeout(() => {
+                    setOauthState((prev) =>
+                      prev ? { ...prev, streamStep: 3 } : null,
+                    );
+
+                    // Execute browser navigation to backend OAuth endpoint
+                    const tRedirect = setTimeout(() => {
+                      try {
+                        sessionStorage.setItem("kip_oauth_in_flight", provider);
+                      } catch {}
+                      const apiUrl =
+                        process.env.NEXT_PUBLIC_API_URL ||
+                        "http://localhost:3000";
+                      window.location.href = `${apiUrl}/auth/${provider}`;
+                    }, 400);
+                    oauthTimerRef.current.push(tRedirect);
+                  }, 220);
+                  oauthTimerRef.current.push(t3);
+                }, 220);
+                oauthTimerRef.current.push(t2);
+              }, 180);
+              oauthTimerRef.current.push(t1);
+            }
+          }, (idx + 1) * 24);
+          oauthTimerRef.current.push(tChar);
+        });
+      }, 180);
+
+      oauthTimerRef.current.push(tStart);
+    },
+    [email.length, isSubmitting, oauthState, stage],
+  );
+
+  // Global keyboard shortcuts (ESC to clear/abort, ^C to reset/abort, 1/2 for OAuth, any key to skip boot)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (bootPhase !== "READY") {
+        skipBootAnimation();
+        return;
+      }
+
+      // If in OAuth state, allow Ctrl+C or Escape to abort
+      if (oauthState) {
+        if (
+          e.key === "Escape" ||
+          (e.ctrlKey && (e.key === "c" || e.key === "C"))
+        ) {
+          e.preventDefault();
+          handleAbortOrReset();
+        }
+        return;
+      }
+
+      const activeEl = document.activeElement;
+      const isTyping =
+        activeEl &&
+        (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+
       if (e.key === "Escape") {
         e.preventDefault();
         handleAbortOrReset();
       } else if (e.ctrlKey && (e.key === "c" || e.key === "C")) {
         e.preventDefault();
         handleAbortOrReset();
+      } else if (!isTyping && e.key === "1") {
+        e.preventDefault();
+        handleTriggerOAuth("google");
+      } else if (!isTyping && e.key === "2") {
+        e.preventDefault();
+        handleTriggerOAuth("github");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleAbortOrReset]);
+  }, [
+    bootPhase,
+    handleAbortOrReset,
+    handleTriggerOAuth,
+    oauthState,
+    skipBootAnimation,
+  ]);
 
   // Stage 1: Validate Email and trigger sequential reveal
   const handleValidateEmail = (e?: React.FormEvent) => {
@@ -230,7 +486,6 @@ export default function LoginPage() {
 
       setServerError(errorText);
       setStreamMessage(null);
-      showError(errorText);
       passwordInputRef.current?.focus();
     }
   };
@@ -358,7 +613,7 @@ export default function LoginPage() {
             MAIN VIEWPORT: CENTERED TERMINAL LOGIN WINDOW
             ==================================================================== */}
         <main className="flex-1 flex items-center justify-center p-4 sm:p-6 w-full pt-20 pb-16">
-          <div className="w-full max-w-xl flex flex-col font-mono">
+          <div className="w-full max-w-2xl flex flex-col font-mono">
             {/* Terminal Window Container */}
             <div
               className={`w-full transition-all ${
@@ -492,35 +747,84 @@ export default function LoginPage() {
                     </p>
                   </div>
 
+                  {/* Shell Command Line (Dynamic boot typing: sys@daemon:/opt/kip$ kip-auth --login) */}
+                  <div
+                    className="flex items-center text-xs sm:text-[13px] font-mono select-none flex-wrap pt-0.5 cursor-pointer"
+                    onClick={skipBootAnimation}
+                  >
+                    <span
+                      className={`font-bold ${
+                        isDark ? "text-[#56d364]" : "text-[#b45309]"
+                      }`}
+                    >
+                      sys@daemon
+                    </span>
+                    <span
+                      className={isDark ? "text-[#8b939e]" : "text-[#45474a]"}
+                    >
+                      {isDark ? ":/opt/kip$" : ":/opt/kip"}
+                    </span>
+                    {!isDark && (
+                      <span className="text-[#1b1c19] font-bold">$</span>
+                    )}
+                    {typedCommand && (
+                      <span
+                        className={`font-bold ml-1.5 ${
+                          isDark ? "text-white" : "text-[#1b1c19]"
+                        }`}
+                      >
+                        {typedCommand}
+                      </span>
+                    )}
+                    {bootPhase !== "READY" && (
+                      <span
+                        aria-hidden="true"
+                        className={`retro-terminal-cursor !w-[9px] !h-[18px] ${
+                          typedCommand ? "ml-1" : "ml-1.5"
+                        } ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
+                      />
+                    )}
+                  </div>
+
                   {/* ==========================================================
                       INTERACTIVE TERMINAL PROMPTS (Email then Password)
+                      Appears after shell command finishes typing
                       ========================================================== */}
-                  <form
-                    onSubmit={
-                      stage === "PASSWORD"
-                        ? handleSubmitCredentials
-                        : handleValidateEmail
-                    }
-                    className="space-y-3"
-                    noValidate
-                  >
-                    {/* Stage 1: Username / Email Prompt */}
-                    <div className="space-y-1.5 pt-0.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <label
-                          htmlFor="terminal-user"
-                          className={`font-medium select-none whitespace-nowrap cursor-pointer ${
-                            isDark ? "text-[#c2c7cf]" : "text-[#45474a]"
-                          }`}
-                        >
-                          kip-auth login:
-                        </label>
+                  {bootPhase === "READY" && (
+                    <div className="space-y-3 pt-0.5 animate-in fade-in duration-150">
+                      <form
+                        onSubmit={
+                          stage === "PASSWORD"
+                            ? handleSubmitCredentials
+                            : handleValidateEmail
+                        }
+                        className="space-y-3"
+                        noValidate
+                      >
+                        {/* Stage 1: Username / Email Prompt */}
+                        <div className="space-y-1.5 pt-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <label
+                              htmlFor="terminal-user"
+                              className={`font-medium select-none whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                                isDark ? "text-[#c2c7cf]" : "text-[#45474a]"
+                              }`}
+                            >
+                              <span
+                                className={`font-bold ${
+                                  isDark ? "text-[#56d364]" : "text-[#b45309]"
+                                }`}
+                              >
+                                &gt;
+                              </span>
+                              <span>kip-auth username:</span>
+                            </label>
 
-                        {stage === "EMAIL" ? (
-                          <div
-                            className="relative flex items-center flex-1 min-w-[200px] cursor-text"
-                            onClick={() => emailInputRef.current?.focus()}
-                          >
+                            {stage === "EMAIL" ? (
+                              <div
+                                className="relative flex items-center flex-1 min-w-[200px] cursor-text"
+                                onClick={() => emailInputRef.current?.focus()}
+                              >
                             <span
                               className={`font-bold tracking-wide text-xs sm:text-[13px] whitespace-pre select-none ${
                                 isDark ? "text-white" : "text-[#1b1c19]"
@@ -528,12 +832,14 @@ export default function LoginPage() {
                             >
                               {email}
                             </span>
-                            <span
-                              aria-hidden="true"
-                              className={`retro-terminal-cursor !w-[9px] !h-[18px] ${
-                                isDark ? "text-[#56d364]" : "text-[#b45309]"
-                              }`}
-                            />
+                            {!oauthState && (
+                              <span
+                                aria-hidden="true"
+                                className={`retro-terminal-cursor !w-[9px] !h-[18px] ${
+                                  isDark ? "text-[#56d364]" : "text-[#b45309]"
+                                }`}
+                              />
+                            )}
                             <input
                               id="terminal-user"
                               type="email"
@@ -552,6 +858,7 @@ export default function LoginPage() {
                                   handleClearEmail();
                                 }
                               }}
+                              disabled={isSubmitting || !!oauthState}
                               className="absolute inset-0 w-full h-full opacity-0 pointer-events-auto cursor-text caret-transparent p-0 m-0 border-none bg-transparent"
                             />
                           </div>
@@ -583,6 +890,69 @@ export default function LoginPage() {
                       {emailError && (
                         <p className="text-[11px] text-red-500 font-medium pl-1 animate-in fade-in duration-150">
                           [ERR_INVALID_IDENTITY]: {emailError}
+                        </p>
+                      )}
+
+                      {/* Server Error Feedback in Stage 1 */}
+                      {stage === "EMAIL" && serverError && (
+                        <div
+                          className={`p-2 border text-[11px] space-y-1 animate-in fade-in duration-150 ${
+                            isDark
+                              ? "bg-[#281313] border-red-800 text-red-300"
+                              : "bg-red-50 border-red-300 text-red-700"
+                          }`}
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <span className="font-bold text-red-500 flex-shrink-0">
+                              [AUTH_FAILURE]:
+                            </span>
+                            <span>{serverError}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Stage 1 Stream Message */}
+                      {stage === "EMAIL" && streamMessage && (
+                        <div
+                          className={`p-2 border text-[11px] space-y-1 animate-in fade-in duration-150 ${
+                            isDark
+                              ? "bg-[#1e2022] border-[#333537] text-[#56d364]"
+                              : "bg-[#f5f4ef] border-[#c5c6cb] text-[#b45309]"
+                          }`}
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <span
+                              className={`font-bold flex-shrink-0 ${
+                                isDark ? "text-[#56d364]" : "text-[#b45309]"
+                              }`}
+                            >
+                              [SYS_STREAM]:
+                            </span>
+                            <span className="animate-pulse">{streamMessage}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Stage 1 Helper Hint when typing email */}
+                      {stage === "EMAIL" && !oauthState && (
+                        <p
+                          className={`text-[11px] pl-1 ${
+                            isDark ? "text-[#8e9194]" : "text-[#75777b]"
+                          }`}
+                        >
+                          [ Press{" "}
+                          <span
+                            className={isDark ? "text-[#56d364]" : "text-[#b45309]"}
+                          >
+                            ENTER
+                          </span>{" "}
+                          to validate identity |{" "}
+                          <span
+                            className={isDark ? "text-[#56d364]" : "text-[#b45309]"}
+                          >
+                            ESC
+                          </span>{" "}
+                          to clear ]
                         </p>
                       )}
 
@@ -642,11 +1012,18 @@ export default function LoginPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <label
                             htmlFor="terminal-token"
-                            className={`whitespace-nowrap font-medium select-none cursor-pointer ${
+                            className={`whitespace-nowrap font-medium select-none cursor-pointer flex items-center gap-1.5 ${
                               isDark ? "text-[#c2c7cf]" : "text-[#45474a]"
                             }`}
                           >
-                            Password for {email.split("@")[0]}:
+                            <span
+                              className={`font-bold ${
+                                isDark ? "text-[#56d364]" : "text-[#b45309]"
+                              }`}
+                            >
+                              &gt;
+                            </span>
+                            <span>kip-auth password:</span>
                           </label>
 
                           <div
@@ -662,12 +1039,14 @@ export default function LoginPage() {
                                 ? password
                                 : "•".repeat(password.length)}
                             </span>
-                            <span
-                              aria-hidden="true"
-                              className={`retro-terminal-cursor !w-[9px] !h-[18px] ${
-                                isDark ? "text-[#56d364]" : "text-[#b45309]"
-                              }`}
-                            />
+                            {!oauthState && (
+                              <span
+                                aria-hidden="true"
+                                className={`retro-terminal-cursor !w-[9px] !h-[18px] ${
+                                  isDark ? "text-[#56d364]" : "text-[#b45309]"
+                                }`}
+                              />
+                            )}
                             <input
                               id="terminal-token"
                               type={showPassword ? "text" : "password"}
@@ -686,7 +1065,7 @@ export default function LoginPage() {
                                   handleAbortOrReset();
                                 }
                               }}
-                              disabled={isSubmitting}
+                              disabled={isSubmitting || !!oauthState}
                               className="absolute inset-0 w-full h-full opacity-0 pointer-events-auto cursor-text caret-transparent p-0 m-0 border-none bg-transparent"
                             />
                           </div>
@@ -714,35 +1093,78 @@ export default function LoginPage() {
                           </button>
                         </div>
 
+                        {/* Password Error Feedback */}
                         {passwordError && (
                           <p className="text-[11px] text-red-500 font-medium pl-1 animate-in fade-in duration-150">
                             [ERR_INVALID_CREDENTIAL]: {passwordError}
                           </p>
                         )}
 
-                        <p
-                          className={`text-[11px] pl-1 ${
-                            isDark ? "text-[#8e9194]" : "text-[#75777b]"
-                          }`}
-                        >
-                          [ Press{" "}
-                          <span
-                            className={
-                              isDark ? "text-[#56d364]" : "text-[#b45309]"
-                            }
+                        {/* Server Error Feedback in Stage 2 */}
+                        {stage === "PASSWORD" && serverError && (
+                          <div
+                            className={`p-2 border text-[11px] space-y-1 animate-in fade-in duration-150 ${
+                              isDark
+                                ? "bg-[#281313] border-red-800 text-red-300"
+                                : "bg-red-50 border-red-300 text-red-700"
+                            }`}
                           >
-                            ENTER
-                          </span>{" "}
-                          to authenticate |{" "}
-                          <span
-                            className={
-                              isDark ? "text-[#56d364]" : "text-[#b45309]"
-                            }
+                            <div className="flex items-start gap-1.5">
+                              <span className="font-bold text-red-500 flex-shrink-0">
+                                [AUTH_FAILURE]:
+                              </span>
+                              <span>{serverError}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Stage 2 Stream Message */}
+                        {stage === "PASSWORD" && streamMessage && (
+                          <div
+                            className={`p-2 border text-[11px] space-y-1 animate-in fade-in duration-150 ${
+                              isDark
+                                ? "bg-[#1e2022] border-[#333537] text-[#56d364]"
+                                : "bg-[#f5f4ef] border-[#c5c6cb] text-[#b45309]"
+                            }`}
                           >
-                            ESC
-                          </span>{" "}
-                          to abort ]
-                        </p>
+                            <div className="flex items-start gap-1.5">
+                              <span
+                                className={`font-bold flex-shrink-0 ${
+                                  isDark ? "text-[#56d364]" : "text-[#b45309]"
+                                }`}
+                              >
+                                [SYS_STREAM]:
+                              </span>
+                              <span className="animate-pulse">{streamMessage}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {!oauthState && (
+                          <p
+                            className={`text-[11px] pl-1 ${
+                              isDark ? "text-[#8e9194]" : "text-[#75777b]"
+                            }`}
+                          >
+                            [ Press{" "}
+                            <span
+                              className={
+                                isDark ? "text-[#56d364]" : "text-[#b45309]"
+                              }
+                            >
+                              ENTER
+                            </span>{" "}
+                            to authenticate |{" "}
+                            <span
+                              className={
+                                isDark ? "text-[#56d364]" : "text-[#b45309]"
+                              }
+                            >
+                              ESC
+                            </span>{" "}
+                            to abort ]
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -754,65 +1176,154 @@ export default function LoginPage() {
                     />
                   </form>
 
-                  {/* Stage 1 Helper Hint when typing email */}
-                  {stage === "EMAIL" && (
-                    <p
-                      className={`text-[11px] pl-1 ${
-                        isDark ? "text-[#8e9194]" : "text-[#75777b]"
-                      }`}
-                    >
-                      [ Press{" "}
-                      <span
-                        className={isDark ? "text-[#56d364]" : "text-[#b45309]"}
-                      >
-                        ENTER
-                      </span>{" "}
-                      to validate identity |{" "}
-                      <span
-                        className={isDark ? "text-[#56d364]" : "text-[#b45309]"}
-                      >
-                        ESC
-                      </span>{" "}
-                      to clear ]
-                    </p>
-                  )}
-
-                  {/* Live Stream / Error Console Box */}
-                  {(streamMessage || serverError) && (
-                    <div
-                      className={`p-2 border text-[11px] space-y-1 animate-in fade-in duration-150 ${
-                        serverError
-                          ? isDark
-                            ? "bg-[#281313] border-red-800 text-red-300"
-                            : "bg-red-50 border-red-300 text-red-700"
-                          : isDark
-                            ? "bg-[#1e2022] border-[#333537] text-[#56d364]"
-                            : "bg-[#f5f4ef] border-[#c5c6cb] text-[#b45309]"
-                      }`}
-                    >
-                      {serverError ? (
-                        <div className="flex items-start gap-1.5">
-                          <span className="font-bold text-red-500 flex-shrink-0">
-                            [AUTH_FAILURE]:
-                          </span>
-                          <span>{serverError}</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-start gap-1.5">
+                  {/* OAuth Dispatch Terminal Stream (Inside same screen as username & password container, above Alternatively) */}
+                  {oauthState && (
+                    <div className="pt-2 border-t border-[#333537]/50 dark:border-[#333537] space-y-1.5 animate-in fade-in duration-150">
+                      {oauthState.wasAborted && (
+                        <p className="text-[11px] text-red-500 font-mono font-medium animate-in fade-in duration-150">
+                          ^C [SIGINT]: Interactive login aborted. Switching dispatch route...
+                        </p>
+                      )}
+                      <div className="flex items-center text-xs sm:text-[13px] font-mono select-none flex-wrap">
+                        <span
+                          className={`font-bold ${
+                            isDark ? "text-[#56d364]" : "text-[#b45309]"
+                          }`}
+                        >
+                          sys@daemon
+                        </span>
+                        <span
+                          className={
+                            isDark ? "text-[#8b939e]" : "text-[#45474a]"
+                          }
+                        >
+                          {isDark ? ":/opt/kip$" : ":/opt/kip"}
+                        </span>
+                        {!isDark && (
+                          <span className="text-[#1b1c19] font-bold">$</span>
+                        )}
+                        {oauthState.typed && (
                           <span
-                            className={`font-bold flex-shrink-0 ${
-                              isDark ? "text-[#56d364]" : "text-[#b45309]"
+                            className={`font-bold ml-1.5 ${
+                              isDark ? "text-white" : "text-[#1b1c19]"
                             }`}
                           >
-                            [SYS_STREAM]:
+                            {oauthState.typed}
                           </span>
-                          <span className="animate-pulse">{streamMessage}</span>
+                        )}
+                        {oauthState.phase === "TYPING" && (
+                          <span
+                            aria-hidden="true"
+                            className={`retro-terminal-cursor !w-[9px] !h-[18px] ml-1 ${
+                              isDark ? "text-[#56d364]" : "text-[#b45309]"
+                            }`}
+                          />
+                        )}
+                      </div>
+
+                      {oauthState.streamStep >= 1 && (
+                        <div className="text-[11px] pl-2 space-y-1 pt-0.5">
+                          <p className="animate-in fade-in slide-in-from-left-2 duration-150">
+                            <span
+                              className={`font-bold ${
+                                isDark ? "text-[#56d364]" : "text-[#b45309]"
+                              }`}
+                            >
+                              [OK]
+                            </span>{" "}
+                            <span
+                              className={
+                                isDark ? "text-white" : "text-[#1b1c19]"
+                              }
+                            >
+                              Initializing{" "}
+                              {oauthState.provider === "google"
+                                ? "Google"
+                                : "GitHub"}{" "}
+                              OAuth 2.0 PKCE handshake...
+                            </span>
+                          </p>
+
+                          {oauthState.streamStep >= 2 && (
+                            <p className="animate-in fade-in slide-in-from-left-2 duration-150">
+                              <span
+                                className={`font-bold ${
+                                  isDark ? "text-[#56d364]" : "text-[#b45309]"
+                                }`}
+                              >
+                                [OK]
+                              </span>{" "}
+                              <span
+                                className={
+                                  isDark ? "text-white" : "text-[#1b1c19]"
+                                }
+                              >
+                                Handshake verified: client_id candidate loaded
+                              </span>
+                            </p>
+                          )}
                         </div>
                       )}
+
+                      {oauthState.streamStep >= 3 && (
+                        <div
+                          className={`p-2 border text-[11px] animate-in fade-in duration-150 ${
+                            isDark
+                              ? "bg-[#1e2022] border-[#333537] text-[#56d364]"
+                              : "bg-[#f5f4ef] border-[#c5c6cb] text-[#b45309]"
+                          }`}
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <span
+                              className={`font-bold flex-shrink-0 ${
+                                isDark ? "text-[#56d364]" : "text-[#b45309]"
+                              }`}
+                            >
+                              [SYS_STREAM]:
+                            </span>
+                            <span className="animate-pulse">
+                              Redirecting to{" "}
+                              {oauthState.provider === "google"
+                                ? "Google"
+                                : "GitHub"}{" "}
+                              identity gateway...
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Abort / Cancel hint if gateway stalls or user wants to revert */}
+                      <p
+                        className={`text-[11px] pl-1 animate-in fade-in duration-150 ${
+                          isDark ? "text-[#8e9194]" : "text-[#75777b]"
+                        }`}
+                      >
+                        [ Press{" "}
+                        <button
+                          type="button"
+                          onClick={handleAbortOrReset}
+                          className={`font-bold hover:underline cursor-pointer ${
+                            isDark ? "text-[#56d364]" : "text-[#b45309]"
+                          }`}
+                        >
+                          ^C
+                        </button>{" "}
+                        to abort |{" "}
+                        <button
+                          type="button"
+                          onClick={handleAbortOrReset}
+                          className={`font-bold hover:underline cursor-pointer ${
+                            isDark ? "text-[#56d364]" : "text-[#b45309]"
+                          }`}
+                        >
+                          ESC
+                        </button>{" "}
+                        to cancel ]
+                      </p>
                     </div>
                   )}
 
-                  {/* Alternatively: OAuth SSO Options */}
+                  {/* Alternatively: OAuth Options */}
                   <div
                     className={`border-t pt-2.5 space-y-2 ${
                       isDark ? "border-[#333537]" : "border-[#e3e3de]"
@@ -826,15 +1337,18 @@ export default function LoginPage() {
                       Alternatively:
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <a
-                        href={`${
-                          process.env.NEXT_PUBLIC_API_URL ||
-                          "http://localhost:3000"
-                        }/auth/google`}
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerOAuth("google")}
+                        disabled={!!oauthState || isSubmitting}
                         className={`text-left px-2.5 py-1 border transition-colors text-[11px] flex items-center space-x-2 cursor-pointer ${
-                          isDark
-                            ? "bg-[#1e2022] hover:bg-[#333537] text-[#c2c7cf] hover:text-white border-[#333537]"
-                            : "bg-[#f5f4ef] hover:bg-[#e9e8e3] text-[#1b1c19] border-[#c5c6cb]"
+                          oauthState?.provider === "google"
+                            ? isDark
+                              ? "bg-[#56d364]/10 border-[#56d364] text-white shadow-[0_0_8px_rgba(86,211,100,0.2)]"
+                              : "bg-[#b45309]/10 border-[#b45309] text-[#1b1c19]"
+                            : isDark
+                              ? "bg-[#1e2022] hover:bg-[#333537] text-[#c2c7cf] hover:text-white border-[#333537]"
+                              : "bg-[#f5f4ef] hover:bg-[#e9e8e3] text-[#1b1c19] border-[#c5c6cb]"
                         }`}
                       >
                         <span className="font-bold">
@@ -845,26 +1359,29 @@ export default function LoginPage() {
                           >
                             [1]
                           </span>{" "}
-                          Google SSO
+                          Google OAuth
                         </span>
                         <span
                           className={
                             isDark ? "text-[#8e9194]" : "text-[#75777b]"
                           }
                         >
-                          (kip auth -g)
+                          (kip auth -google)
                         </span>
-                      </a>
+                      </button>
 
-                      <a
-                        href={`${
-                          process.env.NEXT_PUBLIC_API_URL ||
-                          "http://localhost:3000"
-                        }/auth/github`}
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerOAuth("github")}
+                        disabled={!!oauthState || isSubmitting}
                         className={`text-left px-2.5 py-1 border transition-colors text-[11px] flex items-center space-x-2 cursor-pointer ${
-                          isDark
-                            ? "bg-[#1e2022] hover:bg-[#333537] text-[#c2c7cf] hover:text-white border-[#333537]"
-                            : "bg-[#f5f4ef] hover:bg-[#e9e8e3] text-[#1b1c19] border-[#c5c6cb]"
+                          oauthState?.provider === "github"
+                            ? isDark
+                              ? "bg-[#56d364]/10 border-[#56d364] text-white shadow-[0_0_8px_rgba(86,211,100,0.2)]"
+                              : "bg-[#b45309]/10 border-[#b45309] text-[#1b1c19]"
+                            : isDark
+                              ? "bg-[#1e2022] hover:bg-[#333537] text-[#c2c7cf] hover:text-white border-[#333537]"
+                              : "bg-[#f5f4ef] hover:bg-[#e9e8e3] text-[#1b1c19] border-[#c5c6cb]"
                         }`}
                       >
                         <span className="font-bold">
@@ -882,113 +1399,117 @@ export default function LoginPage() {
                             isDark ? "text-[#8e9194]" : "text-[#75777b]"
                           }
                         >
-                          (kip auth -gh)
+                          (kip auth -github)
                         </span>
-                      </a>
+                      </button>
                     </div>
                   </div>
                 </div>
+              )}
+            </div>
 
-                {/* Bottom Window Control / Shortcut Links */}
-                <div className="flex flex-col space-y-1.5 pt-0.5">
-                  <div
-                    className={`flex items-center justify-between text-[11px] px-1 select-none font-medium ${
-                      isDark ? "text-[#c4c7c9]" : "text-[#45474a]"
-                    }`}
-                  >
-                    {stage === "PASSWORD" ? (
-                      <button
-                        type="button"
-                        onClick={handleSubmitCredentials}
-                        disabled={isSubmitting}
-                        className="hover:underline transition-colors cursor-pointer"
-                      >
-                        <span
-                          className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
-                        >
-                          [ENTER]
-                        </span>{" "}
-                        <span
-                          className={isDark ? "text-white" : "text-[#1b1c19]"}
-                        >
-                          SUBMIT_CREDENTIALS
-                        </span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleValidateEmail}
-                        className="hover:underline transition-colors cursor-pointer"
-                      >
-                        <span
-                          className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
-                        >
-                          [ENTER]
-                        </span>{" "}
-                        <span
-                          className={isDark ? "text-white" : "text-[#1b1c19]"}
-                        >
-                          VALIDATE_IDENTITY
-                        </span>
-                      </button>
-                    )}
-
+            {/* Bottom Window Control / Shortcut Links */}
+            {bootPhase === "READY" && (
+              <div className="flex flex-col space-y-1.5 pt-0.5 animate-in fade-in duration-150">
+                <div
+                  className={`flex items-center justify-between text-[11px] px-1 select-none font-medium ${
+                    isDark ? "text-[#c4c7c9]" : "text-[#45474a]"
+                  }`}
+                >
+                  {stage === "PASSWORD" ? (
                     <button
                       type="button"
-                      onClick={handleAbortOrReset}
+                      onClick={handleSubmitCredentials}
+                      disabled={isSubmitting}
                       className="hover:underline transition-colors cursor-pointer"
                     >
                       <span
                         className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
                       >
-                        [^C]
-                      </span>{" "}
-                      <span
-                        className={isDark ? "text-[#c2c7cf]" : "text-[#1b1c19]"}
-                      >
-                        RESET / ABORT
-                      </span>
-                    </button>
-
-                    <Link
-                      href="/register"
-                      className="hover:underline transition-colors cursor-pointer"
-                    >
-                      <span
-                        className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
-                      >
-                        [TAB]
+                        [ENTER]
                       </span>{" "}
                       <span
                         className={isDark ? "text-white" : "text-[#1b1c19]"}
                       >
-                        CREATE_ACCOUNT
+                        SUBMIT_CREDENTIALS
                       </span>
-                    </Link>
-                  </div>
-
-                  <div
-                    className={`flex items-center justify-between text-[10px] px-1 ${
-                      isDark ? "text-[#8e9194]" : "text-[#75777b]"
-                    }`}
-                  >
-                    <Link
-                      href="/forgot-password"
-                      className="hover:underline transition-colors"
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleValidateEmail}
+                      className="hover:underline transition-colors cursor-pointer"
                     >
                       <span
                         className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
                       >
-                        [?]
+                        [ENTER]
                       </span>{" "}
-                      <span>FORGOT_PASSWORD</span>
-                    </Link>
-                    <span>SESSION_ENCODING: UTF-8</span>
-                  </div>
+                      <span
+                        className={isDark ? "text-white" : "text-[#1b1c19]"}
+                      >
+                        VALIDATE_IDENTITY
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleAbortOrReset}
+                    className="hover:underline transition-colors cursor-pointer"
+                  >
+                    <span
+                      className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
+                    >
+                      [^C]
+                    </span>{" "}
+                    <span
+                      className={isDark ? "text-[#c2c7cf]" : "text-[#1b1c19]"}
+                    >
+                      RESET / ABORT
+                    </span>
+                  </button>
+
+                  <Link
+                    href="/register"
+                    className="hover:underline transition-colors cursor-pointer"
+                  >
+                    <span
+                      className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
+                    >
+                      [TAB]
+                    </span>{" "}
+                    <span
+                      className={isDark ? "text-white" : "text-[#1b1c19]"}
+                    >
+                      CREATE_ACCOUNT
+                    </span>
+                  </Link>
+                </div>
+
+                <div
+                  className={`flex items-center justify-between text-[10px] px-1 ${
+                    isDark ? "text-[#8e9194]" : "text-[#75777b]"
+                  }`}
+                >
+                  <Link
+                    href="/forgot-password"
+                    className="hover:underline transition-colors"
+                  >
+                    <span
+                      className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
+                    >
+                      [?]
+                    </span>{" "}
+                    <span>FORGOT_PASSWORD</span>
+                  </Link>
+                  <span>SESSION_ENCODING: UTF-8</span>
                 </div>
               </div>
-            </div>
+            )}
           </div>
+        </div>
+      </div>
         </main>
 
         {/* ====================================================================
