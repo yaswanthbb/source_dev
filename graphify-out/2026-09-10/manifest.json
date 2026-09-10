@@ -864,9 +864,9 @@
     "semantic_hash": ""
   },
   "frontend/app/(auth)/login/page.tsx": {
-    "mtime": 1788957146.0945027,
-    "seen": 1789015235.1682768,
-    "ast_hash": "f82baf7a7aa86debe1582f04fd91103a",
+    "mtime": 1788950365.3955798,
+    "seen": 1788951909.427008,
+    "ast_hash": "86feba59fc6194e433681748e3f4b810",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/register/page.tsx": {
