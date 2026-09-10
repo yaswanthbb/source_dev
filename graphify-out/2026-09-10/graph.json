@@ -9504,26 +9504,26 @@
       "source_location": "L61"
     },
     {
-      "id": "frontend_package_dependencies_lucide_react",
-      "label": "lucide-react",
+      "id": "backend_package_dependencies_nestjs_passport",
+      "label": "@nestjs/passport",
       "_origin": "ast",
       "community": 124,
-      "community_name": "lucide-react",
+      "community_name": "@nestjs/passport",
       "file_type": "code",
-      "norm_label": "lucide-react",
-      "source_file": "frontend/package.json",
-      "source_location": "L16"
+      "norm_label": "@nestjs/passport",
+      "source_file": "backend/package.json",
+      "source_location": "L31"
     },
     {
-      "id": "lucide_react",
-      "label": "lucide-react",
+      "id": "nestjs_passport",
+      "label": "@nestjs/passport",
       "_origin": "ast",
       "community": 124,
-      "community_name": "lucide-react",
+      "community_name": "@nestjs/passport",
       "file_type": "concept",
-      "norm_label": "lucide-react",
-      "source_file": "frontend/package.json",
-      "source_location": "L16"
+      "norm_label": "@nestjs/passport",
+      "source_file": "backend/package.json",
+      "source_location": "L31"
     },
     {
       "id": "backend_package_dependencies_nestjs_swagger",
@@ -9548,26 +9548,26 @@
       "source_location": "L33"
     },
     {
-      "id": "backend_package_dependencies_nodemailer",
-      "label": "nodemailer",
+      "id": "backend_package_dependencies_passport",
+      "label": "passport",
       "_origin": "ast",
       "community": 126,
-      "community_name": "nodemailer",
+      "community_name": "passport",
       "file_type": "code",
-      "norm_label": "nodemailer",
+      "norm_label": "passport",
       "source_file": "backend/package.json",
-      "source_location": "L39"
+      "source_location": "L40"
     },
     {
-      "id": "nodemailer",
-      "label": "nodemailer",
+      "id": "passport",
+      "label": "passport",
       "_origin": "ast",
       "community": 126,
-      "community_name": "nodemailer",
+      "community_name": "passport",
       "file_type": "concept",
-      "norm_label": "nodemailer",
+      "norm_label": "passport",
       "source_file": "backend/package.json",
-      "source_location": "L39"
+      "source_location": "L40"
     },
     {
       "id": "package",
@@ -9636,26 +9636,26 @@
       "source_location": "L41"
     },
     {
-      "id": "backend_package_dependencies_passport_google_oauth20",
-      "label": "passport-google-oauth20",
+      "id": "backend_package_devdependencies_jest",
+      "label": "jest",
       "_origin": "ast",
       "community": 129,
-      "community_name": "passport-google-oauth20",
+      "community_name": "jest",
       "file_type": "code",
-      "norm_label": "passport-google-oauth20",
+      "norm_label": "jest",
       "source_file": "backend/package.json",
-      "source_location": "L42"
+      "source_location": "L68"
     },
     {
-      "id": "passport_google_oauth20",
-      "label": "passport-google-oauth20",
+      "id": "jest",
+      "label": "jest",
       "_origin": "ast",
       "community": 129,
-      "community_name": "passport-google-oauth20",
+      "community_name": "jest",
       "file_type": "concept",
-      "norm_label": "passport-google-oauth20",
+      "norm_label": "jest",
       "source_file": "backend/package.json",
-      "source_location": "L42"
+      "source_location": "L68"
     },
     {
       "id": "backend_src_common_entities_base_entity_ts_createdatecolumn",
@@ -9966,26 +9966,26 @@
       "source_location": ""
     },
     {
-      "id": "backend_package_devdependencies_eslint_config_prettier",
-      "label": "eslint-config-prettier",
+      "id": "frontend_package_dependencies_hookform_resolvers",
+      "label": "@hookform/resolvers",
       "_origin": "ast",
       "community": 130,
-      "community_name": "eslint-config-prettier",
+      "community_name": "@hookform/resolvers",
       "file_type": "code",
-      "norm_label": "eslint-config-prettier",
-      "source_file": "backend/package.json",
-      "source_location": "L65"
+      "norm_label": "@hookform/resolvers",
+      "source_file": "frontend/package.json",
+      "source_location": "L12"
     },
     {
-      "id": "eslint_config_prettier",
-      "label": "eslint-config-prettier",
+      "id": "hookform_resolvers",
+      "label": "@hookform/resolvers",
       "_origin": "ast",
       "community": 130,
-      "community_name": "eslint-config-prettier",
+      "community_name": "@hookform/resolvers",
       "file_type": "concept",
-      "norm_label": "eslint-config-prettier",
-      "source_file": "backend/package.json",
-      "source_location": "L65"
+      "norm_label": "@hookform/resolvers",
+      "source_file": "frontend/package.json",
+      "source_location": "L12"
     },
     {
       "id": "backend_package_dependencies_passport_jwt",
@@ -12947,17 +12947,6 @@
       "source_location": "L30"
     },
     {
-      "id": "backend_package_dependencies_nestjs_passport",
-      "label": "@nestjs/passport",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "dependencies",
-      "file_type": "code",
-      "norm_label": "@nestjs/passport",
-      "source_file": "backend/package.json",
-      "source_location": "L31"
-    },
-    {
       "id": "backend_package_dependencies_nestjs_typeorm",
       "label": "@nestjs/typeorm",
       "_origin": "ast",
@@ -12969,15 +12958,26 @@
       "source_location": "L34"
     },
     {
-      "id": "backend_package_dependencies_passport",
-      "label": "passport",
+      "id": "backend_package_dependencies_nodemailer",
+      "label": "nodemailer",
       "_origin": "ast",
       "community": 27,
       "community_name": "dependencies",
       "file_type": "code",
-      "norm_label": "passport",
+      "norm_label": "nodemailer",
       "source_file": "backend/package.json",
-      "source_location": "L40"
+      "source_location": "L39"
+    },
+    {
+      "id": "backend_package_dependencies_passport_google_oauth20",
+      "label": "passport-google-oauth20",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "dependencies",
+      "file_type": "code",
+      "norm_label": "passport-google-oauth20",
+      "source_file": "backend/package.json",
+      "source_location": "L42"
     },
     {
       "id": "backend_package_dependencies_reflect_metadata",
@@ -13079,17 +13079,6 @@
       "source_location": "L30"
     },
     {
-      "id": "nestjs_passport",
-      "label": "@nestjs/passport",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "dependencies",
-      "file_type": "concept",
-      "norm_label": "@nestjs/passport",
-      "source_file": "backend/package.json",
-      "source_location": "L31"
-    },
-    {
       "id": "nestjs_typeorm",
       "label": "@nestjs/typeorm",
       "_origin": "ast",
@@ -13101,15 +13090,26 @@
       "source_location": "L34"
     },
     {
-      "id": "passport",
-      "label": "passport",
+      "id": "nodemailer",
+      "label": "nodemailer",
       "_origin": "ast",
       "community": 27,
       "community_name": "dependencies",
       "file_type": "concept",
-      "norm_label": "passport",
+      "norm_label": "nodemailer",
       "source_file": "backend/package.json",
-      "source_location": "L40"
+      "source_location": "L39"
+    },
+    {
+      "id": "passport_google_oauth20",
+      "label": "passport-google-oauth20",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "dependencies",
+      "file_type": "concept",
+      "norm_label": "passport-google-oauth20",
+      "source_file": "backend/package.json",
+      "source_location": "L42"
     },
     {
       "id": "reflect_metadata",
@@ -14223,15 +14223,15 @@
       "source_location": "L11"
     },
     {
-      "id": "frontend_package_dependencies_hookform_resolvers",
-      "label": "@hookform/resolvers",
+      "id": "frontend_package_dependencies_lucide_react",
+      "label": "lucide-react",
       "_origin": "ast",
       "community": 35,
       "community_name": "dependencies",
       "file_type": "code",
-      "norm_label": "@hookform/resolvers",
+      "norm_label": "lucide-react",
       "source_file": "frontend/package.json",
-      "source_location": "L12"
+      "source_location": "L16"
     },
     {
       "id": "frontend_package_dependencies_next",
@@ -14300,15 +14300,15 @@
       "source_location": "L23"
     },
     {
-      "id": "hookform_resolvers",
-      "label": "@hookform/resolvers",
+      "id": "lucide_react",
+      "label": "lucide-react",
       "_origin": "ast",
       "community": 35,
       "community_name": "dependencies",
       "file_type": "concept",
-      "norm_label": "@hookform/resolvers",
+      "norm_label": "lucide-react",
       "source_file": "frontend/package.json",
-      "source_location": "L12"
+      "source_location": "L16"
     },
     {
       "id": "next",
@@ -18271,6 +18271,17 @@
       "source_location": "L49"
     },
     {
+      "id": "backend_package_devdependencies_eslint_config_prettier",
+      "label": "eslint-config-prettier",
+      "_origin": "ast",
+      "community": 78,
+      "community_name": "devDependencies",
+      "file_type": "code",
+      "norm_label": "eslint-config-prettier",
+      "source_file": "backend/package.json",
+      "source_location": "L65"
+    },
+    {
       "id": "backend_package_devdependencies_eslint_js",
       "label": "@eslint/js",
       "_origin": "ast",
@@ -18280,17 +18291,6 @@
       "norm_label": "@eslint/js",
       "source_file": "backend/package.json",
       "source_location": "L51"
-    },
-    {
-      "id": "backend_package_devdependencies_jest",
-      "label": "jest",
-      "_origin": "ast",
-      "community": 78,
-      "community_name": "devDependencies",
-      "file_type": "code",
-      "norm_label": "jest",
-      "source_file": "backend/package.json",
-      "source_location": "L68"
     },
     {
       "id": "backend_package_devdependencies_types_supertest",
@@ -18326,6 +18326,17 @@
       "source_location": "L76"
     },
     {
+      "id": "eslint_config_prettier",
+      "label": "eslint-config-prettier",
+      "_origin": "ast",
+      "community": 78,
+      "community_name": "devDependencies",
+      "file_type": "concept",
+      "norm_label": "eslint-config-prettier",
+      "source_file": "backend/package.json",
+      "source_location": "L65"
+    },
+    {
       "id": "eslint_js",
       "label": "@eslint/js",
       "_origin": "ast",
@@ -18335,17 +18346,6 @@
       "norm_label": "@eslint/js",
       "source_file": "backend/package.json",
       "source_location": "L51"
-    },
-    {
-      "id": "jest",
-      "label": "jest",
-      "_origin": "ast",
-      "community": 78,
-      "community_name": "devDependencies",
-      "file_type": "concept",
-      "norm_label": "jest",
-      "source_file": "backend/package.json",
-      "source_location": "L68"
     },
     {
       "id": "types_supertest",
@@ -21257,7 +21257,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/app/(auth)/login/page.tsx",
-      "source_location": "L355",
+      "source_location": "L455",
       "weight": 1.0
     },
     {
@@ -21269,7 +21269,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/app/(auth)/login/page.tsx",
-      "source_location": "L356",
+      "source_location": "L456",
       "weight": 1.0
     },
     {

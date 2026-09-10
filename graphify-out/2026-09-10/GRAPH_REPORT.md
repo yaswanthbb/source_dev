@@ -1,7 +1,7 @@
 # Graph Report - knowledge_is_power  (2026-09-10)
 
 ## Corpus Check
-- 243 files · ~219,360 words
+- 243 files · ~219,831 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -136,13 +136,13 @@
 - @types/bcrypt
 - @types/passport-github2
 - @types/passport-google-oauth20
-- lucide-react
+- @nestjs/passport
 - @nestjs/swagger
-- nodemailer
+- passport
 - dependencies
 - passport-github2
-- passport-google-oauth20
-- eslint-config-prettier
+- jest
+- @hookform/resolvers
 - passport-jwt
 - pg
 - typeorm
@@ -326,7 +326,7 @@ Nodes (3): IS_PUBLIC_KEY, JwtAuthGuard, Injectable
 
 ### Community 35 - "dependencies"
 Cohesion: 0.13
-Nodes (15): dependencies, @hookform/resolvers, next, react, react-dom, @tanstack/react-query, @tanstack/react-query-devtools, zod (+7 more)
+Nodes (15): dependencies, lucide-react, next, react, react-dom, @tanstack/react-query, @tanstack/react-query-devtools, zod (+7 more)
 
 ### Community 36 - "Content Authoring Flow"
 Cohesion: 0.19
@@ -438,7 +438,7 @@ Nodes (5): ApiPropertyOptional, IsOptional, IsString, MaxLength, UpdateInstructo
 
 ### Community 78 - "devDependencies"
 Cohesion: 0.22
-Nodes (9): devDependencies, @eslint/js, jest, @types/supertest, typescript, typescript, @eslint/js, jest (+1 more)
+Nodes (9): devDependencies, eslint-config-prettier, @eslint/js, @types/supertest, typescript, typescript, eslint-config-prettier, @eslint/js (+1 more)
 
 ### Community 81 - "VerifyOtpDto"
 Cohesion: 0.33
