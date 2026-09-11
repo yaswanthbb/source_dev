@@ -1,16 +1,16 @@
 # Graph Report - knowledge_is_power  (2026-09-11)
 
 ## Corpus Check
-- 243 files · ~221,428 words
+- 243 files · ~221,473 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1687 nodes · 4192 edges · 137 communities (74 shown, 63 thin omitted)
+- 1687 nodes · 4193 edges · 137 communities (74 shown, 63 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 118 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `cb44d864`
+- Built from commit: `cbd6ed25`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -167,12 +167,12 @@
   README.md → frontend/README.md
 - `RootPage()` --calls--> `getToken()`  [EXTRACTED]
   frontend/app/page.tsx → frontend/lib/auth.ts
+- `ModuleConcept` --inherits--> `BaseEntity`  [EXTRACTED]
+  backend/src/modules/content/entities/module-concept.entity.ts → backend/src/common/entities/base.entity.ts
+- `ModuleConcept` --references--> `Concept`  [EXTRACTED]
+  backend/src/modules/content/entities/module-concept.entity.ts → backend/src/modules/content/entities/concept.entity.ts
 - `Module` --inherits--> `BaseEntity`  [EXTRACTED]
   backend/src/modules/content/entities/module.entity.ts → backend/src/common/entities/base.entity.ts
-- `Module` --references--> `Roadmap`  [EXTRACTED]
-  backend/src/modules/content/entities/module.entity.ts → backend/src/modules/content/entities/roadmap.entity.ts
-- `EmailModule` --references--> `Module`  [EXTRACTED]
-  backend/src/modules/email/email.module.ts → backend/src/modules/content/entities/module.entity.ts
 
 ## Import Cycles
 - None detected.
@@ -469,7 +469,7 @@ Cohesion: 0.24
 Nodes (3): AiGenerateService, Injectable, AiGenerationJobResultSummary
 
 ## Knowledge Gaps
-- **336 isolated node(s):** `RegisterStage`, `ParsedMcqOption`, `ParsedMcqQuestion`, `AttemptResponse`, `ConceptDetail` (+331 more)
+- **336 isolated node(s):** `RegisterStage`, `AttemptResponse`, `ConceptDetail`, `McqOption`, `McqQuestion` (+331 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **63 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -479,14 +479,14 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `User` connect `User` to `Roles`, `roadmaps.service.ts`, `ReviewService`, `ConceptsController`, `gamification.controller.ts`, `Roadmap`, `UsersService`, `assignments.module.ts`, `typeorm.config.ts`, `UserConceptProgress`, `AuthController`, `AiGenerateService`, `user.entity.ts`, `QaController`, `AiGenerateController`, `ai-generate.service.ts`, `AdminContentReviewController`, `XpEvent`, `auth.controller.ts`, `CurrentUser`, `auth.module.ts`, `QuizService`, `AiGenerationJob`, `ai-generate.controller.ts`, `qa.service.ts`, `Concept`, `InstructorProfile`, `factories.ts`, `ProgressController`, `users.service.ts`?**
   _High betweenness centrality (0.204) - this node is a cross-community bridge._
 - **Why does `CurrentUser` connect `CurrentUser` to `Roles`, `ReviewService`, `ConceptsController`, `gamification.controller.ts`, `auth.controller.ts`, `User`, `ProgressController`, `QuizService`, `users.service.ts`, `ai-generate.controller.ts`, `AuthController`, `user.entity.ts`, `qa.service.ts`, `AiGenerateController`, `QaController`, `AdminContentReviewController`?**
-  _High betweenness centrality (0.026) - this node is a cross-community bridge._
-- **Why does `Module` connect `roadmaps.service.ts` to `Roadmap`, `factories.ts`, `auth.module.ts`, `typeorm.config.ts`, `UserConceptProgress`, `user.entity.ts`, `Concept`, `ai-generate.service.ts`?**
-  _High betweenness centrality (0.015) - this node is a cross-community bridge._
-- **What connects `RegisterStage`, `ParsedMcqOption`, `ParsedMcqQuestion` to the rest of the system?**
+  _High betweenness centrality (0.028) - this node is a cross-community bridge._
+- **Why does `CreateQuestionDto` connect `QuizService` to `typeorm.config.ts`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+- **What connects `RegisterStage`, `AttemptResponse`, `ConceptDetail` to the rest of the system?**
   _336 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `roadmaps.service.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.1026827012025902 - nodes in this community are weakly interconnected._
 - **Should `profile/page.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.09102564102564102 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09358974358974359 - nodes in this community are weakly interconnected._
 - **Should `ReviewService` be split into smaller, more focused modules?**
   _Cohesion score 0.11330049261083744 - nodes in this community are weakly interconnected._

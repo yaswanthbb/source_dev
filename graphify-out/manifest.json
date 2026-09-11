@@ -864,15 +864,15 @@
     "semantic_hash": ""
   },
   "frontend/app/(auth)/login/page.tsx": {
-    "mtime": 1789026563.19332,
-    "seen": 1789026582.8797126,
+    "mtime": 1789119048.6419969,
+    "seen": 1789119473.7387197,
     "ast_hash": "03d635c4ff2a3984c61917d60d97114f",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/register/page.tsx": {
-    "mtime": 1789042670.2965772,
-    "seen": 1789043239.4099472,
-    "ast_hash": "d939eddd97931a2d84ec6f306275f28f",
+    "mtime": 1789119303.565124,
+    "seen": 1789119473.7387211,
+    "ast_hash": "c8b5f624e1cd48629dc6c8068b77876a",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/reset-password/page.tsx": {
@@ -1296,9 +1296,9 @@
     "semantic_hash": ""
   },
   "frontend/app/auth/callback/page.tsx": {
-    "mtime": 1788863721.6036043,
-    "seen": 1788946888.4833848,
-    "ast_hash": "ef81f6403fd7f66f4ac2c2fb49d1356e",
+    "mtime": 1789118548.1696992,
+    "seen": 1789119473.7387264,
+    "ast_hash": "670c375c766da77b3554be5bac5c074f",
     "semantic_hash": ""
   },
   "backend/src/migrations/1787500000000-AddQaAnswerAiSupport.ts": {
