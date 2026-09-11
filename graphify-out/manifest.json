@@ -870,9 +870,9 @@
     "semantic_hash": ""
   },
   "frontend/app/(auth)/register/page.tsx": {
-    "mtime": 1789021215.0656724,
-    "seen": 1789022680.2445188,
-    "ast_hash": "787ede06af25d0b6ab6d3856b3611d4a",
+    "mtime": 1789042670.2965772,
+    "seen": 1789043239.4099472,
+    "ast_hash": "d939eddd97931a2d84ec6f306275f28f",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/reset-password/page.tsx": {
