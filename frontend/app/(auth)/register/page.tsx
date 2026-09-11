@@ -874,6 +874,21 @@ export default function RegisterPage() {
                   {bootPhase === "READY" && (
                     <div className="space-y-3 pt-0.5 animate-in fade-in duration-150">
                       <form onSubmit={handleFormSubmit} className="space-y-3" noValidate>
+                        {/* Username hint for browser password managers. The visible
+                            email input is unmounted once the flow reaches PASSWORD, so
+                            without this the form submits a lone password field and the
+                            browser falls back to an unrelated saved credential. */}
+                        <input
+                          type="text"
+                          name="username"
+                          autoComplete="username"
+                          value={email}
+                          readOnly
+                          tabIndex={-1}
+                          aria-hidden="true"
+                          className="sr-only"
+                        />
+
                         {/* Step 1: Full Name Prompt */}
                         <div className="space-y-1.5 pt-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
