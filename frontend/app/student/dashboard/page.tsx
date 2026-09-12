@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import apiClient from '@/lib/api-client';
-import { User } from '@/lib/auth';
-import { useTheme } from '@/providers/theme-provider';
-import { useAllRoadmapsProgress } from '@/lib/hooks/use-roadmap-progress';
-import './terminal-dashboard.css';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import apiClient from "@/lib/api-client";
+import { User } from "@/lib/auth";
+import { useTheme } from "@/providers/theme-provider";
+import { useAllRoadmapsProgress } from "@/lib/hooks/use-roadmap-progress";
+import "./terminal-dashboard.css";
 
 // ─── Types matching backend responses ───────────────────────────────────────
 
@@ -31,7 +31,7 @@ interface UserConceptProgress {
   id: string;
   userId: string;
   conceptId: string;
-  status: 'not_started' | 'in_progress' | 'completed';
+  status: "not_started" | "in_progress" | "completed";
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -39,7 +39,7 @@ interface UserConceptProgress {
     id: string;
     title: string;
     slug: string;
-    difficulty?: 'easy' | 'medium' | 'hard';
+    difficulty?: "easy" | "medium" | "hard";
   };
 }
 
@@ -58,37 +58,66 @@ interface BadgeDef {
 }
 
 // ─── Theme palettes ─────────────────────────────────────────────────────────
-// Dark values are verbatim from the Stitch export. Light values are derived
-// from the terminal palette already used by the homepage / login / register.
+// Dark values are verbatim from the Stitch export. Light values are login's
+// palette exactly (app/(auth)/login/page.tsx) — the light export drifted to a
+// green accent (#15803d / #16a34a), which is not in the terminal theme.
 
 const DARK = {
-  base: '#0a0c0e',
-  panel: '#111417',
-  head: '#171a1d',
-  hover: '#202327',
-  ink: '#ffffff',
-  text: '#e2e4e8',
-  dim: '#949aa2',
-  faint: '#656a73',
-  line: '#34383f',
-  primary: '#38ef7d',
-  alert: '#f59e0b',
-  shadow: '#000000',
+  base: "#0a0c0e",
+  panel: "#111417",
+  head: "#171a1d",
+  hover: "#202327",
+  ink: "#ffffff",
+  text: "#e2e4e8",
+  dim: "#949aa2",
+  faint: "#656a73",
+  line: "#34383f",
+  primary: "#38ef7d",
+  alert: "#f59e0b",
+  // Reviews-due card, applied only while the queue is non-empty so the card
+  // reads as the action card exactly when there is an action. Mirrors the light
+  // export's amber wash, swapped to the dark accent.
+  dueWash: "#0d1f16",
+  dueChipBg: "#123524",
+  dueChipInk: "#38ef7d",
+  dueChipLine: "#1f7a4d",
+  dueSub: "#7ad9a3",
+  dueRule: "#1f7a4d",
+  shadow: "#000000",
+  shadowStrong: "#000000",
 };
 
 const LIGHT = {
-  base: '#f2f1ea',
-  panel: '#faf9f4',
-  head: '#eceae1',
-  hover: '#e4e2d7',
-  ink: '#1b1c19',
-  text: '#2f312c',
-  dim: '#6b6d66',
-  faint: '#8b8d84',
-  line: '#d4d2c8',
-  primary: '#0f7b3d',
-  alert: '#b45309',
-  shadow: '#1b1c19',
+  base: "#faf9f4",
+  panel: "#ffffff",
+  head: "#f5f4ef",
+  hover: "#e9e8e3",
+  ink: "#1b1c19",
+  text: "#1b1c19",
+  dim: "#45474a",
+  faint: "#75777b",
+  line: "#c5c6cb",
+  primary: "#b45309",
+  // `alert` is the second accent, not an error colour: badge stars, the [BADGE]
+  // and [CLI] tags, and the sync state. Login's light palette has no second
+  // hue, so it collapses onto the accent here — those sites all contrast
+  // against neutrals, and the sync indicator stays legible through its label
+  // text and pulse. Red is reserved for real errors, as in login.
+  alert: "#b45309",
+  // Reviews-due card, applied only while the queue is non-empty so the card
+  // reads as the action card exactly when there is an action. Values are the
+  // export's amber wash verbatim.
+  dueWash: "#fffbeb",
+  dueChipBg: "#fef3c7",
+  dueChipInk: "#92400e",
+  dueChipLine: "#f59e0b",
+  dueSub: "#92400e",
+  dueRule: "#fde68a",
+  // Every panel casts the same soft shadow, mission_control included.
+  // `shadowStrong` is only for the inverted resume/start buttons, which sit on
+  // a filled accent and need the harder edge. In dark both are black.
+  shadow: "#c5c6cb",
+  shadowStrong: "#1b1c19",
 };
 
 const XP_BY_DIFFICULTY: Record<string, number> = {
@@ -100,7 +129,7 @@ const XP_BY_DIFFICULTY: Record<string, number> = {
 const ACTIVITY_DAYS = 60;
 
 function pad(n: number): string {
-  return String(n).padStart(2, '0');
+  return String(n).padStart(2, "0");
 }
 
 /** Stable pseudo-id from a string — keeps TTY/PID decoration hydration-safe. */
@@ -114,11 +143,11 @@ function stableNumber(seed: string, mod: number): number {
 
 /** Badge category from criteriaKey — real grouping, not an invented rarity. */
 function badgeTag(criteriaKey: string | undefined, name: string): string {
-  const key = `${criteriaKey || ''} ${name}`.toLowerCase();
-  if (key.includes('streak')) return 'STREAK';
-  if (key.includes('xp')) return 'XP';
-  if (key.includes('concept')) return 'CONCEPT';
-  return 'BADGE';
+  const key = `${criteriaKey || ""} ${name}`.toLowerCase();
+  if (key.includes("streak")) return "STREAK";
+  if (key.includes("xp")) return "XP";
+  if (key.includes("concept")) return "CONCEPT";
+  return "BADGE";
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -151,14 +180,16 @@ export default function StudentDashboardPage() {
   // Client-only gate for time-derived decoration (avoids hydration mismatch)
   const [mounted, setMounted] = useState(false);
   const [uptimeSec, setUptimeSec] = useState(0);
-  const [clock, setClock] = useState('--:--:--');
+  const [clock, setClock] = useState("--:--:--");
 
   useEffect(() => {
     setMounted(true);
     const tick = () => {
       setUptimeSec((s) => s + 1);
       const d = new Date();
-      setClock(`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+      setClock(
+        `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
+      );
     };
     tick();
     const t = setInterval(tick, 1000);
@@ -167,7 +198,7 @@ export default function StudentDashboardPage() {
 
   // ── Interactive prompt ──────────────────────────────────────────────────
   // Typeable now; the TERMINAL CLI tab that will execute commands comes later.
-  const [cmd, setCmd] = useState('');
+  const [cmd, setCmd] = useState("");
   const [cliLog, setCliLog] = useState<Array<{ id: number; text: string }>>([]);
   const cliSeq = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -186,7 +217,7 @@ export default function StudentDashboardPage() {
         ...prev,
       ].slice(0, 3),
     );
-    setCmd('');
+    setCmd("");
   };
 
   // Press "/" anywhere to focus the prompt
@@ -194,33 +225,33 @@ export default function StudentDashboardPage() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
-      if (e.key === '/') {
+      if (e.key === "/") {
         e.preventDefault();
         inputRef.current?.focus();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // ── Data ────────────────────────────────────────────────────────────────
 
   const { data: user } = useQuery<User>({
-    queryKey: ['users', 'me'],
-    queryFn: async () => (await apiClient.get<User>('/users/me')).data,
+    queryKey: ["users", "me"],
+    queryFn: async () => (await apiClient.get<User>("/users/me")).data,
   });
 
   const { data: gamification, isLoading: gamificationLoading } =
     useQuery<GamificationData>({
-      queryKey: ['gamification', 'me'],
+      queryKey: ["gamification", "me"],
       queryFn: async () =>
-        (await apiClient.get<GamificationData>('/gamification/me')).data,
+        (await apiClient.get<GamificationData>("/gamification/me")).data,
     });
 
   const { data: activityList = [], isLoading: activityLoading } = useQuery<
     Array<{ date: string; active: boolean }>
   >({
-    queryKey: ['gamification', 'activity', ACTIVITY_DAYS],
+    queryKey: ["gamification", "activity", ACTIVITY_DAYS],
     queryFn: async () =>
       (
         await apiClient.get<Array<{ date: string; active: boolean }>>(
@@ -232,16 +263,16 @@ export default function StudentDashboardPage() {
   const { data: progressList = [], isLoading: progressLoading } = useQuery<
     UserConceptProgress[]
   >({
-    queryKey: ['progress', 'me'],
+    queryKey: ["progress", "me"],
     queryFn: async () =>
-      (await apiClient.get<UserConceptProgress[]>('/progress/me')).data,
+      (await apiClient.get<UserConceptProgress[]>("/progress/me")).data,
   });
 
   const { data: roadmaps = [], isLoading: roadmapsLoading } = useQuery<
     Roadmap[]
   >({
-    queryKey: ['roadmaps'],
-    queryFn: async () => (await apiClient.get<Roadmap[]>('/roadmaps')).data,
+    queryKey: ["roadmaps"],
+    queryFn: async () => (await apiClient.get<Roadmap[]>("/roadmaps")).data,
   });
 
   const roadmapIds = useMemo(() => roadmaps.map((r) => r.id), [roadmaps]);
@@ -251,19 +282,19 @@ export default function StudentDashboardPage() {
   const { data: allBadges = [], isLoading: badgesLoading } = useQuery<
     BadgeDef[]
   >({
-    queryKey: ['badges'],
-    queryFn: async () => (await apiClient.get<BadgeDef[]>('/badges')).data,
+    queryKey: ["badges"],
+    queryFn: async () => (await apiClient.get<BadgeDef[]>("/badges")).data,
   });
 
   const { data: reviewDueData, isLoading: reviewLoading } = useQuery<{
     count: number;
     dueCount: number;
   }>({
-    queryKey: ['review', 'due-count'],
+    queryKey: ["review", "due-count"],
     queryFn: async () =>
       (
         await apiClient.get<{ count: number; dueCount: number }>(
-          '/review/due-count',
+          "/review/due-count",
         )
       ).data,
   });
@@ -280,7 +311,7 @@ export default function StudentDashboardPage() {
   // ── Derived ─────────────────────────────────────────────────────────────
 
   const completedCount = useMemo(
-    () => progressList.filter((p) => p.status === 'completed').length,
+    () => progressList.filter((p) => p.status === "completed").length,
     [progressList],
   );
 
@@ -294,7 +325,7 @@ export default function StudentDashboardPage() {
   );
 
   const currentFocus = useMemo(() => {
-    const inProgress = progressList.filter((p) => p.status === 'in_progress');
+    const inProgress = progressList.filter((p) => p.status === "in_progress");
     if (inProgress.length === 0) return null;
     return [...inProgress].sort(
       (a, b) =>
@@ -320,7 +351,7 @@ export default function StudentDashboardPage() {
     const hits = roadmaps
       .map((rm) => {
         const next = roadmapsProgressMap[rm.id]?.concepts?.find(
-          (x) => x.status === 'not_started',
+          (x) => x.status === "not_started",
         );
         return next ? { ...next, roadmapTitle: rm.title } : null;
       })
@@ -336,7 +367,7 @@ export default function StudentDashboardPage() {
   const activePct =
     activityList.length > 0
       ? ((activeDays / activityList.length) * 100).toFixed(1)
-      : '0.0';
+      : "0.0";
 
   const rankedRoadmaps = useMemo(() => {
     return roadmaps
@@ -391,18 +422,18 @@ export default function StudentDashboardPage() {
   const eventLog = useMemo(() => {
     const events: Array<{
       at: number;
-      kind: 'CONCEPT' | 'BADGE';
+      kind: "CONCEPT" | "BADGE";
       text: string;
       xp: number | null;
     }> = [];
 
     progressList.forEach((p) => {
-      if (p.status === 'completed' && p.completedAt) {
+      if (p.status === "completed" && p.completedAt) {
         events.push({
           at: new Date(p.completedAt).getTime(),
-          kind: 'CONCEPT',
+          kind: "CONCEPT",
           text: `completed ${p.concept?.title ?? p.conceptId.slice(0, 8)}`,
-          xp: XP_BY_DIFFICULTY[p.concept?.difficulty ?? 'medium'] ?? 20,
+          xp: XP_BY_DIFFICULTY[p.concept?.difficulty ?? "medium"] ?? 20,
         });
       }
     });
@@ -410,7 +441,7 @@ export default function StudentDashboardPage() {
     (gamification?.earnedBadges ?? []).forEach((b) => {
       events.push({
         at: new Date(b.earnedAt).getTime(),
-        kind: 'BADGE',
+        kind: "BADGE",
         text: `earned "${b.name}"`,
         xp: null,
       });
@@ -427,7 +458,7 @@ export default function StudentDashboardPage() {
     Math.floor((uptimeSec % 3600) / 60),
   )}:${pad(uptimeSec % 60)}`;
 
-  const seed = user?.id ?? 'kip';
+  const seed = user?.id ?? "kip";
   const tty = stableNumber(seed, 8);
   const pid = 10000 + stableNumber(seed, 79999);
 
@@ -443,7 +474,7 @@ export default function StudentDashboardPage() {
   };
 
   const num = (v: number | undefined, loading: boolean) =>
-    loading || v === undefined ? '--' : v.toLocaleString();
+    loading || v === undefined ? "--" : v.toLocaleString();
 
   const streak = gamification?.currentStreak ?? 0;
   const longest = gamification?.longestStreak ?? 0;
@@ -453,13 +484,13 @@ export default function StudentDashboardPage() {
     // natural height. Desktop (lg+): fixed viewport frame — nothing scrolls
     // the page, individual panels scroll, footer welded to the bottom edge.
     <div
-      className={`kip-dash ${isDark ? '' : 'kip-dash-light'} min-h-screen lg:h-screen lg:overflow-hidden flex flex-col relative`}
+      className={`kip-dash ${isDark ? "" : "kip-dash-light"} min-h-screen lg:h-screen lg:overflow-hidden flex flex-col relative`}
       style={{ backgroundColor: c.base, color: c.text }}
     >
       {/* CRT overlay */}
       <div
         className={`fixed inset-0 z-50 pointer-events-none ${
-          isDark ? 'kip-dash-scanlines opacity-40' : 'kip-dash-scanlines-light'
+          isDark ? "kip-dash-scanlines opacity-40" : "kip-dash-scanlines-light"
         }`}
         aria-hidden="true"
       />
@@ -469,7 +500,10 @@ export default function StudentDashboardPage() {
           in here may grow the page wider than the viewport. */}
       <header
         className="w-full h-11 px-2 sm:px-3 md:px-4 flex items-center justify-between gap-2 z-30 shrink-0 select-none"
-        style={{ backgroundColor: c.panel, borderBottom: `1px solid ${c.line}` }}
+        style={{
+          backgroundColor: c.panel,
+          borderBottom: `1px solid ${c.line}`,
+        }}
       >
         <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
           <span
@@ -480,20 +514,23 @@ export default function StudentDashboardPage() {
               ■
             </span>
             <span className="truncate">
-              KIP<span className="hidden sm:inline">{' // KNOWLEDGE IS POWER'}</span>
+              KIP
+              <span className="hidden sm:inline">
+                {" // KNOWLEDGE IS POWER"}
+              </span>
             </span>
           </span>
           <span
             className="hidden md:inline text-[11px] font-semibold tracking-wider whitespace-nowrap"
             style={{ color: isSyncing ? c.alert : c.primary }}
           >
-            {isSyncing ? '[SYS: SYNC]' : '[SYS: OK]'}
+            {isSyncing ? "[SYS: SYNC]" : "[SYS: OK]"}
           </span>
           <span
             className="hidden xl:inline text-[11px] whitespace-nowrap"
             style={{ color: c.dim }}
           >
-            [UPTIME: {mounted ? uptime : '00:00:00'}]
+            [UPTIME: {mounted ? uptime : "00:00:00"}]
           </span>
         </div>
 
@@ -504,7 +541,7 @@ export default function StudentDashboardPage() {
             style={{ backgroundColor: c.ink, color: c.base }}
           >
             [1:<span className="hidden sm:inline"> DASHBOARD</span>
-            <span className="sm:hidden">DASH</span>*]
+            <span className="sm:hidden">DASH</span>]
           </span>
           <span
             className="px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-[12px] cursor-not-allowed whitespace-nowrap"
@@ -521,17 +558,14 @@ export default function StudentDashboardPage() {
             style={{ color: c.dim }}
           >
             <span className="truncate">
-              {user?.name ?? '...'}
+              {user?.name ?? "..."}
               <span className="hidden xl:inline">
-                {' '}
-                &lt;{user?.email ?? '...'}&gt;
+                {" "}
+                &lt;{user?.email ?? "..."}&gt;
               </span>
             </span>
-            <span
-              className="font-bold shrink-0"
-              style={{ color: c.primary }}
-            >
-              [{(user?.role ?? 'student').toUpperCase()}]
+            <span className="font-bold shrink-0" style={{ color: c.primary }}>
+              [{(user?.role ?? "student").toUpperCase()}]
             </span>
           </div>
           <button
@@ -545,7 +579,7 @@ export default function StudentDashboardPage() {
             }}
           >
             [<span className="hidden sm:inline">MODE: </span>
-            {isDark ? 'DK' : 'LT'}]
+            {isDark ? "DK" : "LT"}]
           </button>
         </div>
       </header>
@@ -608,7 +642,7 @@ export default function StudentDashboardPage() {
                       <span>CURRENT CONCEPT IN FLIGHT</span>
                       {focusRoadmapTitle && (
                         <span style={{ color: c.primary }}>
-                          {focusRoadmapTitle.toUpperCase().replace(/\s+/g, '_')}
+                          {focusRoadmapTitle.toUpperCase().replace(/\s+/g, "_")}
                         </span>
                       )}
                     </div>
@@ -616,7 +650,7 @@ export default function StudentDashboardPage() {
                       className="font-display text-xl md:text-2xl font-bold tracking-tight leading-snug truncate"
                       style={{ color: c.ink }}
                     >
-                      {currentFocus.concept?.title ?? 'In-progress concept'}
+                      {currentFocus.concept?.title ?? "In-progress concept"}
                     </h1>
 
                     <div
@@ -641,9 +675,12 @@ export default function StudentDashboardPage() {
                         <span className="block" style={{ color: c.faint }}>
                           DIFFICULTY
                         </span>
-                        <span className="font-semibold" style={{ color: c.text }}>
+                        <span
+                          className="font-semibold"
+                          style={{ color: c.text }}
+                        >
                           {(
-                            currentFocus.concept?.difficulty ?? 'unrated'
+                            currentFocus.concept?.difficulty ?? "unrated"
                           ).toUpperCase()}
                         </span>
                       </div>
@@ -656,7 +693,7 @@ export default function StudentDashboardPage() {
                     style={{
                       backgroundColor: c.primary,
                       color: c.base,
-                      boxShadow: `2px 2px 0px 0px ${c.shadow}`,
+                      boxShadow: `2px 2px 0px 0px ${c.shadowStrong}`,
                     }}
                   >
                     [ENTER] RESUME CONCEPT ➔
@@ -674,7 +711,7 @@ export default function StudentDashboardPage() {
                         <span style={{ color: c.primary }}>
                           {nextUpConcept.roadmapTitle
                             .toUpperCase()
-                            .replace(/\s+/g, '_')}
+                            .replace(/\s+/g, "_")}
                         </span>
                       )}
                     </div>
@@ -682,7 +719,7 @@ export default function StudentDashboardPage() {
                       className="font-display text-xl md:text-2xl font-bold tracking-tight leading-snug truncate"
                       style={{ color: c.ink }}
                     >
-                      {nextUpConcept?.conceptTitle ?? 'NO ACTIVE CONCEPT'}
+                      {nextUpConcept?.conceptTitle ?? "NO ACTIVE CONCEPT"}
                     </h1>
 
                     <div
@@ -694,18 +731,24 @@ export default function StudentDashboardPage() {
                     >
                       <div>
                         <span className="block" style={{ color: c.faint }}>
-                          STATUS
+                          QUEUE_STATE
                         </span>
-                        <span className="font-semibold" style={{ color: c.dim }}>
-                          [{nextUpConcept ? 'NOT_STARTED' : 'IDLE'}]
+                        <span
+                          className="font-semibold"
+                          style={{ color: c.dim }}
+                        >
+                          [{nextUpConcept ? "AWAITING_START" : "IDLE"}]
                         </span>
                       </div>
                       <div>
                         <span className="block" style={{ color: c.faint }}>
-                          CATALOGUE
+                          COMPLETED
                         </span>
-                        <span className="font-semibold" style={{ color: c.text }}>
-                          {completedCount}/{totalCatalogued || '--'} CONCEPTS
+                        <span
+                          className="font-semibold"
+                          style={{ color: c.text }}
+                        >
+                          {completedCount}/{totalCatalogued || "--"} CONCEPTS
                         </span>
                       </div>
                     </div>
@@ -715,18 +758,18 @@ export default function StudentDashboardPage() {
                     href={
                       nextUpConcept
                         ? `/student/concepts/${nextUpConcept.conceptId}`
-                        : '/student/roadmaps'
+                        : "/student/roadmaps"
                     }
                     className="w-full py-2 px-4 font-bold text-[13px] flex items-center justify-center gap-2 tracking-wider transition-colors cursor-pointer"
                     style={{
                       backgroundColor: c.primary,
                       color: c.base,
-                      boxShadow: `2px 2px 0px 0px ${c.shadow}`,
+                      boxShadow: `2px 2px 0px 0px ${c.shadowStrong}`,
                     }}
                   >
                     {nextUpConcept
-                      ? '[ENTER] START CONCEPT ➔'
-                      : '[ENTER] BROWSE ROADMAPS ➔'}
+                      ? "[ENTER] START CONCEPT ➔"
+                      : "[ENTER] BROWSE ROADMAPS ➔"}
                   </Link>
                 </>
               )}
@@ -736,7 +779,10 @@ export default function StudentDashboardPage() {
           {/* 2x2 gauge cluster */}
           <div className="lg:col-span-5 grid grid-cols-2 gap-3">
             {/* Streak */}
-            <div className="px-3 py-2.5 flex flex-col justify-between" style={panel}>
+            <div
+              className="px-3 py-2.5 flex flex-col justify-between"
+              style={panel}
+            >
               <div
                 className="text-[10px] font-semibold uppercase tracking-wider flex items-center justify-between"
                 style={{ color: c.dim }}
@@ -751,22 +797,25 @@ export default function StudentDashboardPage() {
                 style={{ color: c.ink }}
               >
                 {gamificationLoading
-                  ? '--'
-                  : `${streak} ${plural(streak, 'DAY', 'DAYS')}`}
+                  ? "--"
+                  : `${streak} ${plural(streak, "DAY", "DAYS")}`}
               </div>
               <div
                 className="text-[10px] pt-1"
                 style={{ color: c.faint, borderTop: `1px solid ${c.line}` }}
               >
-                LONGEST:{' '}
+                LONGEST:{" "}
                 {gamificationLoading
-                  ? '--'
-                  : `${longest} ${plural(longest, 'DAY', 'DAYS')}`}
+                  ? "--"
+                  : `${longest} ${plural(longest, "DAY", "DAYS")}`}
               </div>
             </div>
 
             {/* XP */}
-            <div className="px-3 py-2.5 flex flex-col justify-between" style={panel}>
+            <div
+              className="px-3 py-2.5 flex flex-col justify-between"
+              style={panel}
+            >
               <div
                 className="text-[10px] font-semibold uppercase tracking-wider flex items-center justify-between"
                 style={{ color: c.dim }}
@@ -791,7 +840,10 @@ export default function StudentDashboardPage() {
             </div>
 
             {/* Concepts */}
-            <div className="px-3 py-2.5 flex flex-col justify-between" style={panel}>
+            <div
+              className="px-3 py-2.5 flex flex-col justify-between"
+              style={panel}
+            >
               <div
                 className="text-[10px] font-semibold uppercase tracking-wider flex items-center justify-between"
                 style={{ color: c.dim }}
@@ -805,38 +857,45 @@ export default function StudentDashboardPage() {
                 className="my-1 text-xl md:text-2xl font-bold tracking-tight"
                 style={{ color: c.ink }}
               >
-                {progressLoading ? '--' : completedCount}
+                {progressLoading ? "--" : completedCount}
               </div>
               <div
                 className="text-[10px] pt-1"
                 style={{ color: c.dim, borderTop: `1px solid ${c.line}` }}
               >
-                OF {roadmapProgressLoading ? '--' : totalCatalogued} CATALOGUED
+                OF {roadmapProgressLoading ? "--" : totalCatalogued} CATALOGUED
               </div>
             </div>
 
-            {/* Reviews due */}
+            {/* Reviews due — the action card of the four, but only when there
+                is something to act on. With a non-empty queue it wears the full
+                accent treatment (washed background, 2px accent border, accent
+                shadow and type, pulsing ALERT chip); at 0 DUE it falls back to
+                exactly its neighbours' styling. Green in dark, amber in light. */}
             <Link
               href="/student/review"
               className="px-3 py-2.5 flex flex-col justify-between relative overflow-hidden cursor-pointer"
               style={{
-                backgroundColor: c.panel,
-                border: `1px solid ${reviewDue > 0 ? `${c.alert}80` : c.line}`,
-                boxShadow: `3px 3px 0px 0px ${c.shadow}`,
+                backgroundColor: reviewDue > 0 ? c.dueWash : c.panel,
+                border:
+                  reviewDue > 0
+                    ? `2px solid ${c.primary}`
+                    : `1px solid ${c.line}`,
+                boxShadow: `3px 3px 0px 0px ${reviewDue > 0 ? c.primary : c.shadow}`,
               }}
             >
               <div
                 className="text-[10px] font-bold uppercase tracking-wider flex items-center justify-between"
-                style={{ color: reviewDue > 0 ? c.alert : c.dim }}
+                style={{ color: reviewDue > 0 ? c.primary : c.dim }}
               >
                 <span>REVIEWS_DUE</span>
                 {reviewDue > 0 ? (
                   <span
                     className="kip-pulse inline-flex items-center px-1 text-[9px] font-bold"
                     style={{
-                      backgroundColor: `${c.alert}33`,
-                      color: c.alert,
-                      border: `1px solid ${c.alert}66`,
+                      backgroundColor: c.dueChipBg,
+                      color: c.dueChipInk,
+                      border: `1px solid ${c.dueChipLine}`,
                     }}
                   >
                     ALERT
@@ -849,18 +908,23 @@ export default function StudentDashboardPage() {
               </div>
               <div
                 className="my-1 text-xl md:text-2xl font-bold tracking-tight flex items-baseline gap-1"
-                style={{ color: reviewDue > 0 ? c.alert : c.ink }}
+                style={{ color: reviewDue > 0 ? c.primary : c.ink }}
               >
-                <span>{reviewLoading ? '--' : reviewDue} DUE</span>
+                <span>{reviewLoading ? "--" : reviewDue} DUE</span>
                 {reviewDue > 0 && (
-                  <span className="text-[10px] font-normal">[ACTION]</span>
+                  <span
+                    className="text-[10px] font-normal"
+                    style={{ color: c.dueSub }}
+                  >
+                    [ACTION]
+                  </span>
                 )}
               </div>
               <div
                 className="text-[10px] pt-1"
                 style={{
-                  color: reviewDue > 0 ? `${c.alert}b3` : c.dim,
-                  borderTop: `1px solid ${reviewDue > 0 ? `${c.alert}4d` : c.line}`,
+                  color: reviewDue > 0 ? c.dueSub : c.dim,
+                  borderTop: `1px solid ${reviewDue > 0 ? c.dueRule : c.line}`,
                 }}
               >
                 SRS FLASHCARD QUEUE
@@ -882,9 +946,9 @@ export default function StudentDashboardPage() {
                 <span className="font-bold truncate" style={{ color: c.ink }}>
                   ┌─[ study_activity
                   <span className="hidden sm:inline">
-                    {' '}
+                    {" "}
                     :: {ACTIVITY_DAYS}d_consistency
-                  </span>{' '}
+                  </span>{" "}
                   ]
                 </span>
                 <span
@@ -892,8 +956,8 @@ export default function StudentDashboardPage() {
                   style={{ color: c.dim }}
                 >
                   {activityLoading
-                    ? 'LOADING...'
-                    : `${activeDays}/${activityList.length} ACTIVE`}{' '}
+                    ? "LOADING..."
+                    : `${activeDays}/${activityList.length} ACTIVE`}{" "}
                   {!activityLoading && (
                     <span className="font-bold" style={{ color: c.primary }}>
                       ({activePct}%)
@@ -921,10 +985,12 @@ export default function StudentDashboardPage() {
                     <span
                       key={d?.date ?? `empty-${i}`}
                       className="text-center leading-none"
-                      title={d ? `${d.date}: ${d.active ? 'active' : 'idle'}` : ''}
+                      title={
+                        d ? `${d.date}: ${d.active ? "active" : "idle"}` : ""
+                      }
                       style={{ color: d?.active ? c.primary : c.line }}
                     >
-                      {d?.active ? '■' : '·'}
+                      {d?.active ? "■" : "·"}
                     </span>
                   ))}
                 </div>
@@ -934,7 +1000,10 @@ export default function StudentDashboardPage() {
                   style={{ color: c.dim, borderTop: `1px solid ${c.line}` }}
                 >
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <span className="hidden sm:inline" style={{ color: c.faint }}>
+                    <span
+                      className="hidden sm:inline"
+                      style={{ color: c.faint }}
+                    >
                       LEGEND:
                     </span>
                     <span className="font-bold" style={{ color: c.primary }}>
@@ -946,7 +1015,7 @@ export default function StudentDashboardPage() {
                     </span>
                   </div>
                   <div className="hidden lg:inline" style={{ color: c.faint }}>
-                    {'// GET /gamification/activity'}
+                    {"// UTC DAY BOUNDARIES"}
                   </div>
                 </div>
               </div>
@@ -965,7 +1034,7 @@ export default function StudentDashboardPage() {
                   className="text-[11px] shrink-0 whitespace-nowrap"
                   style={{ color: c.faint }}
                 >
-                  TRACKS: {roadmapsLoading ? '--' : rankedRoadmaps.length}
+                  TRACKS: {roadmapsLoading ? "--" : rankedRoadmaps.length}
                   <span className="hidden sm:inline"> TOTAL</span>
                 </span>
               </div>
@@ -982,12 +1051,10 @@ export default function StudentDashboardPage() {
                     </div>
                   ) : (
                     rankedRoadmaps.map((rm) => {
-                      const barColor =
-                        rm.pct >= 75
-                          ? c.primary
-                          : rm.pct >= 25
-                            ? c.text
-                            : c.faint;
+                      // Flat accent at every level: progress reads from how far
+                      // the bar fills, never from a hue shift. Same rule as the
+                      // entropy meter on the reset-password page.
+                      const barColor = c.primary;
 
                       return (
                         <Link
@@ -1000,7 +1067,7 @@ export default function StudentDashboardPage() {
                               className="font-semibold truncate min-w-0"
                               style={{ color: c.ink }}
                             >
-                              {rm.title.toUpperCase().replace(/\s+/g, '_')}
+                              {rm.title.toUpperCase().replace(/\s+/g, "_")}
                             </span>
                             <span
                               className="font-bold shrink-0 whitespace-nowrap"
@@ -1021,9 +1088,9 @@ export default function StudentDashboardPage() {
                               className="kip-bar flex-1 min-w-0"
                               style={
                                 {
-                                  '--kip-bar-pct': `${rm.pct}%`,
-                                  '--kip-bar-fill': barColor,
-                                  '--kip-bar-track': c.line,
+                                  "--kip-bar-pct": `${rm.pct}%`,
+                                  "--kip-bar-fill": barColor,
+                                  "--kip-bar-track": c.line,
                                 } as React.CSSProperties
                               }
                             />
@@ -1048,8 +1115,8 @@ export default function StudentDashboardPage() {
                 style={headStrip}
               >
                 <span className="font-bold truncate" style={{ color: c.ink }}>
-                  ┌─[ badges :: {badgesLoading ? '--' : earnedCount}/
-                  {badgesLoading ? '--' : badgeRows.length} EARNED ]
+                  ┌─[ badges :: {badgesLoading ? "--" : earnedCount}/
+                  {badgesLoading ? "--" : badgeRows.length} EARNED ]
                 </span>
                 <span
                   className="text-[11px] shrink-0 whitespace-nowrap hidden sm:inline"
@@ -1083,7 +1150,7 @@ export default function StudentDashboardPage() {
                               className="font-bold shrink-0"
                               style={{ color: has ? c.alert : c.line }}
                             >
-                              {has ? '★' : '☆'}
+                              {has ? "★" : "☆"}
                             </span>
                             <span
                               className="font-medium text-[12px] truncate"
@@ -1097,14 +1164,14 @@ export default function StudentDashboardPage() {
                               className="text-[11px]"
                               style={{ color: has ? c.faint : c.line }}
                             >
-                              {has ? b.earnedAt!.slice(0, 10) : '[LOCKED]'}
+                              {has ? b.earnedAt!.slice(0, 10) : "[LOCKED]"}
                             </span>
                             <span
                               className="text-[10px] font-bold px-1.5"
                               style={{
                                 color: has ? c.dim : c.line,
                                 border: `1px solid ${c.line}`,
-                                backgroundColor: has ? c.hover : 'transparent',
+                                backgroundColor: has ? c.hover : "transparent",
                               }}
                             >
                               [{badgeTag(b.criteriaKey, b.name)}]
@@ -1127,7 +1194,11 @@ export default function StudentDashboardPage() {
               >
                 <span className="font-bold truncate" style={{ color: c.ink }}>
                   ┌─[ activity.stdout
-                  <span className="hidden sm:inline"> :: client_event_log</span> ]
+                  <span className="hidden sm:inline">
+                    {" "}
+                    :: client_event_log
+                  </span>{" "}
+                  ]
                 </span>
                 <div
                   className="flex items-center gap-1.5 text-[11px] shrink-0"
@@ -1180,13 +1251,16 @@ export default function StudentDashboardPage() {
                         className="flex items-baseline gap-2"
                         style={{ color: c.text }}
                       >
-                        <span className="text-[11px]" style={{ color: c.faint }}>
+                        <span
+                          className="text-[11px]"
+                          style={{ color: c.faint }}
+                        >
                           [{new Date(e.at).toISOString().slice(11, 19)}]
                         </span>
                         <span
                           className="font-bold shrink-0"
                           style={{
-                            color: e.kind === 'BADGE' ? c.alert : c.primary,
+                            color: e.kind === "BADGE" ? c.alert : c.primary,
                           }}
                         >
                           [{e.kind}]
@@ -1194,7 +1268,10 @@ export default function StudentDashboardPage() {
                         <span className="truncate">
                           {e.text}
                           {e.xp !== null && (
-                            <span style={{ color: c.primary }}> (+{e.xp} XP)</span>
+                            <span style={{ color: c.primary }}>
+                              {" "}
+                              (+{e.xp} XP)
+                            </span>
                           )}
                         </span>
                       </div>
@@ -1209,15 +1286,15 @@ export default function StudentDashboardPage() {
                 style={{ color: c.faint, borderTop: `1px solid ${c.line}` }}
               >
                 <span className="truncate min-w-0">
-                  <span className="hidden sm:inline">EVENT_</span>BUF:{' '}
-                  {eventLog.length + cliLog.length}{' '}
-                  {plural(eventLog.length + cliLog.length, 'EVENT', 'EVENTS')}
+                  <span className="hidden sm:inline">EVENT_</span>BUF:{" "}
+                  {eventLog.length + cliLog.length}{" "}
+                  {plural(eventLog.length + cliLog.length, "EVENT", "EVENTS")}
                 </span>
                 <span
                   className="shrink-0 whitespace-nowrap"
                   style={{ color: c.dim }}
                 >
-                  {isSyncing ? 'SYNCING' : '0 ERRORS'}
+                  {isSyncing ? "SYNCING" : "0 ERRORS"}
                 </span>
               </div>
             </div>
@@ -1233,7 +1310,10 @@ export default function StudentDashboardPage() {
         <form
           onSubmit={submitCmd}
           className="px-2 sm:px-3 md:px-4 py-1.5 flex items-center gap-2 text-[13px] cursor-text"
-          style={{ backgroundColor: c.head, borderBottom: `1px solid ${c.line}` }}
+          style={{
+            backgroundColor: c.head,
+            borderBottom: `1px solid ${c.line}`,
+          }}
           onClick={() => inputRef.current?.focus()}
         >
           <span className="font-bold shrink-0" style={{ color: c.primary }}>
@@ -1248,7 +1328,7 @@ export default function StudentDashboardPage() {
               autoComplete="off"
               aria-label="Terminal prompt"
               className="w-full bg-transparent outline-none border-none text-[13px] caret-transparent"
-              style={{ color: c.text, font: 'inherit', fontSize: '13px' }}
+              style={{ color: c.text, font: "inherit", fontSize: "13px" }}
             />
             {/* Block caret parked after the typed text */}
             <span
@@ -1280,14 +1360,16 @@ export default function StudentDashboardPage() {
             <span className="hidden lg:inline whitespace-nowrap">
               [SESSION_ENCODING: UTF-8]
             </span>
-            <span className="hidden xl:inline whitespace-nowrap">[{clock}]</span>
+            <span className="hidden xl:inline whitespace-nowrap">
+              [{clock}]
+            </span>
           </div>
           <div
             className="flex items-center gap-1.5 font-semibold shrink-0 whitespace-nowrap"
             style={{ color: isSyncing ? c.alert : c.primary }}
           >
-            <span className={isSyncing ? 'kip-pulse' : ''}>●</span>
-            <span>[SYNC: {isSyncing ? 'FETCHING' : 'STABLE'}]</span>
+            <span className={isSyncing ? "kip-pulse" : ""}>●</span>
+            <span>[SYNC: {isSyncing ? "FETCHING" : "STABLE"}]</span>
           </div>
         </div>
       </footer>
