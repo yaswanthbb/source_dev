@@ -1,12 +1,30 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import apiClient from "@/lib/api-client";
-import { User } from "@/lib/auth";
+import { User, clearAuth } from "@/lib/auth";
 import { useTheme } from "@/providers/theme-provider";
 import { useAllRoadmapsProgress } from "@/lib/hooks/use-roadmap-progress";
+import {
+  CommandAborted,
+  LineKind,
+  bootLines,
+  completeCommand,
+  matchCommands,
+  runCommand,
+  subHints,
+} from "@/lib/terminal/commands";
+import { formatClock, formatDate, zoneAbbrev } from "@/lib/timezone";
 import "./terminal-dashboard.css";
 
 // ─── Types matching backend responses ───────────────────────────────────────
@@ -57,10 +75,31 @@ interface BadgeDef {
   criteriaKey: string;
 }
 
+// ─── Profile shell types ────────────────────────────────────────────────────
+
+/** One rendered row of the shell buffer. `delay` staggers the boot banner. */
+interface ShellLine {
+  id: number;
+  kind: LineKind;
+  text: string;
+  delay?: number;
+}
+
+/** An in-flight `io.ask`: the question on screen and the promise waiting on
+ *  the next submit. `mask` swaps the input to a password field. */
+interface PendingAsk {
+  prompt: string;
+  mask: boolean;
+  resolve: (value: string) => void;
+  reject: (reason: unknown) => void;
+}
+
 // ─── Theme palettes ─────────────────────────────────────────────────────────
 // Dark values are verbatim from the Stitch export. Light values are login's
-// palette exactly (app/(auth)/login/page.tsx) — the light export drifted to a
-// green accent (#15803d / #16a34a), which is not in the terminal theme.
+// palette (app/(auth)/login/page.tsx) — the light export drifted to a green
+// accent (#15803d / #16a34a), which is not in the terminal theme. Two sets sit
+// outside login and say so where they are defined: the reviews-due wash, taken
+// from the export, and `alert`, which login has no equivalent for.
 
 const DARK = {
   base: "#0a0c0e",
@@ -99,11 +138,17 @@ const LIGHT = {
   line: "#c5c6cb",
   primary: "#b45309",
   // `alert` is the second accent, not an error colour: badge stars, the [BADGE]
-  // and [CLI] tags, and the sync state. Login's light palette has no second
-  // hue, so it collapses onto the accent here — those sites all contrast
-  // against neutrals, and the sync indicator stays legible through its label
-  // text and pulse. Red is reserved for real errors, as in login.
-  alert: "#b45309",
+  // and [CLI] tags, and the sync state. Dark splits these off from `primary`
+  // and light has to do the same, or [BADGE] and [CONCEPT] collapse into one
+  // colour on this side only.
+  //
+  // Login's light palette carries no second hue to borrow, and every other
+  // light value here is amber-family, so this is the one deliberate addition:
+  // deep teal, 5.2:1 on the panel. Amber/cyan is the terminal pairing, and a
+  // cool hue is what keeps it legible beside `primary` — a green would read as
+  // "ok" and invert dark's meaning, where [SYS: SYNC] is the amber one and
+  // [SYS: OK] the accent. Red stays reserved for real errors, as in login.
+  alert: "#0f766e",
   // Reviews-due card, applied only while the queue is non-empty so the card
   // reads as the action card exactly when there is an action. Values are the
   // export's amber wash verbatim.
@@ -126,7 +171,57 @@ const XP_BY_DIFFICULTY: Record<string, number> = {
   hard: 35,
 };
 
-const ACTIVITY_DAYS = 60;
+// A year, which is exactly what makes the graph read like GitHub's: 365 days
+// plus a lead-pad of 0–6 always rounds to 53 week-columns, whatever weekday
+// today falls on. Anything shorter leaves the panel mostly empty.
+const ACTIVITY_DAYS = 365;
+
+// Uppercased to sit in the terminal type register with the rest of the UI.
+const MONTHS = [
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+];
+
+// Title case, for the hover tooltip — "120 XP on July 12th" reads as a
+// sentence, so it doesn't want the axis labels' shouting caps.
+const MONTHS_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/**
+ * The graph's intensity scale — the knobs for how dark a day gets.
+ *
+ * `minXp` is the floor for each step; `mix` is how much accent is blended into
+ * the panel colour at that step, as a percentage. Raise the `minXp` values to
+ * make dark cells harder to earn, raise the `mix` values to make every step
+ * bolder. Steps are ordered lightest → darkest and matched from the top down,
+ * so they must stay sorted by `minXp`.
+ *
+ * Defaults are anchored to real XP: a concept is 10/20/35 by difficulty and a
+ * correct review is 2, so ~1 concept lands on step 1, a solid session on
+ * step 2, and only a genuinely heavy day reaches step 4.
+ */
+const ACTIVITY_SCALE = [
+  { minXp: 1, mix: 26 },
+  { minXp: 25, mix: 48 },
+  { minXp: 60, mix: 72 },
+  { minXp: 110, mix: 100 },
+];
+
+interface ActivityDay {
+  date: string;
+  active: boolean;
+  xp: number;
+}
+
+/** 1 → "1st", 2 → "2nd", 12 → "12th", 23 → "23rd". */
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  const suffix = ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -174,51 +269,80 @@ function BufferFill({ line }: { line: string }) {
 }
 
 export default function StudentDashboardPage() {
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, setTheme } = useTheme();
   const c = isDark ? DARK : LIGHT;
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Client-only gate for time-derived decoration (avoids hydration mismatch)
   const [mounted, setMounted] = useState(false);
   const [uptimeSec, setUptimeSec] = useState(0);
-  const [clock, setClock] = useState("--:--:--");
+  // The instant, not a formatted string — the account's zone isn't known until
+  // the user query resolves below, so formatting happens at render.
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
     const tick = () => {
       setUptimeSec((s) => s + 1);
-      const d = new Date();
-      setClock(
-        `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
-      );
+      setNowMs(Date.now());
     };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, []);
 
-  // ── Interactive prompt ──────────────────────────────────────────────────
-  // Typeable now; the TERMINAL CLI tab that will execute commands comes later.
+  // ── Interactive prompt / profile shell ──────────────────────────────────
+  // The footer prompt is the only input surface. Running a command grows the
+  // panel above it upward into a full terminal; `exit` collapses it again.
   const [cmd, setCmd] = useState("");
-  const [cliLog, setCliLog] = useState<Array<{ id: number; text: string }>>([]);
+  const [cliLog, setCliLog] = useState<
+    Array<{ id: number; text: string; at: string }>
+  >([]);
   const cliSeq = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const submitCmd = (e: React.FormEvent) => {
-    e.preventDefault();
-    const entered = cmd.trim();
-    if (!entered) return;
-    cliSeq.current += 1;
-    setCliLog((prev) =>
-      [
-        {
-          id: cliSeq.current,
-          text: `${entered} — not wired yet, use the TERMINAL CLI tab`,
-        },
-        ...prev,
-      ].slice(0, 3),
-    );
-    setCmd("");
-  };
+  const [shellOpen, setShellOpen] = useState(false);
+  const [shellLines, setShellLines] = useState<ShellLine[]>([]);
+  const [shellBusy, setShellBusy] = useState(false);
+  // Set while the navbar glyph is typing a command in, so the input is
+  // read-only for those few hundred milliseconds.
+  const [autoTyping, setAutoTyping] = useState(false);
+  // Non-null while a command is waiting on `io.ask` — the prompt label swaps
+  // to the question and the submit resolves the promise instead of dispatching.
+  const [pending, setPending] = useState<PendingAsk | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
+  const [histIdx, setHistIdx] = useState(-1);
+  // Bumped on each open so the scanline sweep remounts and replays.
+  const [sweepKey, setSweepKey] = useState(0);
+
+  const lineSeq = useRef(0);
+  const bufferRef = useRef<HTMLDivElement>(null);
+  const bootedRef = useRef(false);
+  const typeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // The OS file picker behind `profile avatar set`. The command module asks
+  // for a file through `io.pickFile` and stays free of DOM work; this input
+  // and the parked resolver are the host's whole side of that bargain.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const filePick = useRef<((file: File | null) => void) | null>(null);
+
+  const pushLines = useCallback((rows: Array<{ text: string; kind: LineKind; delay?: number }>) => {
+    setShellLines((prev) => {
+      const next = [...prev];
+      for (const r of rows) {
+        lineSeq.current += 1;
+        next.push({
+          id: lineSeq.current,
+          kind: r.kind,
+          text: r.text,
+          delay: r.delay,
+        });
+      }
+      // Cap the buffer so a long session cannot grow without bound.
+      return next.slice(-300);
+    });
+  }, []);
 
   // Press "/" anywhere to focus the prompt
   useEffect(() => {
@@ -234,12 +358,321 @@ export default function StudentDashboardPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Keep the newest line in view as output streams in.
+  useEffect(() => {
+    const el = bufferRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [shellLines, pending]);
+
+  // A question needs the caret back in the input.
+  useEffect(() => {
+    if (pending) inputRef.current?.focus();
+  }, [pending]);
+
+  // Drop the auto-type interval if the component goes away mid-animation.
+  useEffect(
+    () => () => {
+      if (typeTimer.current) clearInterval(typeTimer.current);
+    },
+    [],
+  );
+
+  /** Hand the chosen file — or null, on cancel — back to the waiting command. */
+  const settleFilePick = useCallback((file: File | null) => {
+    const resolve = filePick.current;
+    filePick.current = null;
+    // Clear the value so picking the *same* file twice still fires `change`.
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    resolve?.(file);
+  }, []);
+
+  // `cancel` does not bubble, so it is bound to the element directly. Without
+  // it, dismissing the OS dialog would leave the command awaiting a promise
+  // that never settles, and the shell would sit busy forever.
+  useEffect(() => {
+    const el = fileInputRef.current;
+    if (!el) return;
+    const onCancel = () => settleFilePick(null);
+    el.addEventListener("cancel", onCancel);
+    return () => {
+      el.removeEventListener("cancel", onCancel);
+      // Unmounting mid-pick releases the command rather than stranding it.
+      filePick.current?.(null);
+      filePick.current = null;
+    };
+  }, [settleFilePick]);
+
   // ── Data ────────────────────────────────────────────────────────────────
 
   const { data: user } = useQuery<User>({
     queryKey: ["users", "me"],
     queryFn: async () => (await apiClient.get<User>("/users/me")).data,
   });
+
+  // Every timestamp on this page is rendered in the account's zone, not the
+  // browser's — they agree for most people, but the account is the one the
+  // backend buckets streaks and review dates by, so it is the honest one.
+  const tz = user?.timezone;
+  const tzLabel = useMemo(() => zoneAbbrev(tz), [tz]);
+  const clock = nowMs === null ? "--:--:--" : formatClock(nowMs, tz);
+
+  // ── Shell plumbing ──────────────────────────────────────────────────────
+  // Declared after the `user` query because the command context closes over it.
+
+  const closeShell = useCallback(() => {
+    // The buffer survives a collapse, so reopening shows the earlier session.
+    setShellOpen(false);
+    setPending(null);
+  }, []);
+
+  /** Print the banner once per page load, however the shell was opened. */
+  const boot = useCallback(() => {
+    // Held back until `user` resolves, so the identity line is never "...".
+    if (bootedRef.current || !user) return;
+    bootedRef.current = true;
+    pushLines(bootLines(user).map((l, i) => ({ ...l, delay: i * 45 })));
+  }, [pushLines, user]);
+
+  const openShell = useCallback(() => {
+    setShellOpen((wasOpen) => {
+      if (!wasOpen) setSweepKey((k) => k + 1);
+      return true;
+    });
+    boot();
+  }, [boot]);
+
+  // If the shell was opened before /users/me resolved, `boot` deferred — print
+  // the banner as soon as the identity lands.
+  useEffect(() => {
+    if (shellOpen) boot();
+  }, [shellOpen, boot]);
+
+  const logout = useCallback(() => {
+    clearAuth();
+    queryClient.clear();
+    router.replace("/login");
+  }, [queryClient, router]);
+
+  const refreshUser = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["users", "me"] });
+  }, [queryClient]);
+
+  /** The surface handed to every command. */
+  const io = useMemo(
+    () => ({
+      print: (text: string, kind: LineKind = "out") =>
+        pushLines([{ text, kind }]),
+      clear: () => setShellLines([]),
+      close: closeShell,
+      ask: (prompt: string, opts?: { mask?: boolean }) =>
+        new Promise<string>((resolve, reject) => {
+          setPending({
+            prompt,
+            mask: Boolean(opts?.mask),
+            resolve,
+            reject,
+          });
+        }),
+      pickFile: (accept: string) =>
+        new Promise<File | null>((resolve) => {
+          const el = fileInputRef.current;
+          if (!el) {
+            resolve(null);
+            return;
+          }
+          // A second pick abandons the first rather than queueing behind it.
+          filePick.current?.(null);
+          filePick.current = resolve;
+          el.accept = accept;
+          el.value = "";
+          el.click();
+        }),
+    }),
+    [pushLines, closeShell],
+  );
+
+  /** Echo a line, then dispatch it. Also mirrors into activity.stdout. */
+  const exec = useCallback(
+    async (entered: string) => {
+      const line = entered.trim();
+      if (!line) return;
+
+      openShell();
+      pushLines([{ text: `student@kip:~$ ${line}`, kind: "cmd" }]);
+
+      cliSeq.current += 1;
+      const id = cliSeq.current;
+      // Stamp the time here, at execution. Reading the live `clock` at render
+      // time instead would make every row show "now" on each tick.
+      const at = new Date().toISOString();
+      setCliLog((prev) => [{ id, text: line, at }, ...prev].slice(0, 3));
+
+      setHistory((prev) =>
+        prev[0] === line ? prev : [line, ...prev].slice(0, 50),
+      );
+      setHistIdx(-1);
+
+      setShellBusy(true);
+      try {
+        await runCommand(line, {
+          io,
+          user,
+          refreshUser,
+          isDark,
+          setTheme,
+          logout,
+        });
+      } finally {
+        setShellBusy(false);
+      }
+    },
+    [openShell, pushLines, io, user, refreshUser, isDark, setTheme, logout],
+  );
+
+  const submitCmd = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // A command is waiting on an answer — hand it over instead of dispatching.
+    if (pending) {
+      const answer = cmd;
+      setCmd("");
+      setPending(null);
+      pushLines([
+        {
+          text: `${pending.prompt}: ${pending.mask ? "••••••" : answer}`,
+          kind: "dim",
+        },
+      ]);
+      pending.resolve(answer);
+      return;
+    }
+
+    const entered = cmd.trim();
+    if (!entered) return;
+    // Nothing new while a command is still working — one at a time, as in a
+    // real shell where the prompt does not come back until the job returns.
+    if (shellBusy || autoTyping) return;
+    setCmd("");
+    void exec(entered);
+  };
+
+  /** Type a command in character by character, then run it. Used by the
+   *  navbar glyph so the command visibly arrives at the prompt rather than
+   *  bypassing it. */
+  const typeAndRun = useCallback(
+    (text: string) => {
+      if (autoTyping || shellBusy || pending) return;
+      openShell();
+      inputRef.current?.focus();
+
+      if (typeTimer.current) clearInterval(typeTimer.current);
+      setAutoTyping(true);
+      setCmd("");
+
+      let i = 0;
+      typeTimer.current = setInterval(() => {
+        i += 1;
+        setCmd(text.slice(0, i));
+        if (i >= text.length) {
+          if (typeTimer.current) clearInterval(typeTimer.current);
+          typeTimer.current = null;
+          // A beat on the full line before it submits, so it reads as typed.
+          setTimeout(() => {
+            setAutoTyping(false);
+            setCmd("");
+            void exec(text);
+          }, 220);
+        }
+      }, 45);
+    },
+    [autoTyping, shellBusy, pending, openShell, exec],
+  );
+
+  /** Tab completion, history, and Esc/Ctrl-C cancellation. */
+  const onPromptKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (autoTyping) {
+      e.preventDefault();
+      return;
+    }
+
+    // Ctrl-C aborts whatever is waiting, exactly like a real shell.
+    if (e.key === "c" && (e.ctrlKey || e.metaKey) && pending) {
+      e.preventDefault();
+      pending.reject(new CommandAborted());
+      setPending(null);
+      setCmd("");
+      return;
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (pending) {
+        pending.reject(new CommandAborted());
+        setPending(null);
+        setCmd("");
+        return;
+      }
+      if (cmd) {
+        setCmd("");
+        return;
+      }
+      if (shellOpen) closeShell();
+      return;
+    }
+
+    // Answers to a question are free text — no completion or history.
+    if (pending) return;
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const completed = completeCommand(cmd);
+      if (completed) setCmd(completed);
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!history.length) return;
+      const next = Math.min(histIdx + 1, history.length - 1);
+      setHistIdx(next);
+      setCmd(history[next]);
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (histIdx <= 0) {
+        setHistIdx(-1);
+        setCmd("");
+        return;
+      }
+      const next = histIdx - 1;
+      setHistIdx(next);
+      setCmd(history[next]);
+    }
+  };
+
+  /** Commands offered by the hint strip for what is currently typed. */
+  const hints = useMemo(() => matchCommands(cmd), [cmd]);
+  // Once a command with subcommands is typed, the strip switches to listing
+  // those instead — `profile` alone would otherwise dead-end at its usage line.
+  const subs = useMemo(() => subHints(cmd), [cmd]);
+
+  /** Buffer row colour. `err` is the only red, matching login. */
+  const lineColor = (kind: LineKind): string => {
+    if (kind === "cmd") return c.ink;
+    if (kind === "ok") return c.primary;
+    // Login's error text is `text-red-300` on dark / `text-red-700` on light.
+    // These are those two Tailwind v4 tokens verbatim, so no new hue enters
+    // the palette — red still appears only on real errors.
+    if (kind === "err")
+      return isDark
+        ? "oklch(80.8% 0.114 19.571)"
+        : "oklch(50.5% 0.213 27.518)";
+    if (kind === "dim") return c.dim;
+    if (kind === "head") return c.primary;
+    return c.text;
+  };
 
   const { data: gamification, isLoading: gamificationLoading } =
     useQuery<GamificationData>({
@@ -249,12 +682,12 @@ export default function StudentDashboardPage() {
     });
 
   const { data: activityList = [], isLoading: activityLoading } = useQuery<
-    Array<{ date: string; active: boolean }>
+    ActivityDay[]
   >({
     queryKey: ["gamification", "activity", ACTIVITY_DAYS],
     queryFn: async () =>
       (
-        await apiClient.get<Array<{ date: string; active: boolean }>>(
+        await apiClient.get<ActivityDay[]>(
           `/gamification/activity?days=${ACTIVITY_DAYS}`,
         )
       ).data,
@@ -368,6 +801,120 @@ export default function StudentDashboardPage() {
     activityList.length > 0
       ? ((activeDays / activityList.length) * 100).toFixed(1)
       : "0.0";
+
+  /**
+   * Reshape the flat day list into GitHub's contribution-graph geometry: one
+   * column per calendar week, seven rows Sun→Sat. The first column is
+   * lead-padded with nulls so every row lands on its real weekday, and the
+   * last is tail-padded so the grid stays rectangular.
+   *
+   * Dates are parsed as UTC (`T00:00:00Z`) purely to read a weekday off a
+   * `YYYY-MM-DD` string — the backend has already bucketed these into the
+   * user's own timezone, so no zone maths happens here.
+   */
+  const activityWeeks = useMemo(() => {
+    const source: Array<ActivityDay | null> =
+      activityList.length > 0
+        ? activityList
+        : Array.from({ length: ACTIVITY_DAYS }, () => null);
+
+    const first = source.find((d): d is ActivityDay => d !== null);
+    const leadPad = first
+      ? new Date(`${first.date}T00:00:00Z`).getUTCDay()
+      : new Date().getUTCDay();
+
+    const cells: Array<ActivityDay | null> = [
+      ...Array.from({ length: leadPad }, () => null),
+      ...source,
+    ];
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    const weeks: Array<{ label: string; cells: Array<ActivityDay | null> }> = [];
+    let lastMonth = -1;
+
+    for (let i = 0; i < cells.length; i += 7) {
+      const week = cells.slice(i, i + 7);
+      const marker = week.find((d): d is ActivityDay => d !== null);
+      let label = "";
+
+      if (marker) {
+        const month = new Date(`${marker.date}T00:00:00Z`).getUTCMonth();
+        // Label only where the month turns over, and never in two adjacent
+        // columns — the text is wider than the column it marks.
+        if (month !== lastMonth) {
+          const prev = weeks[weeks.length - 1];
+          if (!prev || !prev.label) label = MONTHS[month];
+          lastMonth = month;
+        }
+      }
+
+      weeks.push({ label, cells: week });
+    }
+
+    return weeks;
+  }, [activityList]);
+
+  /**
+   * Cell shade for a day, graded by XP through ACTIVITY_SCALE. Every step is a
+   * mix of the accent into the panel colour rather than a new hue, so dark
+   * stays green and light stays amber with no hex outside the palette.
+   */
+  const ghColor = useCallback(
+    (day: ActivityDay | null): string => {
+      if (!day) return "transparent";
+      if (day.xp <= 0) return c.hover;
+
+      let mix = ACTIVITY_SCALE[0].mix;
+      for (const step of ACTIVITY_SCALE) {
+        if (day.xp >= step.minXp) mix = step.mix;
+      }
+      return `color-mix(in srgb, ${c.primary} ${mix}%, ${c.panel})`;
+    },
+    [c],
+  );
+
+  /** "120 XP on July 12th" / "No XP on July 12th" — GitHub's phrasing. */
+  const ghTipText = useCallback((day: ActivityDay): string => {
+    const [y, m, d] = day.date.split("-").map(Number);
+    const when = `${MONTHS_LONG[m - 1]} ${ordinal(d)}`;
+    // The graph spans two calendar years, so name the year on older cells.
+    const suffix = y === new Date().getFullYear() ? "" : `, ${y}`;
+    const amount = day.xp > 0 ? `${day.xp} XP` : "No XP";
+    return `${amount} on ${when}${suffix}`;
+  }, []);
+
+  // Hover tooltip. Positioned from the cell's viewport rect and portalled to
+  // <body>, so it can't be clipped by the graph's own horizontal scroll.
+  const [ghTip, setGhTip] = useState<{
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const showGhTip = useCallback(
+    (e: React.MouseEvent<HTMLSpanElement>, day: ActivityDay) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      setGhTip({
+        text: ghTipText(day),
+        x: r.left + r.width / 2,
+        y: r.top,
+      });
+    },
+    [ghTipText],
+  );
+
+  // Phones scroll the graph sideways; open it on today rather than a year ago.
+  // Guarded on the computed overflow: on desktop the graph is `hidden`, but
+  // that still permits *programmatic* scrolling (only `clip` doesn't), and the
+  // last month label overhangs by a few px — enough to shunt the grid left and
+  // shave the Mon/Wed/Fri labels off their gutter.
+  const activityScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = activityScrollRef.current;
+    if (!el) return;
+    const scrollable = getComputedStyle(el).overflowX === "auto";
+    if (scrollable) el.scrollLeft = el.scrollWidth;
+  }, [activityWeeks]);
 
   const rankedRoadmaps = useMemo(() => {
     return roadmaps
@@ -580,6 +1127,39 @@ export default function StudentDashboardPage() {
           >
             [<span className="hidden sm:inline">MODE: </span>
             {isDark ? "DK" : "LT"}]
+          </button>
+          {/* Profile shell. Clicking types `profile` at the prompt below and
+              lets the shell run it, so the terminal stays the way in. */}
+          <button
+            type="button"
+            onClick={() => typeAndRun("profile")}
+            disabled={autoTyping || shellBusy || Boolean(pending)}
+            aria-label="Open profile shell"
+            title="Profile — runs `profile` at the prompt"
+            className="px-1.5 py-1 transition-colors cursor-pointer shrink-0 flex items-center gap-1 disabled:cursor-not-allowed"
+            style={{
+              border: `1px solid ${shellOpen ? c.primary : c.line}`,
+              color: shellOpen ? c.primary : c.dim,
+              backgroundColor: shellOpen ? `${c.primary}1a` : c.head,
+            }}
+          >
+            {/* Pixel user glyph — drawn rather than imported so it keeps the
+                hard-edged terminal look at every size. */}
+            <svg
+              width="9"
+              height="10"
+              viewBox="0 0 9 10"
+              fill="currentColor"
+              aria-hidden="true"
+              shapeRendering="crispEdges"
+            >
+              <rect x="3" y="0" width="3" height="1" />
+              <rect x="2" y="1" width="5" height="3" />
+              <rect x="3" y="4" width="3" height="1" />
+              <rect x="1" y="6" width="7" height="1" />
+              <rect x="0" y="7" width="9" height="3" />
+            </svg>
+            <span className="hidden sm:inline text-[11px]">[USR]</span>
           </button>
         </div>
       </header>
@@ -937,7 +1517,7 @@ export default function StudentDashboardPage() {
         <section className="lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
           {/* LEFT */}
           <div className="lg:col-span-7 lg:min-h-0 flex flex-col gap-3">
-            {/* Study activity — fixed height, two clean rows of 30 */}
+            {/* Study activity — GitHub-style contribution graph, fixed height */}
             <div className="shrink-0 flex flex-col" style={panel}>
               <div
                 className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
@@ -945,10 +1525,7 @@ export default function StudentDashboardPage() {
               >
                 <span className="font-bold truncate" style={{ color: c.ink }}>
                   ┌─[ study_activity
-                  <span className="hidden sm:inline">
-                    {" "}
-                    :: {ACTIVITY_DAYS}d_consistency
-                  </span>{" "}
+                  <span className="hidden sm:inline"> :: 1y_consistency</span>{" "}
                   ]
                 </span>
                 <span
@@ -967,55 +1544,87 @@ export default function StudentDashboardPage() {
               </div>
 
               <div className="px-3 sm:px-4 py-3 flex flex-col gap-2">
+                {/* GitHub's contribution graph: 53 week-columns, Sun→Sat rows.
+                    From `md` up the columns are fluid, so the graph spans the
+                    whole panel; phones keep readable cells and scroll instead.
+                    Accent is the green in dark, amber in light. */}
                 <div
-                  className="text-[10px] flex items-center justify-between"
-                  style={{ color: c.faint }}
+                  ref={activityScrollRef}
+                  className="kip-gh select-none"
+                  style={
+                    {
+                      "--gh-cols": activityWeeks.length,
+                      "--gh-edge": `color-mix(in srgb, ${c.line} 55%, transparent)`,
+                    } as React.CSSProperties
+                  }
                 >
-                  <span>T-{ACTIVITY_DAYS}d</span>
-                  <span>TODAY ➔</span>
-                </div>
+                  <div className="kip-gh-months" style={{ color: c.faint }}>
+                    {activityWeeks.map((w, i) => (
+                      <span key={`m-${i}`}>{w.label}</span>
+                    ))}
+                  </div>
 
-                {/* One grid, column count set in CSS per breakpoint (15 on
-                    phone → 30 on desktop) so cells never clip. Rows auto-flow. */}
-                <div className="kip-activity-grid select-none">
-                  {(activityList.length > 0
-                    ? activityList
-                    : Array.from({ length: ACTIVITY_DAYS }, () => null)
-                  ).map((d, i) => (
-                    <span
-                      key={d?.date ?? `empty-${i}`}
-                      className="text-center leading-none"
-                      title={
-                        d ? `${d.date}: ${d.active ? "active" : "idle"}` : ""
-                      }
-                      style={{ color: d?.active ? c.primary : c.line }}
-                    >
-                      {d?.active ? "■" : "·"}
-                    </span>
-                  ))}
+                  <div className="kip-gh-body">
+                    <div className="kip-gh-days" style={{ color: c.faint }}>
+                      <span />
+                      <span>Mon</span>
+                      <span />
+                      <span>Wed</span>
+                      <span />
+                      <span>Fri</span>
+                      <span />
+                    </div>
+
+                    <div className="kip-gh-grid">
+                      {activityWeeks.map((w, wi) =>
+                        w.cells.map((d, di) => (
+                          <span
+                            key={`c-${wi}-${di}`}
+                            className="kip-gh-cell"
+                            onMouseEnter={
+                              d ? (e) => showGhTip(e, d) : undefined
+                            }
+                            onMouseLeave={d ? () => setGhTip(null) : undefined}
+                            style={
+                              d
+                                ? {
+                                    background: ghColor(d),
+                                    boxShadow: "inset 0 0 0 1px var(--gh-edge)",
+                                  }
+                                : { background: "transparent" }
+                            }
+                          />
+                        )),
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div
                   className="pt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px]"
                   style={{ color: c.dim, borderTop: `1px solid ${c.line}` }}
                 >
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <span
-                      className="hidden sm:inline"
-                      style={{ color: c.faint }}
-                    >
-                      LEGEND:
-                    </span>
-                    <span className="font-bold" style={{ color: c.primary }}>
-                      [■] ACTIVE
-                      <span className="hidden sm:inline"> STUDY</span>
-                    </span>
-                    <span className="font-bold" style={{ color: c.line }}>
-                      [·] IDLE
-                    </span>
-                  </div>
                   <div className="hidden lg:inline" style={{ color: c.faint }}>
-                    {"// UTC DAY BOUNDARIES"}
+                    {`// DAY BOUNDARIES: ${tzLabel}`}
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <span style={{ color: c.faint }}>LESS</span>
+                    {[0, ...ACTIVITY_SCALE.map((s) => s.minXp)].map((xp) => (
+                      <span
+                        key={`k-${xp}`}
+                        className="kip-gh-key"
+                        title={xp > 0 ? `${xp}+ XP` : "No XP"}
+                        style={{
+                          background: ghColor({
+                            date: "",
+                            active: xp > 0,
+                            xp,
+                          }),
+                          boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c.line} 55%, transparent)`,
+                        }}
+                      />
+                    ))}
+                    <span style={{ color: c.faint }}>MORE</span>
                   </div>
                 </div>
               </div>
@@ -1164,7 +1773,7 @@ export default function StudentDashboardPage() {
                               className="text-[11px]"
                               style={{ color: has ? c.faint : c.line }}
                             >
-                              {has ? b.earnedAt!.slice(0, 10) : "[LOCKED]"}
+                              {has ? formatDate(b.earnedAt!, tz) : "[LOCKED]"}
                             </span>
                             <span
                               className="text-[10px] font-bold px-1.5"
@@ -1224,7 +1833,7 @@ export default function StudentDashboardPage() {
                       style={{ color: c.text }}
                     >
                       <span className="text-[11px]" style={{ color: c.faint }}>
-                        [{clock}]
+                        [{formatClock(l.at, tz)}]
                       </span>
                       <span
                         className="font-bold shrink-0"
@@ -1255,7 +1864,7 @@ export default function StudentDashboardPage() {
                           className="text-[11px]"
                           style={{ color: c.faint }}
                         >
-                          [{new Date(e.at).toISOString().slice(11, 19)}]
+                          [{formatClock(e.at, tz)}]
                         </span>
                         <span
                           className="font-bold shrink-0"
@@ -1307,6 +1916,147 @@ export default function StudentDashboardPage() {
         className="w-full shrink-0 z-30"
         style={{ backgroundColor: c.panel, borderTop: `1px solid ${c.line}` }}
       >
+        {/* ── Profile shell — grows upward out of the prompt ─────────────── */}
+        <div
+          className={`kip-shell ${shellOpen ? "kip-shell-open" : ""}`}
+          aria-hidden={!shellOpen}
+        >
+          <div
+            className="relative overflow-hidden"
+            style={{
+              backgroundColor: c.base,
+              borderBottom: `1px solid ${c.line}`,
+            }}
+          >
+            {/* One-shot CRT sweep, replayed on every open */}
+            {shellOpen && (
+              <div
+                key={sweepKey}
+                className="kip-sweep absolute inset-x-0 top-0 h-16 z-10"
+                style={{
+                  background: `linear-gradient(to bottom, transparent, ${c.primary}14, transparent)`,
+                }}
+                aria-hidden="true"
+              />
+            )}
+
+            <div
+              className="px-2 sm:px-3 md:px-4 py-1 flex items-center justify-between gap-2 text-[11px]"
+              style={{
+                backgroundColor: c.head,
+                borderBottom: `1px solid ${c.line}`,
+              }}
+            >
+              <span className="font-bold truncate" style={{ color: c.ink }}>
+                ┌─[ profile.sh
+                <span className="hidden sm:inline"> :: /dev/pts/{tty}</span> ]
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {shellBusy && (
+                  <span className="kip-pulse" style={{ color: c.primary }}>
+                    WORKING
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={closeShell}
+                  className="cursor-pointer"
+                  style={{ color: c.faint }}
+                >
+                  [ESC: CLOSE]
+                </button>
+              </div>
+            </div>
+
+            <div
+              ref={bufferRef}
+              className="px-2 sm:px-3 md:px-4 py-2 overflow-y-auto text-[12px] sm:text-[13px] leading-relaxed"
+              style={{ maxHeight: "min(46vh, 24rem)" }}
+            >
+              {shellLines.map((l) => (
+                <div
+                  key={l.id}
+                  className="kip-line-in whitespace-pre-wrap break-words"
+                  style={
+                    {
+                      color: lineColor(l.kind),
+                      fontWeight: l.kind === "head" ? 700 : 400,
+                      "--kip-delay": `${l.delay ?? 0}ms`,
+                    } as React.CSSProperties
+                  }
+                >
+                  {/* A blank line still needs to occupy a row */}
+                  {l.text || " "}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Command hints — stay put while typing, so a half-written line
+               never has to be cleared just to remember the syntax ───────── */}
+        {(shellOpen || cmd.length > 0) && !pending && (
+          <div
+            className="px-2 sm:px-3 md:px-4 py-1 flex items-center gap-2 text-[11px] overflow-x-auto"
+            style={{
+              backgroundColor: c.panel,
+              borderBottom: `1px solid ${c.line}`,
+            }}
+          >
+            <span className="shrink-0 font-bold" style={{ color: c.faint }}>
+              CMD:
+            </span>
+            {hints.length === 0 ? (
+              <span style={{ color: c.faint }}>
+                no match — type help to list everything
+              </span>
+            ) : subs.length > 0 ? (
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {subs.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setCmd(`${s} `);
+                      inputRef.current?.focus();
+                    }}
+                    className="shrink-0 whitespace-nowrap cursor-pointer px-1 transition-colors"
+                    style={{
+                      color: c.primary,
+                      border: `1px solid ${c.primary}66`,
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {hints.map((h) => (
+                  <button
+                    key={h.name}
+                    type="button"
+                    onClick={() => {
+                      setCmd(h.name === "help" ? "help" : `${h.name} `);
+                      inputRef.current?.focus();
+                    }}
+                    className="shrink-0 whitespace-nowrap cursor-pointer px-1 transition-colors"
+                    style={{
+                      color: hints.length === 1 ? c.primary : c.dim,
+                      border: `1px solid ${
+                        hints.length === 1 ? `${c.primary}66` : c.line
+                      }`,
+                    }}
+                    title={h.summary}
+                  >
+                    {hints.length === 1 ? h.usage : h.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <form
           onSubmit={submitCmd}
           className="px-2 sm:px-3 md:px-4 py-1.5 flex items-center gap-2 text-[13px] cursor-text"
@@ -1316,17 +2066,27 @@ export default function StudentDashboardPage() {
           }}
           onClick={() => inputRef.current?.focus()}
         >
-          <span className="font-bold shrink-0" style={{ color: c.primary }}>
-            student@kip:~$
+          <span
+            className="font-bold shrink-0 truncate max-w-[45%] sm:max-w-none"
+            style={{ color: pending ? c.alert : c.primary }}
+          >
+            {pending ? `${pending.prompt}:` : "student@kip:~$"}
           </span>
           <div className="relative flex-1 flex items-center min-w-0">
             <input
               ref={inputRef}
               value={cmd}
               onChange={(e) => setCmd(e.target.value)}
+              onKeyDown={onPromptKeyDown}
+              // `readOnly` rather than `disabled` during auto-type: the value
+              // must keep rendering as the characters land.
+              readOnly={autoTyping}
+              type={pending?.mask ? "password" : "text"}
               spellCheck={false}
               autoComplete="off"
-              aria-label="Terminal prompt"
+              autoCapitalize="off"
+              autoCorrect="off"
+              aria-label={pending ? pending.prompt : "Terminal prompt"}
               className="w-full bg-transparent outline-none border-none text-[13px] caret-transparent"
               style={{ color: c.text, font: "inherit", fontSize: "13px" }}
             />
@@ -1335,7 +2095,7 @@ export default function StudentDashboardPage() {
               className="kip-cursor pointer-events-none absolute top-1/2 -translate-y-1/2 w-2.5 h-4"
               style={{
                 left: `min(${cmd.length}ch, calc(100% - 0.625rem))`,
-                backgroundColor: c.primary,
+                backgroundColor: pending ? c.alert : c.primary,
               }}
               aria-hidden="true"
             />
@@ -1344,9 +2104,23 @@ export default function StudentDashboardPage() {
             className="text-[11px] shrink-0 hidden lg:inline"
             style={{ color: c.faint }}
           >
-            [/] FOCUS · [2] TERMINAL CLI
+            {pending
+              ? "[ENTER] SUBMIT · [ESC] CANCEL"
+              : shellOpen
+                ? "[TAB] COMPLETE · [↑] HISTORY · [ESC] CLOSE"
+                : "[/] FOCUS · type help"}
           </span>
         </form>
+
+        {/* Driven entirely by `io.pickFile` — never focusable, never shown. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => settleFilePick(e.target.files?.[0] ?? null)}
+        />
 
         <div
           className="px-2 sm:px-3 md:px-4 py-1 flex items-center justify-between gap-2 text-[11px]"
@@ -1373,6 +2147,30 @@ export default function StudentDashboardPage() {
           </div>
         </div>
       </footer>
+
+      {/* Activity-graph hover tooltip. Portalled to <body> and positioned from
+          the cell's viewport rect, so the graph's own horizontal scroll on
+          phones can't clip it. Instant, unlike a native `title`. */}
+      {mounted &&
+        ghTip &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="fixed z-[60] px-2 py-1 text-[11px] font-medium rounded pointer-events-none whitespace-nowrap"
+            style={{
+              left: Math.min(Math.max(ghTip.x, 76), window.innerWidth - 76),
+              top: ghTip.y - 8,
+              transform: "translate(-50%, -100%)",
+              background: c.head,
+              color: c.text,
+              border: `1px solid ${c.line}`,
+              boxShadow: `2px 2px 0px 0px ${c.shadow}`,
+            }}
+          >
+            {ghTip.text}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

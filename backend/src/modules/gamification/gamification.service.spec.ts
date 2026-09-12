@@ -325,9 +325,17 @@ describe('GamificationService', () => {
   });
 
   describe('getActivityHeatmap', () => {
-    it('returns one entry per requested day, flagging active days from XP rows', async () => {
+    it('returns one entry per requested day, summing XP per day', async () => {
+      // Rows are keyed to match the query's `.select(..., 'createdAt')` /
+      // `.addSelect(..., 'xpAmount')` aliases. Two on the same UTC day, with
+      // different amounts, exercise the per-day sum the graph grades on.
       xpRepo.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({ rawMany: [{ date: '2026-08-25' }] }),
+        createMockQueryBuilder({
+          rawMany: [
+            { createdAt: '2026-08-25T04:00:00.000Z', xpAmount: 20 },
+            { createdAt: '2026-08-25T18:00:00.000Z', xpAmount: 35 },
+          ],
+        }),
       );
 
       const result = await service.getActivityHeatmap('user-1', 5);
@@ -336,16 +344,21 @@ describe('GamificationService', () => {
       expect(result[result.length - 1]).toEqual({
         date: '2026-08-25',
         active: true,
+        xp: 55,
       });
-      expect(result[0].active).toBe(false);
+      expect(result[0]).toEqual({
+        date: '2026-08-21',
+        active: false,
+        xp: 0,
+      });
     });
 
-    it('clamps the window to a maximum of 90 days', async () => {
+    it('clamps the window to a maximum of 371 days (53 weeks)', async () => {
       xpRepo.createQueryBuilder.mockReturnValue(createMockQueryBuilder({}));
 
       const result = await service.getActivityHeatmap('user-1', 1000);
 
-      expect(result).toHaveLength(90);
+      expect(result).toHaveLength(371);
     });
 
     it('falls back to 14 days for a falsy day count', async () => {

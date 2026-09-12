@@ -1,5 +1,6 @@
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIanaTimezone } from '../../../common/validators/is-iana-timezone.validator';
 
 export class UpdateOwnProfileDto {
   @ApiPropertyOptional({
@@ -16,8 +17,7 @@ export class UpdateOwnProfileDto {
     description: 'IANA timezone string',
   })
   @IsOptional()
-  @IsString()
-  @IsNotEmpty()
+  @IsIanaTimezone()
   timezone?: string;
 
   @ApiPropertyOptional({

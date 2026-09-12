@@ -32,6 +32,7 @@ export class ProgressService {
   async markConceptCompleted(
     userId: string,
     conceptId: string,
+    timezone?: string | null,
   ): Promise<UserConceptProgress> {
     const concept = await this.conceptRepository.findOne({
       where: { id: conceptId },
@@ -71,9 +72,13 @@ export class ProgressService {
         conceptId,
         XpSource.ASSIGNMENT_PASSED,
       );
-      await this.gamificationService.updateStreak(userId);
+      await this.gamificationService.updateStreak(userId, timezone);
       await this.gamificationService.checkAndAwardBadges(userId);
-      await this.reviewService.populateReviewItemsForConcept(userId, conceptId);
+      await this.reviewService.populateReviewItemsForConcept(
+        userId,
+        conceptId,
+        timezone,
+      );
     }
 
     return savedProgress;
@@ -82,8 +87,9 @@ export class ProgressService {
   async markConceptCompletedFromAssignment(
     userId: string,
     conceptId: string,
+    timezone?: string | null,
   ): Promise<UserConceptProgress> {
-    return this.markConceptCompleted(userId, conceptId);
+    return this.markConceptCompleted(userId, conceptId, timezone);
   }
 
   async markConceptStarted(

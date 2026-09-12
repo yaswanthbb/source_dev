@@ -65,12 +65,15 @@ export class UsersService {
     email: string;
     passwordHash: string;
     name: string;
+    timezone?: string;
   }): Promise<Omit<User, 'passwordHash'>> {
     const user = this.userRepository.create({
       email: data.email,
       passwordHash: data.passwordHash,
       name: data.name,
       role: UserRole.STUDENT,
+      // Omitted when the client didn't send one, so the column default applies.
+      ...(data.timezone ? { timezone: data.timezone } : {}),
     });
     const savedUser = await this.userRepository.save(user);
     return this.sanitizeUser(savedUser);

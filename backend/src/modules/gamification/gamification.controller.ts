@@ -29,7 +29,8 @@ export class GamificationController {
 
   @Get('gamification/activity')
   @ApiOperation({
-    summary: 'Get activity heatmap array for the last N days (UTC-based)',
+    summary:
+      "Get activity heatmap array for the last N days, bucketed by the user's own timezone",
   })
   @ApiResponse({
     status: 200,
@@ -42,6 +43,7 @@ export class GamificationController {
     return this.gamificationService.getActivityHeatmap(
       user.id,
       query.days ?? 14,
+      user.timezone,
     );
   }
 

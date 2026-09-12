@@ -47,12 +47,17 @@ export class AiGenerateController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Remaining quota out of 20 daily generations.',
+    description:
+      "Remaining quota out of 20 daily generations, counted against the user's own timezone.",
   })
   async getQuota(
     @CurrentUser() user: User,
   ): Promise<{ remaining: number; limit: number }> {
-    const { remaining } = await this.aiGenerateService.checkRateLimit(user.id);
+    const { remaining } = await this.aiGenerateService.checkRateLimit(
+      user.id,
+      1,
+      user.timezone,
+    );
     return { remaining, limit: 20 };
   }
 

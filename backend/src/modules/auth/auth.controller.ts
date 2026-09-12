@@ -124,10 +124,14 @@ export class AuthController {
     );
     try {
       const oauthProfile = req.user as OAuthProfile;
-      const { accessToken } =
+      const { accessToken, isNewUser } =
         await this.authService.handleOAuthLogin(oauthProfile);
+      // `new=1` tells the client to send the timezone it just detected — the
+      // provider redirect has no way to carry one.
       return res.redirect(
-        `${frontendUrl}/auth/callback?token=${encodeURIComponent(accessToken)}`,
+        `${frontendUrl}/auth/callback?token=${encodeURIComponent(accessToken)}${
+          isNewUser ? '&new=1' : ''
+        }`,
       );
     } catch (err: unknown) {
       const message =
@@ -157,10 +161,12 @@ export class AuthController {
     );
     try {
       const oauthProfile = req.user as OAuthProfile;
-      const { accessToken } =
+      const { accessToken, isNewUser } =
         await this.authService.handleOAuthLogin(oauthProfile);
       return res.redirect(
-        `${frontendUrl}/auth/callback?token=${encodeURIComponent(accessToken)}`,
+        `${frontendUrl}/auth/callback?token=${encodeURIComponent(accessToken)}${
+          isNewUser ? '&new=1' : ''
+        }`,
       );
     } catch (err: unknown) {
       const message =

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import apiClient from "@/lib/api-client";
 import { setToken, setUser, User } from "@/lib/auth";
+import { detectTimezone } from "@/lib/timezone";
 import { useTheme } from "@/providers/theme-provider";
 import { CenteredTerminalLoader } from "@/components/loaders/centered-terminal-loader";
 import "@/components/home/retro-terminal.css";
@@ -513,6 +514,10 @@ export default function RegisterPage() {
           name: name.trim(),
           email: email.trim(),
           password,
+          // The form never asks for this — the browser already knows it, and
+          // leaving every new account on UTC makes streaks and day boundaries
+          // wrong for anyone outside it.
+          timezone: detectTimezone(),
         },
       );
 

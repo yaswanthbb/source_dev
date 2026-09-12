@@ -1510,41 +1510,5 @@
     "seen": 1788951909.427038,
     "ast_hash": "012a2c4e76c5e023f5c6d4c1d3776906",
     "semantic_hash": ""
-  },
-  "frontend/screenshots/agreed-dashboard.png": {
-    "mtime": 1789127450.43574,
-    "seen": 1789202827.819864,
-    "ast_hash": "92f3450a2d51186f49e0f2ea068273d4",
-    "semantic_hash": ""
-  },
-  "frontend/screenshots/dashboard-idea.png": {
-    "mtime": 1789120818.4026146,
-    "seen": 1789202827.8198671,
-    "ast_hash": "530b040c501a86f7c0a690b258fe9449",
-    "semantic_hash": ""
-  },
-  "frontend/screenshots/new-dashboard.png": {
-    "mtime": 1789123765.2153566,
-    "seen": 1789202827.8198693,
-    "ast_hash": "6b32adb7910b2b20b95709cb3c5cc88d",
-    "semantic_hash": ""
-  },
-  "frontend/screenshots/present-design.png": {
-    "mtime": 1789128036.5966473,
-    "seen": 1789202827.8198714,
-    "ast_hash": "e85d069c6133d802e709c5da844636ba",
-    "semantic_hash": ""
-  },
-  "frontend/screenshots/responsive-issue.png": {
-    "mtime": 1789128798.204476,
-    "seen": 1789202827.8198736,
-    "ast_hash": "05533501bb5ff77b9dbad723c033c171",
-    "semantic_hash": ""
-  },
-  "frontend/screenshots/responsive-issue2.png": {
-    "mtime": 1789128820.7726161,
-    "seen": 1789202827.8198755,
-    "ast_hash": "9db297cb5940b001c57c92cde5a5b92c",
-    "semantic_hash": ""
   }
 }

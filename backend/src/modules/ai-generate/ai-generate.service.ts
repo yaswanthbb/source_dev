@@ -24,6 +24,12 @@ import {
   AiGenerationJobStatus,
 } from '../../common/enums/ai-generation-job.enum';
 import { ConceptDifficulty } from '../../common/enums/concept-difficulty.enum';
+import {
+  addCivilDays,
+  civilDateIn,
+  resolveZone,
+  todayIn,
+} from '../../common/utils/timezone.util';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../content/entities/module.entity';
 import { Concept } from '../content/entities/concept.entity';
@@ -115,22 +121,41 @@ export class AiGenerateService implements OnApplicationBootstrap {
   }
 
   /**
-   * Check if the user has reached their daily limit (UTC calendar day).
+   * Check if the user has reached their daily limit for "today" in *their*
+   * timezone.
+   *
+   * On a UTC day boundary an instructor in Asia/Kolkata saw their quota reset
+   * at 05:30 local rather than at midnight, so the last few hours of their
+   * working evening were still spending the previous day's allowance.
+   *
    * Optional requiredSlots parameter ensures enough quota remains for batch operations.
    */
   async checkRateLimit(
     userId: string,
     requiredSlots = 1,
+    timezone?: string | null,
   ): Promise<{ remaining: number }> {
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    const zone = resolveZone(timezone);
+    const todayStr = todayIn(zone);
 
-    const count = await this.aiGenerationLogRepository.count({
+    // A day's worth of slack on each side: the user's civil day can start up
+    // to 14h before, and end up to 12h after, the same-named UTC day.
+    const windowStart = new Date(`${addCivilDays(todayStr, -1)}T00:00:00Z`);
+
+    // Bucketed in JS rather than with `AT TIME ZONE` so the quota window uses
+    // exactly the same zone logic as streaks and the heatmap. At most a couple
+    // of days of one user's log rows, so the row count stays small.
+    const rows = await this.aiGenerationLogRepository.find({
       where: {
         userId,
-        generatedAt: MoreThanOrEqual(startOfDay),
+        generatedAt: MoreThanOrEqual(windowStart),
       },
+      select: { id: true, generatedAt: true },
     });
+
+    const count = rows.filter(
+      (row) => civilDateIn(zone, new Date(row.generatedAt)) === todayStr,
+    ).length;
 
     const remaining = Math.max(0, DAILY_LIMIT - count);
 
@@ -141,7 +166,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
           message:
             requiredSlots > 1
               ? `At least ${requiredSlots} AI generations remaining are required for this batch operation. You have ${remaining}/${DAILY_LIMIT} remaining today.`
-              : `Daily AI generation limit reached (${DAILY_LIMIT} generations per day). Please try again tomorrow (UTC).`,
+              : `Daily AI generation limit reached (${DAILY_LIMIT} generations per day). Your quota resets at midnight in your own timezone.`,
           error: 'Too Many Requests',
           remaining,
           limit: DAILY_LIMIT,
@@ -504,7 +529,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
           'Roadmap module limit reached (6/6). Cannot generate more modules.',
         );
       }
-      await this.checkRateLimit(user.id, 1);
+      await this.checkRateLimit(user.id, 1, user.timezone);
       return { targetLabel: roadmap.title };
     }
 
@@ -532,10 +557,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
       }
       const remainingSlots = 6 - existingConceptTitles.length;
       // 1 title-list call + up to remainingSlots content calls
-      await this.checkRateLimit(user.id, remainingSlots + 1);
+      await this.checkRateLimit(user.id, remainingSlots + 1, user.timezone);
     } else {
       // MODULE_MCQS
-      await this.checkRateLimit(user.id, 1);
+      await this.checkRateLimit(user.id, 1, user.timezone);
     }
 
     return { targetLabel: moduleEntity.title };
@@ -990,7 +1015,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
 
       // Check quota before each individual content call
       try {
-        await this.checkRateLimit(user.id, 1);
+        await this.checkRateLimit(user.id, 1, user.timezone);
       } catch {
         skippedCount = conceptTitles.length - processed;
         break;
@@ -1123,7 +1148,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     for (const concept of conceptsNeedingMcqs) {
       // Check quota before each concept MCQ generation
       try {
-        await this.checkRateLimit(user.id, 1);
+        await this.checkRateLimit(user.id, 1, user.timezone);
       } catch {
         skippedCount = conceptsNeedingMcqs.length - processed;
         break;
@@ -1355,7 +1380,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
 
       // Check quota before each individual content call (same as the first run).
       try {
-        await this.checkRateLimit(user.id, 1);
+        await this.checkRateLimit(user.id, 1, user.timezone);
       } catch {
         skippedCount += titlesToRetry.length - processed;
         break;
@@ -1493,7 +1518,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     for (const concept of conceptsNeedingMcqs) {
       // Check quota before each concept MCQ generation.
       try {
-        await this.checkRateLimit(user.id, 1);
+        await this.checkRateLimit(user.id, 1, user.timezone);
       } catch {
         skippedCount = conceptsNeedingMcqs.length - processed;
         break;
@@ -1626,7 +1651,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     dto: GenerateConceptContentDto,
     user: User,
   ): Promise<{ content: string }> {
-    await this.checkRateLimit(user.id);
+    await this.checkRateLimit(user.id, 1, user.timezone);
 
     const systemPrompt = CONCEPT_CONTENT_SYSTEM_PROMPT;
     const userPrompt = buildConceptContentUserPrompt(dto);
@@ -1651,7 +1676,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     dto: GenerateConceptMcqsDto,
     user: User,
   ): Promise<{ rawText: string }> {
-    await this.checkRateLimit(user.id);
+    await this.checkRateLimit(user.id, 1, user.timezone);
 
     const systemPrompt = CONCEPT_MCQ_SYSTEM_PROMPT;
     const userPrompt = buildConceptMcqUserPrompt(dto.title, dto.content);
@@ -1710,7 +1735,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     questionBody: string,
     user: User,
   ): Promise<string> {
-    await this.checkRateLimit(user.id, 1);
+    await this.checkRateLimit(user.id, 1, user.timezone);
 
     const systemPrompt = QA_ANSWER_SYSTEM_PROMPT;
     const userPrompt = buildQaAnswerUserPrompt(

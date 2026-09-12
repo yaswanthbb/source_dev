@@ -1,5 +1,12 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIanaTimezone } from '../../../common/validators/is-iana-timezone.validator';
 
 export class RegisterDto {
   @ApiProperty({
@@ -21,4 +28,13 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @ApiPropertyOptional({
+    example: 'Asia/Kolkata',
+    description:
+      "Detected from the browser at sign-up. Falls back to the column default (UTC) when absent, e.g. for API clients that don't send it.",
+  })
+  @IsOptional()
+  @IsIanaTimezone()
+  timezone?: string;
 }

@@ -44,6 +44,7 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       name: dto.name,
+      timezone: dto.timezone,
     });
 
     const payload = { sub: user.id, email: user.email, role: user.role };
@@ -121,6 +122,7 @@ export class AuthService {
       return {
         user: sanitizedUser,
         accessToken,
+        isNewUser: false,
       };
     }
 
@@ -156,9 +158,12 @@ export class AuthService {
     };
     const accessToken = this.jwtService.sign(payload);
 
+    // The provider redirect carries no timezone, so the client sets it once
+    // on the way back in — this flag is how it knows the account is new.
     return {
       user: newUser,
       accessToken,
+      isNewUser: true,
     };
   }
 

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { setToken, setUser, User } from '@/lib/auth';
+import { syncTimezoneForNewAccount } from '@/lib/timezone';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { CenteredTerminalLoader } from '@/components/loaders/centered-terminal-loader';
 
@@ -47,6 +48,14 @@ function CallbackHandler() {
     const processAuth = async () => {
       try {
         setToken(token);
+
+        // A provider redirect carries no timezone, so a brand-new account
+        // would otherwise sit on UTC forever. `new=1` is set by the backend
+        // only when it just created the account.
+        if (searchParams.get('new') === '1') {
+          await syncTimezoneForNewAccount();
+        }
+
         // Fetch full self-profile using the new token
         const response = await apiClient.get<User>('/users/me', {
           headers: {

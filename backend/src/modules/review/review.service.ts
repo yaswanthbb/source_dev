@@ -11,6 +11,7 @@ import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { XpEvent } from '../gamification/entities/xp-event.entity';
 import { XpSource } from '../../common/enums/xp-source.enum';
 import { AnswerReviewItemDto } from './dto/answer-review-item.dto';
+import { relativeDayIn, todayIn } from '../../common/utils/timezone.util';
 
 @Injectable()
 export class ReviewService {
@@ -24,28 +25,21 @@ export class ReviewService {
   ) {}
 
   /**
-   * Helper to get current calendar date in YYYY-MM-DD (UTC)
+   * Review scheduling is a civil-date concept: an item due "tomorrow" means
+   * tomorrow where the user lives. Computing these in UTC meant an
+   * Asia/Kolkata user saw today's reviews appear at 05:30 local rather than
+   * at midnight, and lost the 00:00–05:30 window to the anti-farming guard.
    */
-  private getTodayDateString(): string {
-    return new Date().toISOString().slice(0, 10);
+  private getTodayDateString(timezone?: string | null): string {
+    return todayIn(timezone);
   }
 
-  /**
-   * Helper to get tomorrow's calendar date in YYYY-MM-DD (UTC)
-   */
-  private getTomorrowDateString(): string {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() + 1);
-    return d.toISOString().slice(0, 10);
+  private getTomorrowDateString(timezone?: string | null): string {
+    return relativeDayIn(timezone, 1);
   }
 
-  /**
-   * Helper to get future date in YYYY-MM-DD (UTC) by adding days
-   */
-  private getFutureDateString(days: number): string {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().slice(0, 10);
+  private getFutureDateString(days: number, timezone?: string | null): string {
+    return relativeDayIn(timezone, days);
   }
 
   /**
@@ -56,6 +50,7 @@ export class ReviewService {
   async populateReviewItemsForConcept(
     userId: string,
     conceptId: string,
+    timezone?: string | null,
   ): Promise<void> {
     const questions = await this.mcqQuestionRepository.find({
       where: { conceptId },
@@ -65,7 +60,7 @@ export class ReviewService {
       return;
     }
 
-    const tomorrowStr = this.getTomorrowDateString();
+    const tomorrowStr = this.getTomorrowDateString(timezone);
 
     for (const question of questions) {
       await this.reviewItemRepository
@@ -88,8 +83,8 @@ export class ReviewService {
    * Returns all ReviewItems for current user where dueDate <= today (due today or overdue).
    * Strips isCorrect from options (student-facing).
    */
-  async getDueReviewItems(userId: string) {
-    const todayStr = this.getTodayDateString();
+  async getDueReviewItems(userId: string, timezone?: string | null) {
+    const todayStr = this.getTodayDateString(timezone);
 
     const items = await this.reviewItemRepository.find({
       where: {
@@ -130,8 +125,9 @@ export class ReviewService {
    */
   async getDueCount(
     userId: string,
+    timezone?: string | null,
   ): Promise<{ count: number; dueCount: number }> {
-    const todayStr = this.getTodayDateString();
+    const todayStr = this.getTodayDateString(timezone);
     const count = await this.reviewItemRepository.count({
       where: {
         userId,
@@ -149,6 +145,7 @@ export class ReviewService {
     reviewItemId: string,
     userId: string,
     dto: AnswerReviewItemDto,
+    timezone?: string | null,
   ) {
     const item = await this.reviewItemRepository.findOne({
       where: { id: reviewItemId },
@@ -165,7 +162,7 @@ export class ReviewService {
       );
     }
 
-    const todayStr = this.getTodayDateString();
+    const todayStr = this.getTodayDateString(timezone);
 
     // Anti-farming check: cannot review items that are not yet due
     if (item.dueDate > todayStr) {
@@ -192,7 +189,7 @@ export class ReviewService {
       item.correctStreak += 1;
       newIntervalDays = Math.min(item.intervalDays * 2, 60);
       item.intervalDays = newIntervalDays;
-      nextDueDateStr = this.getFutureDateString(newIntervalDays);
+      nextDueDateStr = this.getFutureDateString(newIntervalDays, timezone);
       item.dueDate = nextDueDateStr;
 
       // Award 2 XP via XpEvent (isolated from streaks/badges)
@@ -207,7 +204,7 @@ export class ReviewService {
       item.correctStreak = 0;
       newIntervalDays = 1;
       item.intervalDays = 1;
-      nextDueDateStr = this.getTomorrowDateString();
+      nextDueDateStr = this.getTomorrowDateString(timezone);
       item.dueDate = nextDueDateStr;
     }
 

@@ -22,7 +22,11 @@ export class ProgressController {
     @Param('conceptId') conceptId: string,
     @CurrentUser() user: User,
   ) {
-    return this.progressService.markConceptCompleted(user.id, conceptId);
+    return this.progressService.markConceptCompleted(
+      user.id,
+      conceptId,
+      user.timezone,
+    );
   }
 
   @Post('concepts/:conceptId/start')
