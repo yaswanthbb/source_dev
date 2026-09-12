@@ -858,9 +858,9 @@
     "semantic_hash": "60cf2eb3a35666419fa6b845702d5e84"
   },
   "frontend/app/(auth)/forgot-password/page.tsx": {
-    "mtime": 1788863721.595605,
-    "seen": 1788946888.4833784,
-    "ast_hash": "add200c9da4a6d927741ee188cd28358",
+    "mtime": 1789205182.6195025,
+    "seen": 1789210161.6183784,
+    "ast_hash": "9a9934b2d066f926bba785e27079b76d",
     "semantic_hash": ""
   },
   "frontend/app/(auth)/login/page.tsx": {
@@ -990,9 +990,9 @@
     "semantic_hash": ""
   },
   "frontend/app/student/dashboard/page.tsx": {
-    "mtime": 1789130249.699118,
-    "seen": 1789202827.8197358,
-    "ast_hash": "4e1712e85496787279fc1aa01bd1f52a",
+    "mtime": 1789209622.1356053,
+    "seen": 1789210161.6184268,
+    "ast_hash": "4634c0f6ce0e93c7ef5062195ac3dab0",
     "semantic_hash": ""
   },
   "frontend/app/student/error.tsx": {
