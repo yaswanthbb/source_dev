@@ -167,6 +167,14 @@ export default function StudentAppShellLayout({
     );
   }
 
+  // The dashboard is its own full-screen terminal shell: it carries its own
+  // top bar (with the DASHBOARD / TERMINAL CLI tabs), theme toggle and footer,
+  // so it renders bare — no sidebar, no <main> padding. The auth guard above
+  // still applies. Every tile on it links out to sidebar-bearing routes.
+  if (pathname === "/student/dashboard") {
+    return <>{children}</>;
+  }
+
   const isPendingInstructor = user?.instructorProfile?.status === "pending";
   const isRejectedInstructor = user?.instructorProfile?.status === "rejected";
 

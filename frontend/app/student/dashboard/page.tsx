@@ -1,32 +1,15 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Zap,
-  Flame,
-  Trophy,
-  CheckCircle2,
-  BookOpen,
-  ArrowRight,
-  Sparkles,
-  Lock,
-  AlertCircle,
-  Clock,
-  Layers,
-  RotateCcw,
-  ChevronRight,
-} from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { User } from '@/lib/auth';
-import {
-  useAllRoadmapsProgress,
-  RoadmapProgressData,
-} from '@/lib/hooks/use-roadmap-progress';
+import { useTheme } from '@/providers/theme-provider';
+import { useAllRoadmapsProgress } from '@/lib/hooks/use-roadmap-progress';
+import './terminal-dashboard.css';
 
-// ─── Types matching backend models ──────────────────────────────────────────
+// ─── Types matching backend responses ───────────────────────────────────────
 
 interface EarnedBadgeItem {
   id: string;
@@ -42,44 +25,6 @@ interface GamificationData {
   longestStreak: number;
   lastActivityDate: string | null;
   earnedBadges?: EarnedBadgeItem[];
-  userBadges?: Array<{
-    userId?: string;
-    badgeId?: string;
-    earnedAt: string;
-    badge?: Badge;
-  }>;
-}
-
-const BADGE_IMAGE_MAP: Record<string, string> = {
-  first_concept: '/badges/first_concept.png',
-  five_concepts: '/badges/five_concepts.png',
-  twenty_concepts: '/badges/twenty_concepts.png',
-  three_day_streak: '/badges/three_day_streak.png',
-  seven_day_streak: '/badges/seven_day_streak.png',
-  hundred_xp: '/badges/hundred_xp.png',
-  five_hundred_xp: '/badges/five_hundred_xp.png',
-};
-
-const BADGE_NAME_MAP: Record<string, string> = {
-  'first steps': '/badges/first_concept.png',
-  'getting serious': '/badges/five_concepts.png',
-  'dedicated learner': '/badges/twenty_concepts.png',
-  '3-day streak': '/badges/three_day_streak.png',
-  'week warrior': '/badges/seven_day_streak.png',
-  'xp rookie': '/badges/hundred_xp.png',
-  'xp grinder': '/badges/five_hundred_xp.png',
-};
-
-function getBadgeImage(badge: Badge): string {
-  if (badge.iconUrl && badge.iconUrl.trim()) return badge.iconUrl;
-  if (badge.criteriaKey && BADGE_IMAGE_MAP[badge.criteriaKey]) {
-    return BADGE_IMAGE_MAP[badge.criteriaKey];
-  }
-  const nameKey = badge.name?.toLowerCase().trim();
-  if (nameKey && BADGE_NAME_MAP[nameKey]) {
-    return BADGE_NAME_MAP[nameKey];
-  }
-  return '/badges/first_concept.png';
 }
 
 interface UserConceptProgress {
@@ -103,715 +48,1249 @@ interface Roadmap {
   title: string;
   slug: string;
   description: string | null;
-  moduleCount?: number;
-  modules?: Array<{
-    id: string;
-    title: string;
-    orderIndex: number;
-    moduleConcepts?: Array<{
-      id: string;
-      conceptId: string;
-      orderIndex: number;
-      concept?: { id: string; title: string };
-    }>;
-  }>;
 }
 
-interface Badge {
+interface BadgeDef {
   id: string;
   name: string;
   description: string;
-  iconUrl: string | null;
   criteriaKey: string;
 }
 
-const DIFF_COLORS: Record<string, string> = {
-  easy: 'bg-green-tint text-green ring-1 ring-green/30',
-  medium: 'bg-amber-tint text-amber ring-1 ring-amber/30',
-  hard: 'bg-red-tint text-red ring-1 ring-red/30',
+// ─── Theme palettes ─────────────────────────────────────────────────────────
+// Dark values are verbatim from the Stitch export. Light values are derived
+// from the terminal palette already used by the homepage / login / register.
+
+const DARK = {
+  base: '#0a0c0e',
+  panel: '#111417',
+  head: '#171a1d',
+  hover: '#202327',
+  ink: '#ffffff',
+  text: '#e2e4e8',
+  dim: '#949aa2',
+  faint: '#656a73',
+  line: '#34383f',
+  primary: '#38ef7d',
+  alert: '#f59e0b',
+  shadow: '#000000',
 };
 
+const LIGHT = {
+  base: '#f2f1ea',
+  panel: '#faf9f4',
+  head: '#eceae1',
+  hover: '#e4e2d7',
+  ink: '#1b1c19',
+  text: '#2f312c',
+  dim: '#6b6d66',
+  faint: '#8b8d84',
+  line: '#d4d2c8',
+  primary: '#0f7b3d',
+  alert: '#b45309',
+  shadow: '#1b1c19',
+};
+
+const XP_BY_DIFFICULTY: Record<string, number> = {
+  easy: 10,
+  medium: 20,
+  hard: 35,
+};
+
+const ACTIVITY_DAYS = 60;
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Stable pseudo-id from a string — keeps TTY/PID decoration hydration-safe. */
+function stableNumber(seed: string, mod: number): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return h % mod;
+}
+
+/** Badge category from criteriaKey — real grouping, not an invented rarity. */
+function badgeTag(criteriaKey: string | undefined, name: string): string {
+  const key = `${criteriaKey || ''} ${name}`.toLowerCase();
+  if (key.includes('streak')) return 'STREAK';
+  if (key.includes('xp')) return 'XP';
+  if (key.includes('concept')) return 'CONCEPT';
+  return 'BADGE';
+}
+
+function plural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
+}
+
+/**
+ * Fills a panel's leftover vertical space with faint empty-buffer rules —
+ * the vim/less convention for "nothing below here". Keeps panels visually
+ * full without fabricating data rows. Desktop only: on phones the shell
+ * scrolls naturally, so there is no leftover space to fill.
+ */
+function BufferFill({ line }: { line: string }) {
+  return (
+    <div
+      className="hidden lg:block lg:flex-1 lg:min-h-0"
+      aria-hidden="true"
+      style={{
+        backgroundImage: `repeating-linear-gradient(to bottom, transparent 0 19px, ${line} 19px 20px)`,
+        opacity: 0.35,
+      }}
+    />
+  );
+}
+
 export default function StudentDashboardPage() {
-  // 1. Current User
-  const { data: user, isLoading: userLoading } = useQuery<User>({
+  const { isDark, toggleTheme } = useTheme();
+  const c = isDark ? DARK : LIGHT;
+
+  // Client-only gate for time-derived decoration (avoids hydration mismatch)
+  const [mounted, setMounted] = useState(false);
+  const [uptimeSec, setUptimeSec] = useState(0);
+  const [clock, setClock] = useState('--:--:--');
+
+  useEffect(() => {
+    setMounted(true);
+    const tick = () => {
+      setUptimeSec((s) => s + 1);
+      const d = new Date();
+      setClock(`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // ── Interactive prompt ──────────────────────────────────────────────────
+  // Typeable now; the TERMINAL CLI tab that will execute commands comes later.
+  const [cmd, setCmd] = useState('');
+  const [cliLog, setCliLog] = useState<Array<{ id: number; text: string }>>([]);
+  const cliSeq = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const submitCmd = (e: React.FormEvent) => {
+    e.preventDefault();
+    const entered = cmd.trim();
+    if (!entered) return;
+    cliSeq.current += 1;
+    setCliLog((prev) =>
+      [
+        {
+          id: cliSeq.current,
+          text: `${entered} — not wired yet, use the TERMINAL CLI tab`,
+        },
+        ...prev,
+      ].slice(0, 3),
+    );
+    setCmd('');
+  };
+
+  // Press "/" anywhere to focus the prompt
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // ── Data ────────────────────────────────────────────────────────────────
+
+  const { data: user } = useQuery<User>({
     queryKey: ['users', 'me'],
     queryFn: async () => (await apiClient.get<User>('/users/me')).data,
   });
 
-  // 2. Gamification Stats (XP, Streaks, Earned Badges)
-  const {
-    data: gamification,
-    isLoading: gamificationLoading,
-    isError: gamificationError,
-  } = useQuery<GamificationData>({
-    queryKey: ['gamification', 'me'],
-    queryFn: async () =>
-      (await apiClient.get<GamificationData>('/gamification/me')).data,
-  });
+  const { data: gamification, isLoading: gamificationLoading } =
+    useQuery<GamificationData>({
+      queryKey: ['gamification', 'me'],
+      queryFn: async () =>
+        (await apiClient.get<GamificationData>('/gamification/me')).data,
+    });
 
-  // 2.1 Activity Heatmap (Source of truth from /gamification/activity)
-  const { data: rawActivityList = [], isLoading: activityLoading } = useQuery<
+  const { data: activityList = [], isLoading: activityLoading } = useQuery<
     Array<{ date: string; active: boolean }>
   >({
-    queryKey: ['gamification', 'activity', 14],
+    queryKey: ['gamification', 'activity', ACTIVITY_DAYS],
     queryFn: async () =>
       (
         await apiClient.get<Array<{ date: string; active: boolean }>>(
-          '/gamification/activity?days=14',
+          `/gamification/activity?days=${ACTIVITY_DAYS}`,
         )
       ).data,
   });
 
-  // 3. User Concept Progress List
-  const {
-    data: progressList = [],
-    isLoading: progressLoading,
-    isError: progressError,
-  } = useQuery<UserConceptProgress[]>({
+  const { data: progressList = [], isLoading: progressLoading } = useQuery<
+    UserConceptProgress[]
+  >({
     queryKey: ['progress', 'me'],
     queryFn: async () =>
       (await apiClient.get<UserConceptProgress[]>('/progress/me')).data,
   });
 
-  // 4. All Roadmaps
-  const {
-    data: roadmaps = [],
-    isLoading: roadmapsLoading,
-    isError: roadmapsError,
-  } = useQuery<Roadmap[]>({
+  const { data: roadmaps = [], isLoading: roadmapsLoading } = useQuery<
+    Roadmap[]
+  >({
     queryKey: ['roadmaps'],
     queryFn: async () => (await apiClient.get<Roadmap[]>('/roadmaps')).data,
   });
 
-  // 5. Progress per Roadmap (using bulk hook)
   const roadmapIds = useMemo(() => roadmaps.map((r) => r.id), [roadmaps]);
-  const { data: roadmapsProgressMap = {}, isLoading: roadmapsProgressLoading } =
+  const { data: roadmapsProgressMap = {}, isLoading: roadmapProgressLoading } =
     useAllRoadmapsProgress(roadmapIds);
 
-  // 6. All System Badges
-  const {
-    data: allBadges = [],
-    isLoading: badgesLoading,
-    isError: badgesError,
-  } = useQuery<Badge[]>({
+  const { data: allBadges = [], isLoading: badgesLoading } = useQuery<
+    BadgeDef[]
+  >({
     queryKey: ['badges'],
-    queryFn: async () => (await apiClient.get<Badge[]>('/badges')).data,
+    queryFn: async () => (await apiClient.get<BadgeDef[]>('/badges')).data,
   });
 
-  // 7. Spaced Repetition Due Count
-  const { data: reviewDueData, isLoading: reviewDueLoading } = useQuery<{
+  const { data: reviewDueData, isLoading: reviewLoading } = useQuery<{
     count: number;
     dueCount: number;
   }>({
     queryKey: ['review', 'due-count'],
     queryFn: async () =>
-      (await apiClient.get<{ count: number; dueCount: number }>('/review/due-count')).data,
+      (
+        await apiClient.get<{ count: number; dueCount: number }>(
+          '/review/due-count',
+        )
+      ).data,
   });
 
-  // Derived Calculations
-  const completedConceptsCount = useMemo(() => {
-    return progressList.filter((p) => p.status === 'completed').length;
+  const isSyncing =
+    gamificationLoading ||
+    activityLoading ||
+    progressLoading ||
+    roadmapsLoading ||
+    roadmapProgressLoading ||
+    badgesLoading ||
+    reviewLoading;
+
+  // ── Derived ─────────────────────────────────────────────────────────────
+
+  const completedCount = useMemo(
+    () => progressList.filter((p) => p.status === 'completed').length,
+    [progressList],
+  );
+
+  const totalCatalogued = useMemo(
+    () =>
+      Object.values(roadmapsProgressMap).reduce(
+        (sum, r) => sum + (r.totalConcepts ?? 0),
+        0,
+      ),
+    [roadmapsProgressMap],
+  );
+
+  const currentFocus = useMemo(() => {
+    const inProgress = progressList.filter((p) => p.status === 'in_progress');
+    if (inProgress.length === 0) return null;
+    return [...inProgress].sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt).getTime() -
+        new Date(a.updatedAt || a.createdAt).getTime(),
+    )[0];
   }, [progressList]);
 
-  const mostRecentInProgress = useMemo(() => {
-    const inProgressItems = progressList.filter(
-      (p) => p.status === 'in_progress',
-    );
-    if (inProgressItems.length === 0) return null;
+  // Which roadmap contains the in-flight concept (real lookup, no invention)
+  const focusRoadmapTitle = useMemo(() => {
+    if (!currentFocus) return null;
+    for (const rm of roadmaps) {
+      const prog = roadmapsProgressMap[rm.id];
+      if (prog?.concepts?.some((x) => x.conceptId === currentFocus.conceptId)) {
+        return rm.title;
+      }
+    }
+    return null;
+  }, [currentFocus, roadmaps, roadmapsProgressMap]);
 
-    return [...inProgressItems].sort((a, b) => {
-      const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-      const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-      return dateB - dateA;
-    })[0];
-  }, [progressList]);
+  // Next unstarted concept, so the empty state can point somewhere real
+  const nextUpConcept = useMemo(() => {
+    const hits = roadmaps
+      .map((rm) => {
+        const next = roadmapsProgressMap[rm.id]?.concepts?.find(
+          (x) => x.status === 'not_started',
+        );
+        return next ? { ...next, roadmapTitle: rm.title } : null;
+      })
+      .filter(Boolean);
+    return hits.length > 0 ? hits[0] : null;
+  }, [roadmaps, roadmapsProgressMap]);
 
-  const activityHeatmap = useMemo(() => {
-    if (rawActivityList && rawActivityList.length > 0) {
-      return rawActivityList.map((item, index) => {
-        const parts = item.date.split('-').map(Number);
-        const dayNumber = parts.length === 3 ? parts[2] : index + 1;
+  const activeDays = useMemo(
+    () => activityList.filter((d) => d.active).length,
+    [activityList],
+  );
+
+  const activePct =
+    activityList.length > 0
+      ? ((activeDays / activityList.length) * 100).toFixed(1)
+      : '0.0';
+
+  const rankedRoadmaps = useMemo(() => {
+    return roadmaps
+      .map((rm) => {
+        const p = roadmapsProgressMap[rm.id];
         return {
-          isoDate: item.date,
-          dayNumber,
-          hasActivity: item.active,
-          isToday: index === rawActivityList.length - 1,
+          id: rm.id,
+          title: rm.title,
+          total: p?.totalConcepts ?? 0,
+          done: p?.completedConceptsCount ?? p?.completedConcepts ?? 0,
+          pct: Math.round(p?.completionPercentage ?? p?.percentage ?? 0),
         };
-      });
-    }
+      })
+      .sort((a, b) => b.pct - a.pct);
+  }, [roadmaps, roadmapsProgressMap]);
 
-    const days = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const isoStr = d.toISOString().slice(0, 10);
-      days.push({
-        isoDate: isoStr,
-        dayNumber: d.getDate(),
-        hasActivity: false,
-        isToday: i === 0,
-      });
-    }
-    return days;
-  }, [rawActivityList]);
-
-  const earnedBadgeMap = useMemo(() => {
-    const map = new Map<string, { earnedAt: string }>();
-    if (gamification?.earnedBadges && Array.isArray(gamification.earnedBadges)) {
-      gamification.earnedBadges.forEach((eb) => {
-        if (eb.id) map.set(eb.id, { earnedAt: eb.earnedAt });
-        if (eb.criteriaKey) map.set(eb.criteriaKey, { earnedAt: eb.earnedAt });
-        if (eb.name) map.set(eb.name.toLowerCase().trim(), { earnedAt: eb.earnedAt });
-      });
-    }
-    if (gamification?.userBadges && Array.isArray(gamification.userBadges)) {
-      gamification.userBadges.forEach((ub) => {
-        const id = ub.badgeId || ub.badge?.id;
-        const criteriaKey = ub.badge?.criteriaKey;
-        const name = ub.badge?.name;
-        if (id) map.set(id, { earnedAt: ub.earnedAt });
-        if (criteriaKey) map.set(criteriaKey, { earnedAt: ub.earnedAt });
-        if (name) map.set(name.toLowerCase().trim(), { earnedAt: ub.earnedAt });
-      });
-    }
-    return map;
+  const earnedMap = useMemo(() => {
+    const m = new Map<string, EarnedBadgeItem>();
+    (gamification?.earnedBadges ?? []).forEach((b) => {
+      m.set(b.id, b);
+      if (b.criteriaKey) m.set(b.criteriaKey, b);
+      m.set(b.name.toLowerCase(), b);
+    });
+    return m;
   }, [gamification]);
 
-  const unlockedBadgesCount = useMemo(() => {
-    return allBadges.filter(
-      (b) =>
-        earnedBadgeMap.has(b.id) ||
-        earnedBadgeMap.has(b.criteriaKey) ||
-        earnedBadgeMap.has(b.name.toLowerCase().trim()),
-    ).length;
-  }, [allBadges, earnedBadgeMap]);
+  /** All catalogued badges, earned first — fills the panel with real rows. */
+  const badgeRows = useMemo(() => {
+    const rows = allBadges.map((b) => {
+      const earned =
+        earnedMap.get(b.id) ??
+        earnedMap.get(b.criteriaKey) ??
+        earnedMap.get(b.name.toLowerCase()) ??
+        null;
+      return { ...b, earnedAt: earned?.earnedAt ?? null };
+    });
+    return rows.sort((a, b) => {
+      if (!!a.earnedAt !== !!b.earnedAt) return a.earnedAt ? -1 : 1;
+      if (a.earnedAt && b.earnedAt) {
+        return new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime();
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [allBadges, earnedMap]);
 
-  const reviewDueCount = reviewDueData?.dueCount ?? 0;
+  const earnedCount = useMemo(
+    () => badgeRows.filter((b) => b.earnedAt).length,
+    [badgeRows],
+  );
+
+  /** Event log built from real timestamps: concept completions + badges. */
+  const eventLog = useMemo(() => {
+    const events: Array<{
+      at: number;
+      kind: 'CONCEPT' | 'BADGE';
+      text: string;
+      xp: number | null;
+    }> = [];
+
+    progressList.forEach((p) => {
+      if (p.status === 'completed' && p.completedAt) {
+        events.push({
+          at: new Date(p.completedAt).getTime(),
+          kind: 'CONCEPT',
+          text: `completed ${p.concept?.title ?? p.conceptId.slice(0, 8)}`,
+          xp: XP_BY_DIFFICULTY[p.concept?.difficulty ?? 'medium'] ?? 20,
+        });
+      }
+    });
+
+    (gamification?.earnedBadges ?? []).forEach((b) => {
+      events.push({
+        at: new Date(b.earnedAt).getTime(),
+        kind: 'BADGE',
+        text: `earned "${b.name}"`,
+        xp: null,
+      });
+    });
+
+    return events.sort((a, b) => b.at - a.at).slice(0, 12);
+  }, [progressList, gamification]);
+
+  const reviewDue = reviewDueData?.dueCount ?? 0;
+
+  // ── Decoration ──────────────────────────────────────────────────────────
+
+  const uptime = `${pad(Math.floor(uptimeSec / 3600))}:${pad(
+    Math.floor((uptimeSec % 3600) / 60),
+  )}:${pad(uptimeSec % 60)}`;
+
+  const seed = user?.id ?? 'kip';
+  const tty = stableNumber(seed, 8);
+  const pid = 10000 + stableNumber(seed, 79999);
+
+  const panel: React.CSSProperties = {
+    backgroundColor: c.panel,
+    border: `1px solid ${c.line}`,
+    boxShadow: `3px 3px 0px 0px ${c.shadow}`,
+  };
+
+  const headStrip: React.CSSProperties = {
+    backgroundColor: c.head,
+    borderBottom: `1px solid ${c.line}`,
+  };
+
+  const num = (v: number | undefined, loading: boolean) =>
+    loading || v === undefined ? '--' : v.toLocaleString();
+
+  const streak = gamification?.currentStreak ?? 0;
+  const longest = gamification?.longestStreak ?? 0;
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* ── 1. Header Welcome Section ─────────────────────────────────── */}
-      <div className="stagger-item flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold font-display text-text-primary tracking-tight">
-            {userLoading ? (
-              <span className="inline-block w-48 h-8 bg-border/50 rounded-lg animate-pulse" />
-            ) : (
-              `Welcome back, ${user?.name || 'Learner'}!`
-            )}
-          </h1>
-          <p className="text-text-secondary text-sm mt-1">
-            Track your roadmaps, maintain your daily streak, and master new concepts.
-          </p>
+    // Responsive shell. Phone/tablet: normal page scroll, panels take their
+    // natural height. Desktop (lg+): fixed viewport frame — nothing scrolls
+    // the page, individual panels scroll, footer welded to the bottom edge.
+    <div
+      className={`kip-dash ${isDark ? '' : 'kip-dash-light'} min-h-screen lg:h-screen lg:overflow-hidden flex flex-col relative`}
+      style={{ backgroundColor: c.base, color: c.text }}
+    >
+      {/* CRT overlay */}
+      <div
+        className={`fixed inset-0 z-50 pointer-events-none ${
+          isDark ? 'kip-dash-scanlines opacity-40' : 'kip-dash-scanlines-light'
+        }`}
+        aria-hidden="true"
+      />
+
+      {/* ══ TOP BAR ═══════════════════════════════════════════════════════
+          Phone: brand shortens to "KIP", telemetry hides, tabs stay. Nothing
+          in here may grow the page wider than the viewport. */}
+      <header
+        className="w-full h-11 px-2 sm:px-3 md:px-4 flex items-center justify-between gap-2 z-30 shrink-0 select-none"
+        style={{ backgroundColor: c.panel, borderBottom: `1px solid ${c.line}` }}
+      >
+        <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+          <span
+            className="font-bold tracking-tight flex items-center gap-1.5 min-w-0"
+            style={{ color: c.ink }}
+          >
+            <span style={{ color: c.primary }} className="text-[14px] shrink-0">
+              ■
+            </span>
+            <span className="truncate">
+              KIP<span className="hidden sm:inline">{' // KNOWLEDGE IS POWER'}</span>
+            </span>
+          </span>
+          <span
+            className="hidden md:inline text-[11px] font-semibold tracking-wider whitespace-nowrap"
+            style={{ color: isSyncing ? c.alert : c.primary }}
+          >
+            {isSyncing ? '[SYS: SYNC]' : '[SYS: OK]'}
+          </span>
+          <span
+            className="hidden xl:inline text-[11px] whitespace-nowrap"
+            style={{ color: c.dim }}
+          >
+            [UPTIME: {mounted ? uptime : '00:00:00'}]
+          </span>
         </div>
 
-        <Link
-          href="/student/roadmaps"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white font-medium text-sm hover:bg-accent/90 transition-colors duration-150 shadow-sm self-start sm:self-auto cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <BookOpen className="w-4 h-4" aria-hidden="true" />
-          <span>Explore Roadmaps</span>
-        </Link>
-      </div>
+        {/* Exactly two tabs */}
+        <nav className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <span
+            className="px-1.5 sm:px-2.5 py-1 font-bold text-[11px] sm:text-[12px] whitespace-nowrap"
+            style={{ backgroundColor: c.ink, color: c.base }}
+          >
+            [1:<span className="hidden sm:inline"> DASHBOARD</span>
+            <span className="sm:hidden">DASH</span>*]
+          </span>
+          <span
+            className="px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-[12px] cursor-not-allowed whitespace-nowrap"
+            style={{ color: c.faint }}
+            title="Terminal CLI — not wired up yet"
+          >
+            [2:<span className="hidden sm:inline"> TERMINAL</span> CLI]
+          </span>
+        </nav>
 
-      {/* ── 2. Stats Grid (5 Cards) ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        {/* Total XP */}
-        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-accent/40 dark:hover:shadow-[0_0_24px_rgba(99,102,241,0.18)] transition-all duration-200 cursor-default">
-          <div className="w-12 h-12 rounded-xl bg-accent-tint text-accent flex items-center justify-center flex-shrink-0">
-            <Zap className="w-6 h-6" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-              Total XP
-            </p>
-            <p className="text-2xl font-bold font-display text-text-primary mt-0.5">
-              {gamificationLoading ? (
-                <span className="inline-block w-16 h-7 bg-border/40 rounded animate-pulse" />
-              ) : (
-                gamification?.totalXp ?? 0
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Current Streak */}
-        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-amber/40 dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)] transition-all duration-200 cursor-default">
-          <div className="w-12 h-12 rounded-xl bg-amber-tint text-amber flex items-center justify-center flex-shrink-0">
-            <Flame className="w-6 h-6" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-              Current Streak
-            </p>
-            <p className="text-2xl font-bold font-display text-text-primary mt-0.5">
-              {gamificationLoading ? (
-                <span className="inline-block w-16 h-7 bg-border/40 rounded animate-pulse" />
-              ) : (
-                `${gamification?.currentStreak ?? 0} days`
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Longest Streak */}
-        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-amber/40 dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)] transition-all duration-200 cursor-default">
-          <div className="w-12 h-12 rounded-xl bg-amber-tint text-amber flex items-center justify-center flex-shrink-0">
-            <Trophy className="w-6 h-6" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-              Longest Streak
-            </p>
-            <p className="text-2xl font-bold font-display text-text-primary mt-0.5">
-              {gamificationLoading ? (
-                <span className="inline-block w-16 h-7 bg-border/40 rounded animate-pulse" />
-              ) : (
-                `${gamification?.longestStreak ?? 0} days`
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Concepts Completed */}
-        <div className="stagger-item p-5 rounded-2xl bg-surface border border-border shadow-xs flex items-center gap-4 hover:border-green/40 dark:hover:shadow-[0_0_24px_rgba(52,211,153,0.18)] transition-all duration-200 cursor-default">
-          <div className="w-12 h-12 rounded-xl bg-green-tint text-green flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 className="w-6 h-6" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-              Completed
-            </p>
-            <p className="text-2xl font-bold font-display text-text-primary mt-0.5">
-              {progressLoading ? (
-                <span className="inline-block w-16 h-7 bg-border/40 rounded animate-pulse" />
-              ) : (
-                `${completedConceptsCount} concepts`
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Spaced Reviews Due Card */}
-        <Link
-          href="/student/review"
-          aria-label={`Reviews Due: ${reviewDueCount > 0 ? `${reviewDueCount} reviews due` : 'All caught up'}. Go to review queue.`}
-          className={`stagger-item p-5 rounded-2xl bg-surface border shadow-xs flex items-center gap-4 transition-all duration-200 group cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-            reviewDueCount > 0
-              ? 'border-amber/50 hover:border-amber dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)]'
-              : 'border-border hover:border-accent/60 dark:hover:shadow-[0_0_24px_rgba(99,102,241,0.18)]'
-          }`}
-        >
+        <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 justify-end">
           <div
-            className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105 ${
-              reviewDueCount > 0
-                ? 'bg-amber-tint text-amber ring-2 ring-amber/20'
-                : 'bg-accent-tint text-accent'
-            }`}
+            className="hidden lg:flex items-center gap-1 text-[12px] min-w-0"
+            style={{ color: c.dim }}
           >
-            <RotateCcw className="w-6 h-6" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider truncate">
-              Reviews Due
-            </p>
-            <div className="mt-0.5 flex items-center justify-between gap-1">
-              <p className="text-lg font-bold font-display text-text-primary truncate">
-                {reviewDueLoading ? (
-                  <span className="inline-block w-12 h-6 bg-border/40 rounded animate-pulse" />
-                ) : reviewDueCount > 0 ? (
-                  <span className="text-amber">
-                    {reviewDueCount} due
-                  </span>
-                ) : (
-                  <span className="text-text-secondary text-sm font-medium flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-green" aria-hidden="true" />
-                    <span>Caught up</span>
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-        </Link>
-      </div>
-
-      {/* ── 3. Middle Section: Continue Learning & 14-Day Heatmap ─────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Continue Learning Banner (2 Cols) */}
-        <div className="stagger-item lg:col-span-2 rounded-2xl bg-accent dark:bg-gradient-to-br dark:from-indigo-600 dark:via-indigo-700 dark:to-violet-800 text-white p-6 sm:p-8 flex flex-col justify-between shadow-sm relative overflow-hidden">
-          {/* Ambient light source inside card */}
-          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" aria-hidden="true" />
-          <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.06] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)', backgroundSize: '24px 24px' }} aria-hidden="true" />
-
-          {progressLoading ? (
-            <div className="space-y-4 animate-pulse">
-              <div className="w-24 h-5 bg-white/20 rounded-full" />
-              <div className="w-3/4 h-8 bg-white/20 rounded-lg" />
-              <div className="w-1/2 h-4 bg-white/20 rounded" />
-            </div>
-          ) : mostRecentInProgress ? (
-            <div className="relative z-10">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold uppercase tracking-wider backdrop-blur-sm mb-3">
-                <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Continue Learning</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold font-display tracking-tight text-white mt-1">
-                {mostRecentInProgress.concept?.title || 'In-Progress Concept'}
-              </h2>
-              <p className="text-white/80 text-sm mt-1">
-                Pick up right where you left off and keep your momentum going.
-              </p>
-
-              <div className="mt-6 flex items-center gap-3 flex-wrap">
-                <Link
-                  href={`/student/concepts/${mostRecentInProgress.conceptId}`}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-accent dark:text-indigo-700 font-bold text-sm hover:bg-white/95 transition-all shadow-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                >
-                  <span>Resume Concept</span>
-                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                </Link>
-                {mostRecentInProgress.concept?.difficulty && (
-                  <span className="px-3 py-1 rounded-lg bg-black/20 text-white/90 text-xs font-medium capitalize">
-                    {mostRecentInProgress.concept.difficulty}
-                  </span>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="relative z-10">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold uppercase tracking-wider backdrop-blur-sm mb-3">
-                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Get Started</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold font-display tracking-tight text-white mt-1">
-                Start your first learning roadmap
-              </h2>
-              <p className="text-white/80 text-sm mt-1 max-w-lg">
-                Choose a structured curriculum from our catalog and master core concepts step-by-step.
-              </p>
-
-              <div className="mt-6">
-                <Link
-                  href="/student/roadmaps"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-accent dark:text-indigo-700 font-bold text-sm hover:bg-white/95 transition-all shadow-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                >
-                  <span>Browse Roadmaps</span>
-                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 4. Last 14 Days Activity Heatmap (1 Col) */}
-        <div className="stagger-item p-6 rounded-2xl bg-surface border border-border shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-bold font-display text-text-primary uppercase tracking-wider">
-                Last 14 Days Activity
-              </h3>
-              <span className="text-xs text-text-secondary font-medium flex items-center gap-1">
-                {gamification?.currentStreak ? (
-                  <>
-                    <Flame className="w-3.5 h-3.5 text-amber" aria-hidden="true" />
-                    <span>{gamification.currentStreak}d Streak</span>
-                  </>
-                ) : (
-                  <span>Daily Streak</span>
-                )}
+            <span className="truncate">
+              {user?.name ?? '...'}
+              <span className="hidden xl:inline">
+                {' '}
+                &lt;{user?.email ?? '...'}&gt;
               </span>
-            </div>
-            <p className="text-xs text-text-secondary">
-              Consistent daily practice drives deeper understanding.
-            </p>
-          </div>
-
-          <div className="my-5 overflow-x-auto pb-1">
-            {activityLoading || progressLoading ? (
-              <div className="grid grid-cols-7 gap-2 min-w-[240px] animate-pulse">
-                {Array.from({ length: 14 }).map((_, i) => (
-                  <div key={i} className="h-8 rounded-lg bg-border/40" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-7 gap-2 min-w-[240px]">
-                {activityHeatmap.map((item) => {
-                  let boxStyle = 'bg-bg border border-border text-text-secondary/70';
-                  if (item.hasActivity) {
-                    boxStyle = 'bg-accent text-white font-bold shadow-xs dark:shadow-lg dark:shadow-accent/30';
-                  } else if (item.isToday) {
-                    boxStyle = 'bg-accent-tint/50 text-accent font-semibold border border-accent/30 dark:ring-1 dark:ring-accent/50';
-                  }
-
-                  return (
-                    <div
-                      key={item.isoDate}
-                      title={`${item.isoDate}: ${item.hasActivity ? 'Active' : 'No activity'}`}
-                      className={`h-8 rounded-lg flex flex-col items-center justify-center text-[10px] transition-all ${boxStyle}`}
-                    >
-                      <span>{item.dayNumber}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex items-center justify-between text-[11px] text-text-secondary mt-2 min-w-[240px]">
-              <span>14 days ago</span>
-              <span>Today</span>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-border/80 flex items-center justify-between text-xs text-text-secondary">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-accent inline-block" /> Active
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-bg border border-border inline-block" /> Inactive
+            <span
+              className="font-bold shrink-0"
+              style={{ color: c.primary }}
+            >
+              [{(user?.role ?? 'student').toUpperCase()}]
             </span>
           </div>
-        </div>
-      </div>
-
-      {/* ── 5. Your Roadmaps Section ──────────────────────────────────── */}
-      <div className="stagger-item p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold font-display text-text-primary tracking-tight">
-              Your Roadmaps
-            </h2>
-            <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
-              Structured learning tracks and curriculum completion rates
-            </p>
-          </div>
-
-          <Link
-            href="/student/roadmaps"
-            className="text-xs sm:text-sm font-semibold text-accent hover:underline flex items-center gap-1 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="px-1.5 sm:px-2 py-0.5 text-[11px] transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+            style={{
+              border: `1px solid ${c.line}`,
+              color: c.dim,
+              backgroundColor: c.head,
+            }}
           >
-            <span>View all</span>
-            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-          </Link>
+            [<span className="hidden sm:inline">MODE: </span>
+            {isDark ? 'DK' : 'LT'}]
+          </button>
         </div>
+      </header>
 
-        {roadmapsLoading || roadmapsProgressLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 2 }).map((_, i) => (
+      {/* ══ MAIN — edge to edge; fills height only once the shell is fixed ═ */}
+      <main className="w-full lg:flex-1 lg:min-h-0 px-2 sm:px-3 md:px-4 py-3 flex flex-col gap-3">
+        {/* ── BAND 1: mission control + 4 gauges ───────────────────────── */}
+        <section className="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
+          {/* Current focus */}
+          <div
+            className="lg:col-span-7 flex flex-col relative overflow-hidden"
+            style={{
+              backgroundColor: c.panel,
+              border: `1px solid ${currentFocus ? `${c.primary}66` : c.line}`,
+              boxShadow: `3px 3px 0px 0px ${c.shadow}`,
+            }}
+          >
+            <div
+              className="px-3 py-1.5 flex items-center justify-between text-[12px] shrink-0"
+              style={headStrip}
+            >
               <div
-                key={i}
-                className="p-4 rounded-xl border border-border bg-bg animate-pulse space-y-3"
+                className="flex items-center gap-2 font-bold tracking-tight min-w-0"
+                style={{ color: c.ink }}
               >
-                <div className="w-1/3 h-5 bg-border/60 rounded" />
-                <div className="w-full h-2 bg-border/40 rounded-full" />
+                <span style={{ color: c.primary }} className="shrink-0">
+                  ▶
+                </span>
+                <span className="truncate">
+                  ┌─[ mission_control
+                  <span className="hidden sm:inline"> :: active_session</span> ]
+                </span>
               </div>
-            ))}
-          </div>
-        ) : roadmapsError ? (
-          <div className="p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-xs flex items-center gap-2" role="alert">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            <span>Unable to load roadmaps. Please refresh the page.</span>
-          </div>
-        ) : roadmaps.length === 0 ? (
-          <div className="p-8 text-center border border-dashed border-border rounded-xl bg-bg">
-            <Layers className="w-8 h-8 text-text-secondary mx-auto mb-2 opacity-50" aria-hidden="true" />
-            <p className="text-sm font-semibold text-text-primary">
-              No roadmaps available yet
-            </p>
-            <p className="text-xs text-text-secondary mt-1">
-              Instructors are currently preparing new roadmaps.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {roadmaps.map((roadmap) => {
-              const progress = roadmapsProgressMap[roadmap.id] || {
-                totalConcepts: 0,
-                completedConceptsCount: 0,
-                completionPercentage: 0,
-              };
-
-              const completedCount =
-                progress.completedConceptsCount ?? progress.completedConcepts ?? 0;
-              const totalCount = progress.totalConcepts ?? 0;
-              const completionPct =
-                progress.completionPercentage ?? progress.percentage ?? 0;
-
-
-              return (
-                <div
-                  key={roadmap.id}
-                  className="p-4 sm:p-5 rounded-xl border border-border bg-bg/50 hover:bg-surface-hover hover:border-accent/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              {currentFocus && (
+                <span
+                  className="kip-pulse font-bold text-[11px] px-1.5"
+                  style={{
+                    color: c.primary,
+                    backgroundColor: `${c.primary}1a`,
+                    border: `1px solid ${c.primary}66`,
+                  }}
                 >
-                  <div className="space-y-1.5 flex-1 max-w-xl">
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/student/roadmaps/${roadmap.id}`}
-                        className="font-bold text-text-primary text-sm sm:text-base hover:text-accent transition-colors"
-                      >
-                        {roadmap.title}
-                      </Link>
-                    </div>
-                    {roadmap.description && (
-                      <p className="text-xs text-text-secondary line-clamp-1">
-                        {roadmap.description}
-                      </p>
-                    )}
+                  [ACTIVE RUNTIME]
+                </span>
+              )}
+            </div>
 
-                    {/* Progress Bar */}
-                    <div className="pt-2 flex items-center gap-3">
-                      <div className="flex-1 h-2 rounded-full bg-accent-tint overflow-hidden">
-                        <div
-                          className="h-full bg-accent transition-all duration-300 rounded-full"
-                          style={{
-                            width: `${Math.min(100, Math.max(0, completionPct))}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs font-semibold text-text-primary whitespace-nowrap">
-                        {Math.round(completionPct)}%
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
-                    <span className="text-xs text-text-secondary font-medium">
-                      {completedCount} / {totalCount} concepts
-                    </span>
-                    <Link
-                      href={`/student/roadmaps/${roadmap.id}`}
-                      className="px-3.5 py-1.5 rounded-lg border border-border bg-surface text-text-primary hover:bg-accent hover:text-white hover:border-accent text-xs font-semibold transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    >
-                      Continue
-                    </Link>
-                  </div>
+            <div className="px-4 py-3 flex flex-col justify-between gap-3 flex-1">
+              {progressLoading ? (
+                <div className="text-[12px]" style={{ color: c.dim }}>
+                  LOADING SESSION<span className="kip-cursor">_</span>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── 6. Badges & Achievements Gallery ──────────────────────────── */}
-      <div className="stagger-item p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold font-display text-text-primary tracking-tight">
-              Badges & Achievements
-            </h2>
-            <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
-              Earn badges by completing concepts and maintaining consistent streaks
-            </p>
-          </div>
-          <div className="text-xs font-semibold text-accent bg-accent-tint px-3 py-1 rounded-full border border-accent/20">
-            {unlockedBadgesCount} of {allBadges.length} unlocked
-          </div>
-        </div>
-
-        {badgesLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="p-4 sm:p-5 rounded-2xl border border-border bg-bg animate-pulse space-y-3 flex flex-col items-center"
-              >
-                <div className="w-16 h-16 rounded-2xl bg-border/60" />
-                <div className="w-3/4 h-4 bg-border/50 rounded" />
-                <div className="w-1/2 h-3 bg-border/40 rounded" />
-              </div>
-            ))}
-          </div>
-        ) : badgesError ? (
-          <div className="p-4 rounded-xl bg-amber-tint border border-amber/30 text-amber text-xs flex items-center gap-2" role="alert">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            <span>Unable to load achievements. Please refresh the page.</span>
-          </div>
-        ) : allBadges.length === 0 ? (
-          <p className="text-xs text-text-secondary text-center py-6">
-            No system badges configured yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-            {allBadges.map((badge) => {
-              const earnedInfo =
-                earnedBadgeMap.get(badge.id) ||
-                earnedBadgeMap.get(badge.criteriaKey) ||
-                earnedBadgeMap.get(badge.name.toLowerCase().trim());
-              const isEarned = Boolean(earnedInfo);
-              const badgeImgSrc = getBadgeImage(badge);
-
-              return (
-                <div
-                  key={badge.id}
-                  className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 flex flex-col items-center text-center justify-between group ${
-                    isEarned
-                      ? 'bg-surface border-amber/40 shadow-xs hover:border-amber/70 dark:bg-amber-500/5 dark:border-amber-500/30 dark:hover:shadow-[0_0_24px_rgba(251,191,36,0.18)]'
-                      : 'bg-bg/40 border-border/70 opacity-70 hover:opacity-90 dark:bg-surface/20 dark:border-border/40'
-                  }`}
-                >
-                  <div className="flex flex-col items-center w-full">
-                    {/* Badge Icon / Image */}
-                    <div className="relative mb-3 flex items-center justify-center">
-                      <div
-                        className={`w-16 h-18 sm:w-20 sm:h-22 relative transition-all duration-300 flex items-center justify-center ${
-                          isEarned
-                            ? 'drop-shadow-[0_4px_14px_rgba(245,158,11,0.25)] group-hover:scale-105'
-                            : 'grayscale contrast-75 opacity-40 group-hover:opacity-60'
-                        }`}
-                      >
-                        <Image
-                          src={badgeImgSrc}
-                          alt={badge.name}
-                          width={160}
-                          height={180}
-                          className="w-full h-full object-contain"
-                          unoptimized
-                        />
-                      </div>
-
-                      {/* Locked Overlay */}
-                      {!isEarned && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-                          <div className="w-7 h-7 rounded-full bg-surface/90 dark:bg-black/60 border border-border shadow-xs flex items-center justify-center text-text-secondary">
-                            <Lock className="w-3.5 h-3.5" />
-                          </div>
-                        </div>
+              ) : currentFocus ? (
+                <>
+                  <div>
+                    <div
+                      className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider mb-0.5"
+                      style={{ color: c.faint }}
+                    >
+                      <span>CURRENT CONCEPT IN FLIGHT</span>
+                      {focusRoadmapTitle && (
+                        <span style={{ color: c.primary }}>
+                          {focusRoadmapTitle.toUpperCase().replace(/\s+/g, '_')}
+                        </span>
                       )}
                     </div>
+                    <h1
+                      className="font-display text-xl md:text-2xl font-bold tracking-tight leading-snug truncate"
+                      style={{ color: c.ink }}
+                    >
+                      {currentFocus.concept?.title ?? 'In-progress concept'}
+                    </h1>
 
-                    <h3 className="font-bold text-xs sm:text-sm text-text-primary tracking-tight">
-                      {badge.name}
-                    </h3>
-                    <p className="text-[11px] text-text-secondary mt-1 line-clamp-2 leading-relaxed">
-                      {badge.description}
-                    </p>
+                    <div
+                      className="mt-2 grid grid-cols-2 gap-3 py-1.5 text-[11px]"
+                      style={{
+                        borderTop: `1px solid ${c.line}`,
+                        borderBottom: `1px solid ${c.line}`,
+                      }}
+                    >
+                      <div>
+                        <span className="block" style={{ color: c.faint }}>
+                          STATUS
+                        </span>
+                        <span
+                          className="font-semibold"
+                          style={{ color: c.primary }}
+                        >
+                          [IN_PROGRESS]
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block" style={{ color: c.faint }}>
+                          DIFFICULTY
+                        </span>
+                        <span className="font-semibold" style={{ color: c.text }}>
+                          {(
+                            currentFocus.concept?.difficulty ?? 'unrated'
+                          ).toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-border/60 w-full text-center">
-                    {isEarned ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green dark:text-amber-300">
-                        <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>
-                          Earned{' '}
-                          {new Date(earnedInfo!.earnedAt).toLocaleDateString(
-                            'en-US',
-                            { month: 'short', day: 'numeric', year: 'numeric' },
-                          )}
+                  <Link
+                    href={`/student/concepts/${currentFocus.conceptId}`}
+                    className="w-full py-2 px-4 font-bold text-[13px] flex items-center justify-center gap-2 tracking-wider transition-colors cursor-pointer"
+                    style={{
+                      backgroundColor: c.primary,
+                      color: c.base,
+                      boxShadow: `2px 2px 0px 0px ${c.shadow}`,
+                    }}
+                  >
+                    [ENTER] RESUME CONCEPT ➔
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <div
+                      className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider mb-0.5"
+                      style={{ color: c.faint }}
+                    >
+                      <span>NEXT UP</span>
+                      {nextUpConcept?.roadmapTitle && (
+                        <span style={{ color: c.primary }}>
+                          {nextUpConcept.roadmapTitle
+                            .toUpperCase()
+                            .replace(/\s+/g, '_')}
                         </span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-text-secondary/70">
-                        <Lock className="w-3 h-3" aria-hidden="true" />
-                        <span>Locked</span>
-                      </span>
-                    )}
+                      )}
+                    </div>
+                    <h1
+                      className="font-display text-xl md:text-2xl font-bold tracking-tight leading-snug truncate"
+                      style={{ color: c.ink }}
+                    >
+                      {nextUpConcept?.conceptTitle ?? 'NO ACTIVE CONCEPT'}
+                    </h1>
+
+                    <div
+                      className="mt-2 grid grid-cols-2 gap-3 py-1.5 text-[11px]"
+                      style={{
+                        borderTop: `1px solid ${c.line}`,
+                        borderBottom: `1px solid ${c.line}`,
+                      }}
+                    >
+                      <div>
+                        <span className="block" style={{ color: c.faint }}>
+                          STATUS
+                        </span>
+                        <span className="font-semibold" style={{ color: c.dim }}>
+                          [{nextUpConcept ? 'NOT_STARTED' : 'IDLE'}]
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block" style={{ color: c.faint }}>
+                          CATALOGUE
+                        </span>
+                        <span className="font-semibold" style={{ color: c.text }}>
+                          {completedCount}/{totalCatalogued || '--'} CONCEPTS
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    href={
+                      nextUpConcept
+                        ? `/student/concepts/${nextUpConcept.conceptId}`
+                        : '/student/roadmaps'
+                    }
+                    className="w-full py-2 px-4 font-bold text-[13px] flex items-center justify-center gap-2 tracking-wider transition-colors cursor-pointer"
+                    style={{
+                      backgroundColor: c.primary,
+                      color: c.base,
+                      boxShadow: `2px 2px 0px 0px ${c.shadow}`,
+                    }}
+                  >
+                    {nextUpConcept
+                      ? '[ENTER] START CONCEPT ➔'
+                      : '[ENTER] BROWSE ROADMAPS ➔'}
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* 2x2 gauge cluster */}
+          <div className="lg:col-span-5 grid grid-cols-2 gap-3">
+            {/* Streak */}
+            <div className="px-3 py-2.5 flex flex-col justify-between" style={panel}>
+              <div
+                className="text-[10px] font-semibold uppercase tracking-wider flex items-center justify-between"
+                style={{ color: c.dim }}
+              >
+                <span>CURRENT_STREAK</span>
+                <span className="text-[9px]" style={{ color: c.faint }}>
+                  #01
+                </span>
+              </div>
+              <div
+                className="my-1 text-xl md:text-2xl font-bold tracking-tight"
+                style={{ color: c.ink }}
+              >
+                {gamificationLoading
+                  ? '--'
+                  : `${streak} ${plural(streak, 'DAY', 'DAYS')}`}
+              </div>
+              <div
+                className="text-[10px] pt-1"
+                style={{ color: c.faint, borderTop: `1px solid ${c.line}` }}
+              >
+                LONGEST:{' '}
+                {gamificationLoading
+                  ? '--'
+                  : `${longest} ${plural(longest, 'DAY', 'DAYS')}`}
+              </div>
+            </div>
+
+            {/* XP */}
+            <div className="px-3 py-2.5 flex flex-col justify-between" style={panel}>
+              <div
+                className="text-[10px] font-semibold uppercase tracking-wider flex items-center justify-between"
+                style={{ color: c.dim }}
+              >
+                <span>TOTAL_XP</span>
+                <span className="text-[9px]" style={{ color: c.faint }}>
+                  #02
+                </span>
+              </div>
+              <div
+                className="my-1 text-xl md:text-2xl font-bold tracking-tight"
+                style={{ color: c.ink }}
+              >
+                {num(gamification?.totalXp, gamificationLoading)}
+              </div>
+              <div
+                className="text-[10px] pt-1"
+                style={{ color: c.dim, borderTop: `1px solid ${c.line}` }}
+              >
+                RUNNING TOTAL
+              </div>
+            </div>
+
+            {/* Concepts */}
+            <div className="px-3 py-2.5 flex flex-col justify-between" style={panel}>
+              <div
+                className="text-[10px] font-semibold uppercase tracking-wider flex items-center justify-between"
+                style={{ color: c.dim }}
+              >
+                <span>CONCEPTS_DONE</span>
+                <span className="text-[9px]" style={{ color: c.faint }}>
+                  #03
+                </span>
+              </div>
+              <div
+                className="my-1 text-xl md:text-2xl font-bold tracking-tight"
+                style={{ color: c.ink }}
+              >
+                {progressLoading ? '--' : completedCount}
+              </div>
+              <div
+                className="text-[10px] pt-1"
+                style={{ color: c.dim, borderTop: `1px solid ${c.line}` }}
+              >
+                OF {roadmapProgressLoading ? '--' : totalCatalogued} CATALOGUED
+              </div>
+            </div>
+
+            {/* Reviews due */}
+            <Link
+              href="/student/review"
+              className="px-3 py-2.5 flex flex-col justify-between relative overflow-hidden cursor-pointer"
+              style={{
+                backgroundColor: c.panel,
+                border: `1px solid ${reviewDue > 0 ? `${c.alert}80` : c.line}`,
+                boxShadow: `3px 3px 0px 0px ${c.shadow}`,
+              }}
+            >
+              <div
+                className="text-[10px] font-bold uppercase tracking-wider flex items-center justify-between"
+                style={{ color: reviewDue > 0 ? c.alert : c.dim }}
+              >
+                <span>REVIEWS_DUE</span>
+                {reviewDue > 0 ? (
+                  <span
+                    className="kip-pulse inline-flex items-center px-1 text-[9px] font-bold"
+                    style={{
+                      backgroundColor: `${c.alert}33`,
+                      color: c.alert,
+                      border: `1px solid ${c.alert}66`,
+                    }}
+                  >
+                    ALERT
+                  </span>
+                ) : (
+                  <span className="text-[9px]" style={{ color: c.faint }}>
+                    #04
+                  </span>
+                )}
+              </div>
+              <div
+                className="my-1 text-xl md:text-2xl font-bold tracking-tight flex items-baseline gap-1"
+                style={{ color: reviewDue > 0 ? c.alert : c.ink }}
+              >
+                <span>{reviewLoading ? '--' : reviewDue} DUE</span>
+                {reviewDue > 0 && (
+                  <span className="text-[10px] font-normal">[ACTION]</span>
+                )}
+              </div>
+              <div
+                className="text-[10px] pt-1"
+                style={{
+                  color: reviewDue > 0 ? `${c.alert}b3` : c.dim,
+                  borderTop: `1px solid ${reviewDue > 0 ? `${c.alert}4d` : c.line}`,
+                }}
+              >
+                SRS FLASHCARD QUEUE
+              </div>
+            </Link>
+          </div>
+        </section>
+
+        {/* ── BAND 2: absorbs remaining height on desktop only ─────────── */}
+        <section className="lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
+          {/* LEFT */}
+          <div className="lg:col-span-7 lg:min-h-0 flex flex-col gap-3">
+            {/* Study activity — fixed height, two clean rows of 30 */}
+            <div className="shrink-0 flex flex-col" style={panel}>
+              <div
+                className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
+                style={headStrip}
+              >
+                <span className="font-bold truncate" style={{ color: c.ink }}>
+                  ┌─[ study_activity
+                  <span className="hidden sm:inline">
+                    {' '}
+                    :: {ACTIVITY_DAYS}d_consistency
+                  </span>{' '}
+                  ]
+                </span>
+                <span
+                  className="text-[11px] font-medium shrink-0 whitespace-nowrap"
+                  style={{ color: c.dim }}
+                >
+                  {activityLoading
+                    ? 'LOADING...'
+                    : `${activeDays}/${activityList.length} ACTIVE`}{' '}
+                  {!activityLoading && (
+                    <span className="font-bold" style={{ color: c.primary }}>
+                      ({activePct}%)
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              <div className="px-3 sm:px-4 py-3 flex flex-col gap-2">
+                <div
+                  className="text-[10px] flex items-center justify-between"
+                  style={{ color: c.faint }}
+                >
+                  <span>T-{ACTIVITY_DAYS}d</span>
+                  <span>TODAY ➔</span>
+                </div>
+
+                {/* One grid, column count set in CSS per breakpoint (15 on
+                    phone → 30 on desktop) so cells never clip. Rows auto-flow. */}
+                <div className="kip-activity-grid select-none">
+                  {(activityList.length > 0
+                    ? activityList
+                    : Array.from({ length: ACTIVITY_DAYS }, () => null)
+                  ).map((d, i) => (
+                    <span
+                      key={d?.date ?? `empty-${i}`}
+                      className="text-center leading-none"
+                      title={d ? `${d.date}: ${d.active ? 'active' : 'idle'}` : ''}
+                      style={{ color: d?.active ? c.primary : c.line }}
+                    >
+                      {d?.active ? '■' : '·'}
+                    </span>
+                  ))}
+                </div>
+
+                <div
+                  className="pt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px]"
+                  style={{ color: c.dim, borderTop: `1px solid ${c.line}` }}
+                >
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="hidden sm:inline" style={{ color: c.faint }}>
+                      LEGEND:
+                    </span>
+                    <span className="font-bold" style={{ color: c.primary }}>
+                      [■] ACTIVE
+                      <span className="hidden sm:inline"> STUDY</span>
+                    </span>
+                    <span className="font-bold" style={{ color: c.line }}>
+                      [·] IDLE
+                    </span>
+                  </div>
+                  <div className="hidden lg:inline" style={{ color: c.faint }}>
+                    {'// GET /gamification/activity'}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* Roadmap progress — flexes to fill on desktop, scrolls if needed */}
+            <div className="lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
+              <div
+                className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
+                style={headStrip}
+              >
+                <span className="font-bold truncate" style={{ color: c.ink }}>
+                  ┌─[ roadmap_progress ]
+                </span>
+                <span
+                  className="text-[11px] shrink-0 whitespace-nowrap"
+                  style={{ color: c.faint }}
+                >
+                  TRACKS: {roadmapsLoading ? '--' : rankedRoadmaps.length}
+                  <span className="hidden sm:inline"> TOTAL</span>
+                </span>
+              </div>
+
+              <div className="lg:flex-1 lg:min-h-0 flex flex-col">
+                <div className="px-3 sm:px-4 py-3 flex flex-col gap-3 lg:overflow-y-auto">
+                  {roadmapsLoading || roadmapProgressLoading ? (
+                    <div className="text-[12px]" style={{ color: c.dim }}>
+                      SCANNING TRACKS<span className="kip-cursor">_</span>
+                    </div>
+                  ) : rankedRoadmaps.length === 0 ? (
+                    <div className="text-[12px]" style={{ color: c.dim }}>
+                      NO ROADMAPS AVAILABLE — instructors are still publishing.
+                    </div>
+                  ) : (
+                    rankedRoadmaps.map((rm) => {
+                      const barColor =
+                        rm.pct >= 75
+                          ? c.primary
+                          : rm.pct >= 25
+                            ? c.text
+                            : c.faint;
+
+                      return (
+                        <Link
+                          key={rm.id}
+                          href={`/student/roadmaps/${rm.id}`}
+                          className="flex flex-col gap-0.5 cursor-pointer"
+                        >
+                          <div className="flex justify-between items-center gap-2 text-[12px]">
+                            <span
+                              className="font-semibold truncate min-w-0"
+                              style={{ color: c.ink }}
+                            >
+                              {rm.title.toUpperCase().replace(/\s+/g, '_')}
+                            </span>
+                            <span
+                              className="font-bold shrink-0 whitespace-nowrap"
+                              style={{ color: barColor }}
+                            >
+                              {rm.pct}% [{rm.done}/{rm.total}]
+                            </span>
+                          </div>
+                          {/* Fluid bar: keeps the bracketed block-glyph look
+                              but scales to any width instead of a fixed
+                              character count that overflows on phones. */}
+                          <div
+                            className="flex items-center gap-1 text-[11px] leading-none select-none"
+                            style={{ color: barColor }}
+                          >
+                            <span className="shrink-0">[</span>
+                            <span
+                              className="kip-bar flex-1 min-w-0"
+                              style={
+                                {
+                                  '--kip-bar-pct': `${rm.pct}%`,
+                                  '--kip-bar-fill': barColor,
+                                  '--kip-bar-track': c.line,
+                                } as React.CSSProperties
+                              }
+                            />
+                            <span className="shrink-0">]</span>
+                          </div>
+                        </Link>
+                      );
+                    })
+                  )}
+                </div>
+                <BufferFill line={c.line} />
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* RIGHT */}
+          <div className="lg:col-span-5 lg:min-h-0 flex flex-col gap-3">
+            {/* Badges — every catalogued badge, earned first then locked */}
+            <div className="lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
+              <div
+                className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
+                style={headStrip}
+              >
+                <span className="font-bold truncate" style={{ color: c.ink }}>
+                  ┌─[ badges :: {badgesLoading ? '--' : earnedCount}/
+                  {badgesLoading ? '--' : badgeRows.length} EARNED ]
+                </span>
+                <span
+                  className="text-[11px] shrink-0 whitespace-nowrap hidden sm:inline"
+                  style={{ color: c.faint }}
+                >
+                  ALL-TIME
+                </span>
+              </div>
+
+              <div className="lg:flex-1 lg:min-h-0 flex flex-col">
+                <div className="px-3 py-2 flex flex-col gap-1 lg:overflow-y-auto">
+                  {badgesLoading || gamificationLoading ? (
+                    <div className="text-[12px] px-1" style={{ color: c.dim }}>
+                      LOADING<span className="kip-cursor">_</span>
+                    </div>
+                  ) : badgeRows.length === 0 ? (
+                    <div className="text-[12px] px-1" style={{ color: c.dim }}>
+                      NO BADGES CATALOGUED YET.
+                    </div>
+                  ) : (
+                    badgeRows.map((b) => {
+                      const has = Boolean(b.earnedAt);
+                      return (
+                        <div
+                          key={b.id}
+                          className="flex items-center justify-between px-1 py-0.5"
+                          title={b.description}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="font-bold shrink-0"
+                              style={{ color: has ? c.alert : c.line }}
+                            >
+                              {has ? '★' : '☆'}
+                            </span>
+                            <span
+                              className="font-medium text-[12px] truncate"
+                              style={{ color: has ? c.ink : c.faint }}
+                            >
+                              {b.name.toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className="text-[11px]"
+                              style={{ color: has ? c.faint : c.line }}
+                            >
+                              {has ? b.earnedAt!.slice(0, 10) : '[LOCKED]'}
+                            </span>
+                            <span
+                              className="text-[10px] font-bold px-1.5"
+                              style={{
+                                color: has ? c.dim : c.line,
+                                border: `1px solid ${c.line}`,
+                                backgroundColor: has ? c.hover : 'transparent',
+                              }}
+                            >
+                              [{badgeTag(b.criteriaKey, b.name)}]
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <BufferFill line={c.line} />
+              </div>
+            </div>
+
+            {/* activity.stdout */}
+            <div className="lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
+              <div
+                className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
+                style={headStrip}
+              >
+                <span className="font-bold truncate" style={{ color: c.ink }}>
+                  ┌─[ activity.stdout
+                  <span className="hidden sm:inline"> :: client_event_log</span> ]
+                </span>
+                <div
+                  className="flex items-center gap-1.5 text-[11px] shrink-0"
+                  style={{ color: c.faint }}
+                >
+                  <span
+                    className="kip-pulse w-2 h-2 rounded-full inline-block"
+                    style={{ backgroundColor: c.primary }}
+                  />
+                  <span className="font-bold" style={{ color: c.primary }}>
+                    LIVE
+                  </span>
+                </div>
+              </div>
+
+              <div className="lg:flex-1 lg:min-h-0 flex flex-col">
+                <div className="px-3 sm:px-4 py-2 flex flex-col gap-1 text-[12px] leading-relaxed lg:overflow-y-auto">
+                  {/* Echoes of anything typed at the prompt below */}
+                  {cliLog.map((l) => (
+                    <div
+                      key={l.id}
+                      className="flex items-baseline gap-2"
+                      style={{ color: c.text }}
+                    >
+                      <span className="text-[11px]" style={{ color: c.faint }}>
+                        [{clock}]
+                      </span>
+                      <span
+                        className="font-bold shrink-0"
+                        style={{ color: c.alert }}
+                      >
+                        [CLI]
+                      </span>
+                      <span className="truncate">{l.text}</span>
+                    </div>
+                  ))}
+
+                  {progressLoading ? (
+                    <div style={{ color: c.dim }}>
+                      TAILING<span className="kip-cursor">_</span>
+                    </div>
+                  ) : eventLog.length === 0 ? (
+                    <div style={{ color: c.dim }}>
+                      NO EVENTS YET — your activity will stream here.
+                    </div>
+                  ) : (
+                    eventLog.map((e, i) => (
+                      <div
+                        key={`${e.at}-${i}`}
+                        className="flex items-baseline gap-2"
+                        style={{ color: c.text }}
+                      >
+                        <span className="text-[11px]" style={{ color: c.faint }}>
+                          [{new Date(e.at).toISOString().slice(11, 19)}]
+                        </span>
+                        <span
+                          className="font-bold shrink-0"
+                          style={{
+                            color: e.kind === 'BADGE' ? c.alert : c.primary,
+                          }}
+                        >
+                          [{e.kind}]
+                        </span>
+                        <span className="truncate">
+                          {e.text}
+                          {e.xp !== null && (
+                            <span style={{ color: c.primary }}> (+{e.xp} XP)</span>
+                          )}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <BufferFill line={c.line} />
+              </div>
+
+              <div
+                className="px-2 sm:px-3 py-1 text-[10px] sm:text-[11px] flex items-center justify-between gap-2 shrink-0"
+                style={{ color: c.faint, borderTop: `1px solid ${c.line}` }}
+              >
+                <span className="truncate min-w-0">
+                  <span className="hidden sm:inline">EVENT_</span>BUF:{' '}
+                  {eventLog.length + cliLog.length}{' '}
+                  {plural(eventLog.length + cliLog.length, 'EVENT', 'EVENTS')}
+                </span>
+                <span
+                  className="shrink-0 whitespace-nowrap"
+                  style={{ color: c.dim }}
+                >
+                  {isSyncing ? 'SYNCING' : '0 ERRORS'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* ══ FOOTER — live prompt, welded to the bottom edge ═══════════════ */}
+      <footer
+        className="w-full shrink-0 z-30"
+        style={{ backgroundColor: c.panel, borderTop: `1px solid ${c.line}` }}
+      >
+        <form
+          onSubmit={submitCmd}
+          className="px-2 sm:px-3 md:px-4 py-1.5 flex items-center gap-2 text-[13px] cursor-text"
+          style={{ backgroundColor: c.head, borderBottom: `1px solid ${c.line}` }}
+          onClick={() => inputRef.current?.focus()}
+        >
+          <span className="font-bold shrink-0" style={{ color: c.primary }}>
+            student@kip:~$
+          </span>
+          <div className="relative flex-1 flex items-center min-w-0">
+            <input
+              ref={inputRef}
+              value={cmd}
+              onChange={(e) => setCmd(e.target.value)}
+              spellCheck={false}
+              autoComplete="off"
+              aria-label="Terminal prompt"
+              className="w-full bg-transparent outline-none border-none text-[13px] caret-transparent"
+              style={{ color: c.text, font: 'inherit', fontSize: '13px' }}
+            />
+            {/* Block caret parked after the typed text */}
+            <span
+              className="kip-cursor pointer-events-none absolute top-1/2 -translate-y-1/2 w-2.5 h-4"
+              style={{
+                left: `min(${cmd.length}ch, calc(100% - 0.625rem))`,
+                backgroundColor: c.primary,
+              }}
+              aria-hidden="true"
+            />
+          </div>
+          <span
+            className="text-[11px] shrink-0 hidden lg:inline"
+            style={{ color: c.faint }}
+          >
+            [/] FOCUS · [2] TERMINAL CLI
+          </span>
+        </form>
+
+        <div
+          className="px-2 sm:px-3 md:px-4 py-1 flex items-center justify-between gap-2 text-[11px]"
+          style={{ color: c.dim }}
+        >
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="whitespace-nowrap">[TTY: /dev/pts/{tty}]</span>
+            <span className="hidden sm:inline whitespace-nowrap">
+              [PID: {pid}]
+            </span>
+            <span className="hidden lg:inline whitespace-nowrap">
+              [SESSION_ENCODING: UTF-8]
+            </span>
+            <span className="hidden xl:inline whitespace-nowrap">[{clock}]</span>
+          </div>
+          <div
+            className="flex items-center gap-1.5 font-semibold shrink-0 whitespace-nowrap"
+            style={{ color: isSyncing ? c.alert : c.primary }}
+          >
+            <span className={isSyncing ? 'kip-pulse' : ''}>●</span>
+            <span>[SYNC: {isSyncing ? 'FETCHING' : 'STABLE'}]</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

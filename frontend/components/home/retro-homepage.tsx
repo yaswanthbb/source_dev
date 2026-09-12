@@ -80,19 +80,19 @@ export function RetroHomepage() {
             : 'bg-[#faf9f4]/95 border-black/20'
         }`}>
           {/* Brand & Left System Telemetry */}
-          <div className="flex items-center gap-unit-4">
-            <Link href="/" className="flex items-center gap-unit-2 group">
-              <span className={`w-2.5 h-2.5 inline-block ${isDark ? 'bg-[#e6e8eb]' : 'bg-black'}`} />
-              <span className={`font-code-md text-code-md font-bold tracking-tight uppercase ${
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Link href="/" className="flex items-center gap-unit-2 group min-w-0">
+              <span className={`w-2.5 h-2.5 inline-block shrink-0 ${isDark ? 'bg-[#e6e8eb]' : 'bg-black'}`} />
+              <span className={`font-code-md text-code-md font-bold tracking-tight uppercase truncate ${
                 isDark ? 'text-[#e6e8eb]' : 'text-black'
               }`}>
-                KIP // KNOWLEDGE IS POWER
+                KIP<span className="hidden sm:inline">{' // KNOWLEDGE IS POWER'}</span>
               </span>
             </Link>
 
             {/* System Status Pill */}
             <span
-              className={`font-label-sm text-label-sm px-unit-2 py-unit-1 border uppercase font-mono ${
+              className={`hidden md:inline font-label-sm text-label-sm px-unit-2 py-unit-1 border uppercase font-mono shrink-0 whitespace-nowrap ${
                 isDark
                   ? 'border-[#383e47] bg-[#181b1f] text-[#56d364]'
                   : 'border-black/40 bg-[#f5f4ef] text-black'
@@ -103,31 +103,34 @@ export function RetroHomepage() {
           </div>
 
           {/* Right: Mode Toggle Button & Root Badge (Clean Minimalist matching updated Stitch) */}
-          <div className="flex items-center gap-unit-4">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Mode Toggle Button */}
             <button
               type="button"
               onClick={toggleTheme}
               aria-label="Toggle light/dark mode"
               title={`Toggle Mode: currently ${isDark ? 'Dark' : 'Light'}`}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-bold tracking-wider cursor-pointer select-none transition-none ${
+              className={`inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-mono font-bold tracking-wider whitespace-nowrap cursor-pointer select-none transition-none ${
                 isDark
                   ? 'text-[#e6e8eb] bg-[#14171b] border border-[#383e47] hover:border-[#e6e8eb] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.6)]'
                   : 'text-black bg-white border border-black hover:bg-[#e9e8e3] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
               }`}
             >
               <span
-                className={`w-2 h-2 inline-block ${
+                className={`w-2 h-2 inline-block shrink-0 ${
                   isDark ? 'bg-[#56d364]' : 'bg-black'
                 }`}
               />
-              <span>{isDark ? '[MODE: DK]' : '[MODE: LT]'}</span>
+              <span className="hidden sm:inline">
+                {isDark ? '[MODE: DK]' : '[MODE: LT]'}
+              </span>
+              <span className="sm:hidden">{isDark ? '[DK]' : '[LT]'}</span>
             </button>
 
             {/* Root / Session Badge */}
             <Link
               href={isAuthenticated ? '/student/dashboard' : '/login'}
-              className={`inline-flex font-label-sm text-label-sm px-unit-3 py-unit-1 border uppercase font-mono ${
+              className={`hidden sm:inline-flex font-label-sm text-label-sm px-unit-3 py-unit-1 border uppercase font-mono whitespace-nowrap ${
                 isDark
                   ? 'border-[#383e47] bg-[#14171b] text-[#e6e8eb]'
                   : 'border-[#c5c6cb] bg-[#f5f4ef] text-black'
@@ -161,25 +164,28 @@ export function RetroHomepage() {
               />
 
               {/* Micro Metadata Tracker */}
-              <div className="flex items-center gap-unit-3 mb-unit-5">
+              <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2 mb-unit-5 max-w-full">
                 <span
-                  className={`font-label-sm text-label-sm px-unit-2 py-unit-1 border uppercase font-mono ${
+                  className={`font-label-sm text-label-sm px-unit-2 py-unit-1 border uppercase font-mono whitespace-nowrap ${
                     isDark
                       ? 'border-[#383e47] bg-[#181b1f] text-[#e6e8eb] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)]'
                       : 'border-black bg-white text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
                   }`}
                 >
-                  SPEC_VER: 3.4.1 // ZERO-BLOAT
+                  SPEC_VER: 3.4.1<span className="hidden sm:inline">{' // ZERO-BLOAT'}</span>
                 </span>
-                <span className={`font-label-sm text-label-sm flex items-center gap-unit-1 font-mono ${
+                <span className={`font-label-sm text-label-sm flex items-center gap-unit-1 font-mono min-w-0 ${
                   isDark ? 'text-[#8b939e]' : 'text-[#45474a]'
                 }`}>
                   <span
-                    className={`w-1.5 h-1.5 inline-block ${
+                    className={`w-1.5 h-1.5 inline-block shrink-0 ${
                       isDark ? 'bg-[#56d364]' : 'bg-[#fe932c]'
                     }`}
                   />
-                  <span>LATENCY: 0.8ms (OFFLINE CACHED)</span>
+                  <span className="truncate">
+                    LATENCY: 0.8ms
+                    <span className="hidden sm:inline"> (OFFLINE CACHED)</span>
+                  </span>
                 </span>
               </div>
 
@@ -349,23 +355,29 @@ export function RetroHomepage() {
 
                     {/* Canvas Top Diagnostic Line */}
                     <div
-                      className={`relative z-10 flex items-center justify-between border-b pb-unit-3 font-code-md text-[11px] ${
+                      className={`relative z-10 flex items-center justify-between gap-2 border-b pb-unit-3 font-code-md text-[11px] ${
                         isDark
                           ? 'border-[#2a2e34] text-[#8b939e]'
                           : 'border-black/20 text-[#45474a]'
                       }`}
                     >
-                      <span className="uppercase">
-                        VIEWPORT: 1024x480 • COORD_SYS: CARTESIAN • DAG_RENDERER: WASM
+                      <span className="uppercase truncate min-w-0">
+                        VIEWPORT: 1024x480
+                        <span className="hidden sm:inline">
+                          {' • COORD_SYS: CARTESIAN'}
+                        </span>
+                        <span className="hidden lg:inline">
+                          {' • DAG_RENDERER: WASM'}
+                        </span>
                       </span>
                       <span
-                        className={`font-label-sm px-unit-2 border ${
+                        className={`font-label-sm px-unit-2 border shrink-0 whitespace-nowrap ${
                           isDark
                             ? 'bg-[#1e2227] border-[#383e47] text-[#cbd0d6]'
                             : 'bg-[#e9e8e3] border-black/30 text-black'
                         }`}
                       >
-                        ZOOM: 100% [FIXED]
+                        ZOOM: 100%<span className="hidden sm:inline"> [FIXED]</span>
                       </span>
                     </div>
 
@@ -1523,29 +1535,31 @@ export function RetroHomepage() {
               : 'bg-[#f5f4ef] border-black/20'
           }`}
         >
-          <div className="w-full px-gutter-lg py-unit-3 flex flex-col md:flex-row items-center justify-between gap-unit-4">
-            <div className={`font-label-sm text-label-sm uppercase tracking-wider font-mono ${
+          <div className="w-full px-gutter-sm md:px-gutter-lg py-unit-3 flex flex-col md:flex-row items-center justify-between gap-2 md:gap-3">
+            <div className={`font-label-sm text-label-sm uppercase tracking-wider font-mono text-center md:text-left ${
               isDark ? 'text-[#8b939e]' : 'text-[#45474a]'
             }`}>
-              KIP © 2026 • ZERO COOKIES • ZERO TRACKERS
+              KIP © 2026 • ZERO COOKIES<span className="hidden sm:inline"> • ZERO TRACKERS</span>
             </div>
 
-            <div className={`flex items-center gap-unit-2 font-label-sm text-label-sm uppercase font-mono ${
+            <div className={`flex items-center gap-1 font-label-sm text-label-sm uppercase font-mono ${
               isDark ? 'text-[#cbd0d6]' : 'text-black'
             }`}>
               <span
-                className={`inline-block w-2 h-2 rounded-full animate-pulse ${
+                className={`inline-block w-2 h-2 rounded-full animate-pulse shrink-0 ${
                   isDark ? 'bg-[#56d364]' : 'bg-[#fe932c]'
                 }`}
               />
-              <span>● DAEMON RUNNING // LATENCY &lt; 4ms</span>
+              <span className="whitespace-nowrap">
+                ● DAEMON RUNNING<span className="hidden sm:inline">{' // LATENCY < 4ms'}</span>
+              </span>
             </div>
 
-            <div className={`flex items-center gap-unit-3 font-label-sm text-label-sm ${
+            <div className={`flex items-center gap-2 font-label-sm text-label-sm ${
               isDark ? 'text-[#8b939e]' : 'text-[#45474a]'
             }`}>
               <span
-                className={`px-unit-2 py-unit-1 border ${
+                className={`px-unit-2 py-unit-1 border whitespace-nowrap ${
                   isDark
                     ? 'border-[#383e47] bg-[#181b1f] text-[#e6e8eb]'
                     : 'border-[#c5c6cb] bg-white text-black'
@@ -1554,7 +1568,7 @@ export function RetroHomepage() {
                 [ESC: CLOSE]
               </span>
               <span
-                className={`px-unit-2 py-unit-1 border ${
+                className={`px-unit-2 py-unit-1 border whitespace-nowrap ${
                   isDark
                     ? 'border-[#383e47] bg-[#181b1f] text-[#e6e8eb]'
                     : 'border-[#c5c6cb] bg-white text-black'

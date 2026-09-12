@@ -1,0 +1,138 @@
+/* ==========================================================================
+   KIP Terminal Dashboard — Styles & Animations
+   Structure/spacing extracted from Stitch export: "btop Student Terminal
+   Dashboard (API Grounded)". Colors live in the component (theme-driven).
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@600;700&display=swap');
+
+.kip-dash {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  min-height: 100vh;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.kip-dash .font-display {
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+/* ── CRT scanline overlay ───────────────────────────────────────────── */
+.kip-dash-scanlines {
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.28) 50%),
+    linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.02),
+      rgba(0, 255, 0, 0.01),
+      rgba(0, 0, 255, 0.02)
+    );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+/* Light mode: the same texture, dialled right down so cream stays cream */
+.kip-dash-scanlines-light {
+  background: linear-gradient(
+    rgba(0, 0, 0, 0) 50%,
+    rgba(27, 28, 25, 0.055) 50%
+  );
+  background-size: 100% 3px;
+  pointer-events: none;
+}
+
+/* ── Block cursor (instant digital blink, no fade) ──────────────────── */
+@keyframes kip-cursor-blink {
+  0%,
+  49.99% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.kip-cursor {
+  animation: kip-cursor-blink 1s steps(1, end) infinite;
+}
+
+/* ── Telemetry pulse (LIVE dot, ALERT chip, ACTIVE RUNTIME chip) ────── */
+@keyframes kip-pulse-subtle {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.kip-pulse {
+  animation: kip-pulse-subtle 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kip-cursor,
+  .kip-pulse {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── Activity heatmap grid ──────────────────────────────────────────────
+   Column count steps up with the viewport so the 60 day-cells never clip.
+   15 cols (4 rows) on phones → 30 cols (2 rows) from `sm` up, matching the
+   agreed two-row desktop layout. */
+.kip-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  gap: 1px 0;
+  font-size: 12px;
+}
+
+@media (min-width: 480px) {
+  .kip-activity-grid {
+    grid-template-columns: repeat(20, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 640px) {
+  .kip-activity-grid {
+    grid-template-columns: repeat(30, minmax(0, 1fr));
+    font-size: 13px;
+  }
+}
+
+/* ── Thin terminal scrollbars ───────────────────────────────────────── */
+.kip-dash ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.kip-dash ::-webkit-scrollbar-thumb {
+  background: #34383f;
+}
+
+.kip-dash ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kip-dash-light ::-webkit-scrollbar-thumb {
+  background: #d4d2c8;
+}
+
+/* ── Roadmap progress bar ───────────────────────────────────────────────
+   Fluid replacement for a fixed 24-character block-glyph bar, which
+   overflowed below ~420px. Keeps the chunky terminal look via a
+   hard-stop gradient (no anti-aliased edge) and scales to its column. */
+.kip-bar {
+  display: block;
+  height: 9px;
+  background-image: linear-gradient(
+    to right,
+    var(--kip-bar-fill) 0 var(--kip-bar-pct),
+    var(--kip-bar-track) var(--kip-bar-pct) 100%
+  );
+}

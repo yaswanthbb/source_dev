@@ -552,22 +552,25 @@ export default function LoginPage() {
           }`}
         >
           {/* Brand & System Status */}
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2 group">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Link href="/" className="flex items-center gap-2 group min-w-0">
               <span
-                className={`w-2.5 h-2.5 inline-block ${isDark ? "bg-[#e6e8eb]" : "bg-black"}`}
+                className={`w-2.5 h-2.5 inline-block shrink-0 ${isDark ? "bg-[#e6e8eb]" : "bg-black"}`}
               />
               <span
-                className={`font-mono text-sm font-bold tracking-tight uppercase ${
+                className={`font-mono text-sm font-bold tracking-tight uppercase truncate ${
                   isDark ? "text-[#e6e8eb]" : "text-black"
                 }`}
               >
-                KIP // KNOWLEDGE IS POWER
+                KIP
+                <span className="hidden sm:inline">
+                  {" // KNOWLEDGE IS POWER"}
+                </span>
               </span>
             </Link>
 
             <span
-              className={`text-xs px-2 py-0.5 border uppercase font-mono ${
+              className={`hidden md:inline text-xs px-2 py-0.5 border uppercase font-mono shrink-0 whitespace-nowrap ${
                 isDark
                   ? "border-[#383e47] bg-[#181b1f] text-[#56d364]"
                   : "border-black/40 bg-[#f5f4ef] text-black"
@@ -578,33 +581,37 @@ export default function LoginPage() {
           </div>
 
           {/* Right Mode Toggle & Register Link */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               type="button"
               onClick={toggleTheme}
               aria-label="Toggle light/dark mode"
               title={`Toggle Mode: currently ${isDark ? "Dark" : "Light"}`}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-bold tracking-wider cursor-pointer select-none transition-none ${
+              className={`inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-mono font-bold tracking-wider whitespace-nowrap cursor-pointer select-none transition-none ${
                 isDark
                   ? "text-[#e6e8eb] bg-[#14171b] border border-[#383e47] hover:border-[#e6e8eb] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.6)]"
                   : "text-black bg-white border border-black hover:bg-[#e9e8e3] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
               }`}
             >
               <span
-                className={`w-2 h-2 inline-block ${isDark ? "bg-[#56d364]" : "bg-black"}`}
+                className={`w-2 h-2 inline-block shrink-0 ${isDark ? "bg-[#56d364]" : "bg-black"}`}
               />
-              <span>{isDark ? "[MODE: DK]" : "[MODE: LT]"}</span>
+              <span className="hidden sm:inline">
+                {isDark ? "[MODE: DK]" : "[MODE: LT]"}
+              </span>
+              <span className="sm:hidden">{isDark ? "[DK]" : "[LT]"}</span>
             </button>
 
             <Link
               href="/register"
-              className={`inline-flex text-xs px-3 py-1 border uppercase font-mono transition-colors ${
+              className={`inline-flex text-xs px-2 sm:px-3 py-1 border uppercase font-mono whitespace-nowrap transition-colors ${
                 isDark
                   ? "border-[#383e47] bg-[#14171b] text-[#e6e8eb] hover:bg-[#1e2227]"
                   : "border-[#c5c6cb] bg-[#f5f4ef] text-black hover:bg-[#e9e8e3]"
               }`}
             >
-              [REG: NEW_USER]
+              <span className="hidden sm:inline">[REG: NEW_USER]</span>
+              <span className="sm:hidden">[REG]</span>
             </Link>
           </div>
         </header>
@@ -1412,7 +1419,7 @@ export default function LoginPage() {
             {bootPhase === "READY" && (
               <div className="flex flex-col space-y-1.5 pt-0.5 animate-in fade-in duration-150">
                 <div
-                  className={`flex items-center justify-between text-[11px] px-1 select-none font-medium ${
+                  className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] px-1 select-none font-medium ${
                     isDark ? "text-[#c4c7c9]" : "text-[#45474a]"
                   }`}
                 >
@@ -1421,7 +1428,7 @@ export default function LoginPage() {
                       type="button"
                       onClick={handleSubmitCredentials}
                       disabled={isSubmitting}
-                      className="hover:underline transition-colors cursor-pointer"
+                      className="hover:underline transition-colors cursor-pointer whitespace-nowrap"
                     >
                       <span
                         className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
@@ -1431,14 +1438,14 @@ export default function LoginPage() {
                       <span
                         className={isDark ? "text-white" : "text-[#1b1c19]"}
                       >
-                        SUBMIT_CREDENTIALS
+                        SUBMIT<span className="hidden sm:inline">_CREDENTIALS</span>
                       </span>
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={handleValidateEmail}
-                      className="hover:underline transition-colors cursor-pointer"
+                      className="hover:underline transition-colors cursor-pointer whitespace-nowrap"
                     >
                       <span
                         className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
@@ -1448,7 +1455,7 @@ export default function LoginPage() {
                       <span
                         className={isDark ? "text-white" : "text-[#1b1c19]"}
                       >
-                        VALIDATE_IDENTITY
+                        VALIDATE<span className="hidden sm:inline">_IDENTITY</span>
                       </span>
                     </button>
                   )}
@@ -1456,7 +1463,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={handleAbortOrReset}
-                    className="hover:underline transition-colors cursor-pointer"
+                    className="hover:underline transition-colors cursor-pointer whitespace-nowrap"
                   >
                     <span
                       className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
@@ -1466,13 +1473,13 @@ export default function LoginPage() {
                     <span
                       className={isDark ? "text-[#c2c7cf]" : "text-[#1b1c19]"}
                     >
-                      RESET / ABORT
+                      RESET<span className="hidden sm:inline"> / ABORT</span>
                     </span>
                   </button>
 
                   <Link
                     href="/register"
-                    className="hover:underline transition-colors cursor-pointer"
+                    className="hover:underline transition-colors cursor-pointer whitespace-nowrap"
                   >
                     <span
                       className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
@@ -1482,19 +1489,19 @@ export default function LoginPage() {
                     <span
                       className={isDark ? "text-white" : "text-[#1b1c19]"}
                     >
-                      CREATE_ACCOUNT
+                      <span className="hidden sm:inline">CREATE_</span>ACCOUNT
                     </span>
                   </Link>
                 </div>
 
                 <div
-                  className={`flex items-center justify-between text-[10px] px-1 ${
+                  className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] px-1 ${
                     isDark ? "text-[#8e9194]" : "text-[#75777b]"
                   }`}
                 >
                   <Link
                     href="/forgot-password"
-                    className="hover:underline transition-colors"
+                    className="hover:underline transition-colors whitespace-nowrap"
                   >
                     <span
                       className={`font-bold ${isDark ? "text-[#56d364]" : "text-[#b45309]"}`}
@@ -1503,7 +1510,9 @@ export default function LoginPage() {
                     </span>{" "}
                     <span>FORGOT_PASSWORD</span>
                   </Link>
-                  <span>SESSION_ENCODING: UTF-8</span>
+                  <span className="whitespace-nowrap">
+                    <span className="hidden sm:inline">SESSION_</span>ENC: UTF-8
+                  </span>
                 </div>
               </div>
             )}
@@ -1522,13 +1531,13 @@ export default function LoginPage() {
               : "bg-[#f5f4ef] border-black/20"
           }`}
         >
-          <div className="w-full px-4 md:px-6 py-2.5 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+          <div className="w-full px-4 md:px-6 py-2.5 flex flex-col md:flex-row items-center justify-between gap-2 md:gap-3 text-[10px] sm:text-xs">
             <div
-              className={`font-mono uppercase tracking-wider ${
+              className={`font-mono uppercase tracking-wider text-center md:text-left ${
                 isDark ? "text-[#8b939e]" : "text-[#45474a]"
               }`}
             >
-              KIP © 2026 • ZERO COOKIES • ZERO TRACKERS
+              KIP © 2026 • ZERO COOKIES<span className="hidden sm:inline"> • ZERO TRACKERS</span>
             </div>
 
             <div
@@ -1537,11 +1546,13 @@ export default function LoginPage() {
               }`}
             >
               <span
-                className={`inline-block w-2 h-2 rounded-full animate-pulse ${
+                className={`inline-block w-2 h-2 rounded-full animate-pulse shrink-0 ${
                   isDark ? "bg-[#56d364]" : "bg-[#fe932c]"
                 }`}
               />
-              <span>● DAEMON RUNNING // LATENCY &lt; 4ms</span>
+              <span className="whitespace-nowrap">
+                ● DAEMON RUNNING<span className="hidden sm:inline">{' // LATENCY < 4ms'}</span>
+              </span>
             </div>
 
             <div
