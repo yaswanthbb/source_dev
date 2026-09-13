@@ -990,9 +990,9 @@
     "semantic_hash": ""
   },
   "frontend/app/student/dashboard/page.tsx": {
-    "mtime": 1789237580.8924396,
-    "seen": 1789237761.4685469,
-    "ast_hash": "9165ad68a3d6fbc982d7d05f42d20094",
+    "mtime": 1789239362.4640088,
+    "seen": 1789240011.1620038,
+    "ast_hash": "e16ce956ac667045064696ae782e8789",
     "semantic_hash": ""
   },
   "frontend/app/student/error.tsx": {
@@ -1563,6 +1563,12 @@
     "mtime": 1789237172.45154,
     "seen": 1789237761.468583,
     "ast_hash": "3dbf8ec69ffbcf593eb07845a4e56a22",
+    "semantic_hash": ""
+  },
+  "frontend/app/student/dashboard/terminal-motion.tsx": {
+    "mtime": 1789239362.4630086,
+    "seen": 1789240011.1620057,
+    "ast_hash": "a2ee733b9c98b526c6f010dae22198f4",
     "semantic_hash": ""
   }
 }

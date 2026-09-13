@@ -864,8 +864,8 @@
     "semantic_hash": ""
   },
   "frontend/app/(auth)/login/page.tsx": {
-    "mtime": 1789201074.9378376,
-    "seen": 1789202827.8196757,
+    "mtime": 1789243092.7174273,
+    "seen": 1789300815.6985524,
     "ast_hash": "f7ea9cb866d90d6709c8b19f1a3d79ef",
     "semantic_hash": ""
   },
@@ -1476,8 +1476,8 @@
     "semantic_hash": ""
   },
   "frontend/components/home/retro-homepage.tsx": {
-    "mtime": 1789201577.9455202,
-    "seen": 1789202827.8197722,
+    "mtime": 1789243092.7179365,
+    "seen": 1789300815.6986322,
     "ast_hash": "8093e0eddc7b2acb400733fd78c20264",
     "semantic_hash": ""
   },
@@ -1566,9 +1566,15 @@
     "semantic_hash": ""
   },
   "frontend/app/student/dashboard/terminal-motion.tsx": {
-    "mtime": 1789239362.4630086,
-    "seen": 1789240011.1620057,
-    "ast_hash": "a2ee733b9c98b526c6f010dae22198f4",
+    "mtime": 1789299946.649585,
+    "seen": 1789300815.698603,
+    "ast_hash": "6f2ac9e2540f5789604ad74c5faa7fad",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1789300518.1577098,
+    "seen": 1789300815.6986852,
+    "ast_hash": "b36d9e7ad22303e358ee895819df8164",
     "semantic_hash": ""
   }
 }
