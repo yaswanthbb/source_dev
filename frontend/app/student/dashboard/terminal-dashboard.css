@@ -292,9 +292,225 @@
 .kip-bar {
   display: block;
   height: 9px;
-  background-image: linear-gradient(
-    to right,
-    var(--kip-bar-fill) 0 var(--kip-bar-pct),
-    var(--kip-bar-track) var(--kip-bar-pct) 100%
-  );
+  overflow: hidden;
+  background: var(--kip-bar-track);
+  mask-image: repeating-linear-gradient(to right, #000 0 6px, transparent 6px 8px);
+}
+
+.kip-bar-progress {
+  display: block;
+  height: 100%;
+  width: clamp(0%, var(--kip-bar-pct), 100%);
+  background: var(--kip-bar-fill);
+  transform-origin: left;
+  transition: width 600ms steps(16, end);
+}
+
+/* ── Terminal power-on choreography ───────────────────────────────────
+   The screen remains interactive during boot. Only transforms and opacity
+   animate; no flashing, layout shifts, or artificial loading gate. */
+@keyframes kip-panel-online {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes kip-screen-sweep {
+  from { opacity: 0; transform: translateY(-12vh); }
+  15% { opacity: 0.65; }
+  75% { opacity: 0.35; }
+  to { opacity: 0; transform: translateY(100vh); }
+}
+
+.kip-dash .kip-boot-sweep {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 12vh;
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--kip-accent) 9%, transparent), transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--kip-accent) 18%, transparent);
+}
+
+.kip-dash[data-motion="on"] .kip-boot-sweep {
+  animation: kip-screen-sweep 1100ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+
+.kip-dash .kip-panel {
+  position: relative;
+  min-width: 0;
+  --kip-panel-delay: 0ms;
+}
+
+.kip-dash[data-motion="on"] .kip-panel {
+  animation: kip-panel-online 440ms cubic-bezier(0.16, 1, 0.3, 1) var(--kip-panel-delay) backwards;
+}
+
+.kip-dash .kip-gauges > :nth-child(1) { --kip-panel-delay: 70ms; }
+.kip-dash .kip-gauges > :nth-child(2) { --kip-panel-delay: 130ms; }
+.kip-dash .kip-gauges > :nth-child(3) { --kip-panel-delay: 190ms; }
+.kip-dash .kip-gauges > :nth-child(4) { --kip-panel-delay: 250ms; }
+.kip-dash .kip-activity { --kip-panel-delay: 200ms; }
+.kip-dash .kip-roadmaps { --kip-panel-delay: 300ms; }
+.kip-dash .kip-badges { --kip-panel-delay: 260ms; }
+.kip-dash .kip-events { --kip-panel-delay: 360ms; }
+
+/* Illuminated corner brackets pick out the panel under the pointer/focus. */
+.kip-dash .kip-panel::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(var(--kip-accent), var(--kip-accent)) top left / 16px 2px,
+    linear-gradient(var(--kip-accent), var(--kip-accent)) top left / 2px 16px,
+    linear-gradient(var(--kip-accent), var(--kip-accent)) bottom right / 16px 2px,
+    linear-gradient(var(--kip-accent), var(--kip-accent)) bottom right / 2px 16px;
+  background-repeat: no-repeat;
+  transition: opacity 180ms ease-out;
+}
+
+.kip-dash .kip-panel:focus-within::after { opacity: 1; }
+
+/* A slow signal travels along mission control's top edge. */
+@keyframes kip-signal-travel {
+  0% { transform: translateX(-100%); opacity: 0; }
+  12%, 70% { opacity: 0.85; }
+  90%, 100% { transform: translateX(400%); opacity: 0; }
+}
+
+.kip-dash .kip-mission::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 3px;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--kip-accent), transparent);
+}
+
+.kip-dash[data-motion="on"] .kip-mission::before {
+  animation: kip-signal-travel 7s linear 900ms infinite;
+}
+
+.kip-dash .kip-readout { font-variant-numeric: tabular-nums; }
+
+@keyframes kip-cell-charge {
+  from { opacity: 0.15; transform: scale(0.65); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.kip-dash[data-motion="on"] .kip-gh-cell[data-active="true"] {
+  animation: kip-cell-charge 360ms ease-out var(--kip-cell-delay, 0ms) backwards;
+}
+
+@keyframes kip-bar-load {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.kip-dash[data-motion="on"] .kip-bar-progress {
+  animation: kip-bar-load 800ms steps(16, end) var(--kip-delay, 0ms) backwards;
+}
+
+.kip-dash[data-motion="on"] .kip-track,
+.kip-dash[data-motion="on"] .kip-badge-row {
+  animation: kip-line-in 240ms ease-out var(--kip-delay, 0ms) backwards;
+}
+
+.kip-dash .kip-track,
+.kip-dash .kip-badge-row {
+  transition: background-color 160ms ease-out;
+}
+
+.kip-dash .kip-gh-cell {
+  transition: box-shadow 150ms ease-out;
+}
+
+.kip-dash .kip-launch {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: filter 160ms ease-out;
+}
+
+.kip-dash .kip-launch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 30%) 50%, transparent 75%);
+  transform: translateX(-120%);
+}
+
+@keyframes kip-launch-sheen {
+  to { transform: translateX(120%); }
+}
+
+.kip-dash[data-motion="on"] .kip-launch:focus-visible::after {
+  animation: kip-launch-sheen 550ms ease-out;
+}
+
+.kip-dash .kip-prompt {
+  position: relative;
+  transition: box-shadow 180ms ease-out;
+}
+
+.kip-dash .kip-prompt:focus-within {
+  box-shadow: inset 3px 0 var(--kip-accent), inset 0 1px color-mix(in srgb, var(--kip-accent) 35%, transparent);
+}
+
+.kip-dash :is(button, a):focus-visible {
+  outline: 2px solid var(--kip-accent);
+  outline-offset: 3px;
+}
+
+.kip-dash .kip-motion-toggle {
+  min-height: 24px;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .kip-dash .kip-panel:hover::after { opacity: 1; }
+  .kip-dash .kip-track:hover,
+  .kip-dash .kip-badge-row[data-earned="true"]:hover {
+    background: color-mix(in srgb, var(--kip-accent) 6%, transparent);
+  }
+  .kip-dash .kip-gh-cell[data-active="true"]:hover {
+    box-shadow: 0 0 0 1px var(--kip-accent), 0 0 9px color-mix(in srgb, var(--kip-accent) 45%, transparent) !important;
+  }
+  .kip-dash .kip-launch:hover { filter: brightness(1.1); }
+  .kip-dash[data-motion="on"] .kip-launch:hover::after {
+    animation: kip-launch-sheen 550ms ease-out;
+  }
+  .kip-dash .kip-terminal-tab:hover,
+  .kip-dash .kip-motion-toggle:not(:disabled):hover {
+    background: color-mix(in srgb, var(--kip-accent) 10%, transparent);
+  }
+}
+
+/* The switch also stops existing cursor/pulse/shell animations. Turning FX
+   off exposes final values immediately, never a partially decoded screen. */
+.kip-dash[data-motion="off"] *,
+.kip-dash[data-motion="off"] *::before,
+.kip-dash[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.kip-dash[data-motion="off"] :is(.kip-boot-sweep, .kip-sweep) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kip-dash *,
+  .kip-dash *::before,
+  .kip-dash *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .kip-dash :is(.kip-boot-sweep, .kip-sweep) { display: none; }
 }

@@ -25,6 +25,7 @@ import {
   subHints,
 } from "@/lib/terminal/commands";
 import { formatClock, formatDate, zoneAbbrev } from "@/lib/timezone";
+import { TerminalReadout, useTerminalMotion } from "./terminal-motion";
 import "./terminal-dashboard.css";
 
 // ─── Types matching backend responses ───────────────────────────────────────
@@ -270,6 +271,7 @@ function BufferFill({ line }: { line: string }) {
 
 export default function StudentDashboardPage() {
   const { isDark, toggleTheme, setTheme } = useTheme();
+  const { motionEnabled, reducedMotion, toggleMotion } = useTerminalMotion();
   const c = isDark ? DARK : LIGHT;
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -320,6 +322,7 @@ export default function StudentDashboardPage() {
   const bufferRef = useRef<HTMLDivElement>(null);
   const bootedRef = useRef(false);
   const typeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // The OS file picker behind `profile avatar set`. The command module asks
   // for a file through `io.pickFile` and stays free of DOM work; this input
@@ -373,6 +376,7 @@ export default function StudentDashboardPage() {
   useEffect(
     () => () => {
       if (typeTimer.current) clearInterval(typeTimer.current);
+      if (submitTimer.current) clearTimeout(submitTimer.current);
     },
     [],
   );
@@ -565,6 +569,12 @@ export default function StudentDashboardPage() {
       openShell();
       inputRef.current?.focus();
 
+      if (!motionEnabled) {
+        setCmd("");
+        void exec(text);
+        return;
+      }
+
       if (typeTimer.current) clearInterval(typeTimer.current);
       setAutoTyping(true);
       setCmd("");
@@ -577,7 +587,8 @@ export default function StudentDashboardPage() {
           if (typeTimer.current) clearInterval(typeTimer.current);
           typeTimer.current = null;
           // A beat on the full line before it submits, so it reads as typed.
-          setTimeout(() => {
+          submitTimer.current = setTimeout(() => {
+            submitTimer.current = null;
             setAutoTyping(false);
             setCmd("");
             void exec(text);
@@ -585,7 +596,7 @@ export default function StudentDashboardPage() {
         }
       }, 45);
     },
-    [autoTyping, shellBusy, pending, openShell, exec],
+    [autoTyping, shellBusy, pending, openShell, exec, motionEnabled],
   );
 
   /** Tab completion, history, and Esc/Ctrl-C cancellation. */
@@ -1032,8 +1043,14 @@ export default function StudentDashboardPage() {
     // the page, individual panels scroll, footer welded to the bottom edge.
     <div
       className={`kip-dash ${isDark ? "" : "kip-dash-light"} min-h-screen lg:h-screen lg:overflow-hidden flex flex-col relative`}
-      style={{ backgroundColor: c.base, color: c.text }}
+      data-motion={motionEnabled ? "on" : "off"}
+      style={{
+        backgroundColor: c.base,
+        color: c.text,
+        "--kip-accent": c.primary,
+      } as React.CSSProperties}
     >
+      <div className="kip-boot-sweep" aria-hidden="true" />
       {/* CRT overlay */}
       <div
         className={`fixed inset-0 z-50 pointer-events-none ${
@@ -1082,7 +1099,10 @@ export default function StudentDashboardPage() {
         </div>
 
         {/* Exactly two tabs */}
-        <nav className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <nav
+          aria-label="Dashboard views"
+          className="flex items-center gap-1 sm:gap-2 shrink-0"
+        >
           <span
             className="px-1.5 sm:px-2.5 py-1 font-bold text-[11px] sm:text-[12px] whitespace-nowrap"
             style={{ backgroundColor: c.ink, color: c.base }}
@@ -1090,13 +1110,21 @@ export default function StudentDashboardPage() {
             [1:<span className="hidden sm:inline"> DASHBOARD</span>
             <span className="sm:hidden">DASH</span>]
           </span>
-          <span
-            className="px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-[12px] cursor-not-allowed whitespace-nowrap"
-            style={{ color: c.faint }}
-            title="Terminal CLI — not wired up yet"
+          <button
+            type="button"
+            className="kip-terminal-tab px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-[12px] cursor-pointer whitespace-nowrap"
+            style={{ color: shellOpen ? c.primary : c.dim }}
+            aria-expanded={shellOpen}
+            aria-controls="dashboard-shell"
+            onClick={() => {
+              if (shellOpen) closeShell();
+              else openShell();
+              inputRef.current?.focus();
+            }}
+            title="Toggle terminal"
           >
             [2:<span className="hidden sm:inline"> TERMINAL</span> CLI]
-          </span>
+          </button>
         </nav>
 
         <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 justify-end">
@@ -1170,7 +1198,7 @@ export default function StudentDashboardPage() {
         <section className="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
           {/* Current focus */}
           <div
-            className="lg:col-span-7 flex flex-col relative overflow-hidden"
+            className="kip-panel kip-mission lg:col-span-7 flex flex-col relative overflow-hidden"
             style={{
               backgroundColor: c.panel,
               border: `1px solid ${currentFocus ? `${c.primary}66` : c.line}`,
@@ -1269,7 +1297,7 @@ export default function StudentDashboardPage() {
 
                   <Link
                     href={`/student/concepts/${currentFocus.conceptId}`}
-                    className="w-full py-2 px-4 font-bold text-[13px] flex items-center justify-center gap-2 tracking-wider transition-colors cursor-pointer"
+                    className="kip-launch w-full py-2 px-4 font-bold text-[13px] flex items-center justify-center gap-2 tracking-wider transition-colors cursor-pointer"
                     style={{
                       backgroundColor: c.primary,
                       color: c.base,
@@ -1340,7 +1368,7 @@ export default function StudentDashboardPage() {
                         ? `/student/concepts/${nextUpConcept.conceptId}`
                         : "/student/roadmaps"
                     }
-                    className="w-full py-2 px-4 font-bold text-[13px] flex items-center justify-center gap-2 tracking-wider transition-colors cursor-pointer"
+                    className="kip-launch w-full py-2 px-4 font-bold text-[13px] flex items-center justify-center gap-2 tracking-wider transition-colors cursor-pointer"
                     style={{
                       backgroundColor: c.primary,
                       color: c.base,
@@ -1357,10 +1385,10 @@ export default function StudentDashboardPage() {
           </div>
 
           {/* 2x2 gauge cluster */}
-          <div className="lg:col-span-5 grid grid-cols-2 gap-3">
+          <div className="kip-gauges lg:col-span-5 grid grid-cols-2 gap-3">
             {/* Streak */}
             <div
-              className="px-3 py-2.5 flex flex-col justify-between"
+              className="kip-panel px-3 py-2.5 flex flex-col justify-between"
               style={panel}
             >
               <div
@@ -1376,9 +1404,12 @@ export default function StudentDashboardPage() {
                 className="my-1 text-xl md:text-2xl font-bold tracking-tight"
                 style={{ color: c.ink }}
               >
-                {gamificationLoading
-                  ? "--"
-                  : `${streak} ${plural(streak, "DAY", "DAYS")}`}
+                <TerminalReadout
+                  text={gamificationLoading
+                    ? "--"
+                    : `${streak} ${plural(streak, "DAY", "DAYS")}`}
+                  enabled={motionEnabled}
+                />
               </div>
               <div
                 className="text-[10px] pt-1"
@@ -1393,7 +1424,7 @@ export default function StudentDashboardPage() {
 
             {/* XP */}
             <div
-              className="px-3 py-2.5 flex flex-col justify-between"
+              className="kip-panel px-3 py-2.5 flex flex-col justify-between"
               style={panel}
             >
               <div
@@ -1409,7 +1440,10 @@ export default function StudentDashboardPage() {
                 className="my-1 text-xl md:text-2xl font-bold tracking-tight"
                 style={{ color: c.ink }}
               >
-                {num(gamification?.totalXp, gamificationLoading)}
+                <TerminalReadout
+                  text={num(gamification?.totalXp, gamificationLoading)}
+                  enabled={motionEnabled}
+                />
               </div>
               <div
                 className="text-[10px] pt-1"
@@ -1421,7 +1455,7 @@ export default function StudentDashboardPage() {
 
             {/* Concepts */}
             <div
-              className="px-3 py-2.5 flex flex-col justify-between"
+              className="kip-panel px-3 py-2.5 flex flex-col justify-between"
               style={panel}
             >
               <div
@@ -1437,7 +1471,10 @@ export default function StudentDashboardPage() {
                 className="my-1 text-xl md:text-2xl font-bold tracking-tight"
                 style={{ color: c.ink }}
               >
-                {progressLoading ? "--" : completedCount}
+                <TerminalReadout
+                  text={progressLoading ? "--" : String(completedCount)}
+                  enabled={motionEnabled}
+                />
               </div>
               <div
                 className="text-[10px] pt-1"
@@ -1454,7 +1491,7 @@ export default function StudentDashboardPage() {
                 exactly its neighbours' styling. Green in dark, amber in light. */}
             <Link
               href="/student/review"
-              className="px-3 py-2.5 flex flex-col justify-between relative overflow-hidden cursor-pointer"
+              className="kip-panel kip-review px-3 py-2.5 flex flex-col justify-between relative overflow-hidden cursor-pointer"
               style={{
                 backgroundColor: reviewDue > 0 ? c.dueWash : c.panel,
                 border:
@@ -1490,7 +1527,12 @@ export default function StudentDashboardPage() {
                 className="my-1 text-xl md:text-2xl font-bold tracking-tight flex items-baseline gap-1"
                 style={{ color: reviewDue > 0 ? c.primary : c.ink }}
               >
-                <span>{reviewLoading ? "--" : reviewDue} DUE</span>
+                <span>
+                  <TerminalReadout
+                    text={reviewLoading ? "--" : String(reviewDue)}
+                    enabled={motionEnabled}
+                  /> DUE
+                </span>
                 {reviewDue > 0 && (
                   <span
                     className="text-[10px] font-normal"
@@ -1518,7 +1560,7 @@ export default function StudentDashboardPage() {
           {/* LEFT */}
           <div className="lg:col-span-7 lg:min-h-0 flex flex-col gap-3">
             {/* Study activity — GitHub-style contribution graph, fixed height */}
-            <div className="shrink-0 flex flex-col" style={panel}>
+            <div className="kip-panel kip-activity shrink-0 flex flex-col" style={panel}>
               <div
                 className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
                 style={headStrip}
@@ -1581,6 +1623,7 @@ export default function StudentDashboardPage() {
                           <span
                             key={`c-${wi}-${di}`}
                             className="kip-gh-cell"
+                            data-active={Boolean(d && d.xp > 0)}
                             onMouseEnter={
                               d ? (e) => showGhTip(e, d) : undefined
                             }
@@ -1590,7 +1633,8 @@ export default function StudentDashboardPage() {
                                 ? {
                                     background: ghColor(d),
                                     boxShadow: "inset 0 0 0 1px var(--gh-edge)",
-                                  }
+                                    "--kip-cell-delay": `${wi * 12 + di * 18}ms`,
+                                  } as React.CSSProperties
                                 : { background: "transparent" }
                             }
                           />
@@ -1631,7 +1675,7 @@ export default function StudentDashboardPage() {
             </div>
 
             {/* Roadmap progress — flexes to fill on desktop, scrolls if needed */}
-            <div className="lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
+            <div className="kip-panel kip-roadmaps lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
               <div
                 className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
                 style={headStrip}
@@ -1659,7 +1703,7 @@ export default function StudentDashboardPage() {
                       NO ROADMAPS AVAILABLE — instructors are still publishing.
                     </div>
                   ) : (
-                    rankedRoadmaps.map((rm) => {
+                    rankedRoadmaps.map((rm, index) => {
                       // Flat accent at every level: progress reads from how far
                       // the bar fills, never from a hue shift. Same rule as the
                       // entropy meter on the reset-password page.
@@ -1669,7 +1713,8 @@ export default function StudentDashboardPage() {
                         <Link
                           key={rm.id}
                           href={`/student/roadmaps/${rm.id}`}
-                          className="flex flex-col gap-0.5 cursor-pointer"
+                          className="kip-track flex flex-col gap-0.5 cursor-pointer"
+                          style={{ "--kip-delay": `${Math.min(index, 10) * 65}ms` } as React.CSSProperties}
                         >
                           <div className="flex justify-between items-center gap-2 text-[12px]">
                             <span
@@ -1702,7 +1747,9 @@ export default function StudentDashboardPage() {
                                   "--kip-bar-track": c.line,
                                 } as React.CSSProperties
                               }
-                            />
+                            >
+                              <span className="kip-bar-progress" />
+                            </span>
                             <span className="shrink-0">]</span>
                           </div>
                         </Link>
@@ -1718,7 +1765,7 @@ export default function StudentDashboardPage() {
           {/* RIGHT */}
           <div className="lg:col-span-5 lg:min-h-0 flex flex-col gap-3">
             {/* Badges — every catalogued badge, earned first then locked */}
-            <div className="lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
+            <div className="kip-panel kip-badges lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
               <div
                 className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
                 style={headStrip}
@@ -1746,12 +1793,14 @@ export default function StudentDashboardPage() {
                       NO BADGES CATALOGUED YET.
                     </div>
                   ) : (
-                    badgeRows.map((b) => {
+                    badgeRows.map((b, index) => {
                       const has = Boolean(b.earnedAt);
                       return (
                         <div
                           key={b.id}
-                          className="flex items-center justify-between px-1 py-0.5"
+                          className="kip-badge-row flex items-center justify-between px-1 py-0.5"
+                          data-earned={has}
+                          style={{ "--kip-delay": `${Math.min(index, 10) * 55}ms` } as React.CSSProperties}
                           title={b.description}
                         >
                           <div className="flex items-center gap-2 min-w-0">
@@ -1796,7 +1845,7 @@ export default function StudentDashboardPage() {
             </div>
 
             {/* activity.stdout */}
-            <div className="lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
+            <div className="kip-panel kip-events lg:flex-1 lg:min-h-0 flex flex-col" style={panel}>
               <div
                 className="px-3 py-1.5 flex items-center justify-between gap-2 text-[12px] shrink-0"
                 style={headStrip}
@@ -1829,7 +1878,7 @@ export default function StudentDashboardPage() {
                   {cliLog.map((l) => (
                     <div
                       key={l.id}
-                      className="flex items-baseline gap-2"
+                      className="kip-line-in flex items-baseline gap-2"
                       style={{ color: c.text }}
                     >
                       <span className="text-[11px]" style={{ color: c.faint }}>
@@ -1857,8 +1906,8 @@ export default function StudentDashboardPage() {
                     eventLog.map((e, i) => (
                       <div
                         key={`${e.at}-${i}`}
-                        className="flex items-baseline gap-2"
-                        style={{ color: c.text }}
+                        className="kip-line-in flex items-baseline gap-2"
+                        style={{ color: c.text, "--kip-delay": `${i * 55}ms` } as React.CSSProperties}
                       >
                         <span
                           className="text-[11px]"
@@ -1918,8 +1967,10 @@ export default function StudentDashboardPage() {
       >
         {/* ── Profile shell — grows upward out of the prompt ─────────────── */}
         <div
+          id="dashboard-shell"
           className={`kip-shell ${shellOpen ? "kip-shell-open" : ""}`}
           aria-hidden={!shellOpen}
+          inert={!shellOpen}
         >
           <div
             className="relative overflow-hidden"
@@ -2059,7 +2110,7 @@ export default function StudentDashboardPage() {
 
         <form
           onSubmit={submitCmd}
-          className="px-2 sm:px-3 md:px-4 py-1.5 flex items-center gap-2 text-[13px] cursor-text"
+          className="kip-prompt px-2 sm:px-3 md:px-4 py-1.5 flex items-center gap-2 text-[13px] cursor-text"
           style={{
             backgroundColor: c.head,
             borderBottom: `1px solid ${c.line}`,
@@ -2138,12 +2189,26 @@ export default function StudentDashboardPage() {
               [{clock}]
             </span>
           </div>
-          <div
-            className="flex items-center gap-1.5 font-semibold shrink-0 whitespace-nowrap"
-            style={{ color: isSyncing ? c.alert : c.primary }}
-          >
-            <span className={isSyncing ? "kip-pulse" : ""}>●</span>
-            <span>[SYNC: {isSyncing ? "FETCHING" : "STABLE"}]</span>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={toggleMotion}
+              disabled={reducedMotion}
+              aria-label={reducedMotion ? "Animations disabled by system preference" : "Dashboard animations"}
+              aria-pressed={motionEnabled}
+              title={reducedMotion ? "Reduced motion is enabled in your system settings" : "Toggle terminal animations"}
+              className="kip-motion-toggle cursor-pointer disabled:cursor-default"
+              style={{ color: motionEnabled ? c.primary : c.dim }}
+            >
+              [FX: {motionEnabled ? "ON" : "OFF"}]
+            </button>
+            <div
+              className="flex items-center gap-1.5 font-semibold whitespace-nowrap"
+              style={{ color: isSyncing ? c.alert : c.primary }}
+            >
+              <span className={isSyncing ? "kip-pulse" : ""} aria-hidden="true">●</span>
+              <span>[SYNC: {isSyncing ? "FETCHING" : "STABLE"}]</span>
+            </div>
           </div>
         </div>
       </footer>
