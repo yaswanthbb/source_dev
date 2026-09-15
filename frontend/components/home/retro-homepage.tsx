@@ -1346,7 +1346,7 @@ export function RetroHomepage() {
                         </td>
                         <td className="py-unit-3 px-unit-4 text-center">
                           <Link
-                            href={isAuthenticated ? '/student/roadmaps' : '/login'}
+                            href={isAuthenticated ? '/student/terminal?view=roadmaps' : '/login'}
                             className={`inline-block px-unit-3 py-1 font-bold text-[11px] uppercase border transition-none font-mono ${
                               isDark
                                 ? 'bg-[#e6e8eb] text-[#111417] border-[#e6e8eb] hover:bg-transparent hover:text-[#e6e8eb] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)]'
@@ -1374,7 +1374,7 @@ export function RetroHomepage() {
                         </td>
                         <td className="py-unit-3 px-unit-4 text-center">
                           <Link
-                            href={isAuthenticated ? '/student/roadmaps' : '/login'}
+                            href={isAuthenticated ? '/student/terminal?view=roadmaps' : '/login'}
                             className={`inline-block px-unit-3 py-1 font-bold text-[11px] uppercase border transition-none font-mono ${
                               isDark
                                 ? 'bg-[#e6e8eb] text-[#111417] border-[#e6e8eb] hover:bg-transparent hover:text-[#e6e8eb] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)]'
@@ -1402,7 +1402,7 @@ export function RetroHomepage() {
                         </td>
                         <td className="py-unit-3 px-unit-4 text-center">
                           <Link
-                            href={isAuthenticated ? '/student/roadmaps' : '/login'}
+                            href={isAuthenticated ? '/student/terminal?view=roadmaps' : '/login'}
                             className={`inline-block px-unit-3 py-1 font-bold text-[11px] uppercase border transition-none font-mono ${
                               isDark
                                 ? 'bg-[#e6e8eb] text-[#111417] border-[#e6e8eb] hover:bg-transparent hover:text-[#e6e8eb] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)]'
@@ -1430,7 +1430,7 @@ export function RetroHomepage() {
                         </td>
                         <td className="py-unit-3 px-unit-4 text-center">
                           <Link
-                            href={isAuthenticated ? '/student/roadmaps' : '/login'}
+                            href={isAuthenticated ? '/student/terminal?view=roadmaps' : '/login'}
                             className={`inline-block px-unit-3 py-1 font-bold text-[11px] uppercase border transition-none font-mono ${
                               isDark
                                 ? 'bg-[#e6e8eb] text-[#111417] border-[#e6e8eb] hover:bg-transparent hover:text-[#e6e8eb] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)]'

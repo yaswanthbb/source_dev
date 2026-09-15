@@ -1,0 +1,760 @@
+.kip-terminal-theme {
+  color: var(--term-text);
+  background: var(--term-base);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  --color-bg: var(--term-base);
+  --color-surface: var(--term-panel);
+  --color-surface-hover: var(--term-hover);
+  --color-border: var(--term-line);
+  --color-border-subtle: var(--term-line);
+  --color-text-primary: var(--term-ink);
+  --color-text-secondary: var(--term-dim);
+  --color-text-muted: var(--term-dim);
+  --color-accent: var(--term-accent);
+  --color-accent-hover: var(--term-accent);
+  --color-accent-tint: color-mix(
+    in srgb,
+    var(--term-accent) 10%,
+    var(--term-panel)
+  );
+  --font-sans: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Space Grotesk", ui-sans-serif, sans-serif;
+}
+.kip-terminal-theme :is(button, a, input, select, textarea):focus-visible,
+.kip-topbar :is(button, a):focus-visible {
+  outline: 2px solid var(--term-accent, currentColor);
+  outline-offset: 3px;
+}
+.kip-terminal-theme button {
+  cursor: pointer;
+}
+.kip-terminal-theme button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.kip-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 5px 16px;
+  flex-shrink: 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+}
+.kip-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+.kip-view-tabs,
+.kip-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.kip-account-actions {
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.kip-view-tabs a {
+  padding: 5px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.kip-view-tabs a[aria-current] {
+  font-weight: 700;
+}
+.kip-account-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kip-topbar :is(button, a):hover {
+  filter: brightness(0.88);
+}
+/* ─── Command strip ─────────────────────────────────────────────────────────
+   The old RUN: row, back where it belongs: one line under the header, full
+   width, reading as the same `[token]` text the output prints. Hovering one
+   says what it does, for anyone who has not learnt the verbs yet. */
+.kip-cmdbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  flex-shrink: 0;
+  padding: 5px clamp(8px, 2vw, 16px);
+  font-size: 11px;
+}
+.kip-cmdbar-label {
+  color: var(--term-dim);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  flex-shrink: 0;
+}
+.kip-cmdbar-item {
+  position: relative;
+  padding: 2px 0;
+  color: var(--term-accent);
+  background: none;
+  border: 0;
+  font: inherit;
+  white-space: nowrap;
+}
+.kip-cmdbar-item:hover:not(:disabled),
+.kip-cmdbar-item:focus-visible {
+  background: var(--term-accent);
+  color: var(--term-base);
+}
+/* Pointer-only: a tooltip that needs hover has nothing to say on a phone, and
+   the strip scrolls there, which would clip it anyway. */
+@media (hover: hover) and (pointer: fine) {
+  .kip-cmdbar-item::after {
+    content: attr(data-hint);
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    z-index: 40;
+    padding: 3px 7px;
+    border: 1px solid var(--term-line);
+    background: var(--term-panel);
+    color: var(--term-dim);
+    font-size: 10px;
+    letter-spacing: 0;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  /* The last few would run off the right edge, so they hang the other way. */
+  .kip-cmdbar-item:nth-last-child(-n + 3)::after {
+    left: auto;
+    right: 0;
+  }
+  .kip-cmdbar-item:hover::after,
+  .kip-cmdbar-item:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+.kip-console {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.kip-console-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* ─── The screen ────────────────────────────────────────────────────────────
+   One scrolling region holding output and the prompt, with no frame of its
+   own: the terminal IS the page, not a widget sitting on one. */
+.kip-screen {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px clamp(12px, 2vw, 22px) 20px;
+  cursor: text;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.kip-screen-lines {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.kip-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.kip-line[data-kind="cmd"] {
+  margin-top: 14px;
+  color: var(--term-ink);
+}
+/* The first line of a screen opens at the top of it, not 14px down. Each line
+   sits inside its own reveal wrapper, so the first wrapper's line is the one
+   that matters here. */
+.kip-screen-lines > .kip-line[data-kind="cmd"]:first-child,
+.kip-screen-lines > .kip-reveal:first-child > .kip-line[data-kind="cmd"] {
+  margin-top: 0;
+}
+.kip-line[data-kind="dim"] {
+  color: var(--term-dim);
+}
+.kip-line[data-kind="ok"] {
+  color: var(--term-accent);
+}
+.kip-line[data-kind="head"] {
+  color: var(--term-accent);
+  font-weight: 700;
+}
+.kip-line[data-kind="err"] {
+  color: var(--term-error);
+}
+/* ASCII art must not wrap or the letterforms come apart, so the banner
+   scrolls sideways on a narrow screen instead of reflowing. */
+.kip-banner {
+  margin: 2px 0 10px;
+  color: var(--term-accent);
+  font-weight: 700;
+  font-size: clamp(9px, 2.6vw, 13px);
+  line-height: 1.05;
+  overflow-x: auto;
+  scrollbar-width: none;
+  user-select: none;
+}
+.kip-banner::-webkit-scrollbar {
+  display: none;
+}
+/* A divider the width of the screen, not a run of dashes that would wrap. */
+.kip-rule {
+  height: 0;
+  margin: 10px 0;
+  border-top: 1px solid var(--term-line);
+}
+/* ─── Streaming reveal ──────────────────────────────────────────────────────
+   Output prints on rather than landing whole: each line of one burst starts a
+   step after the line above it. The delay is set per line by the host; the
+   `backwards` fill is what holds a line invisible until its own turn comes. */
+@keyframes kip-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.kip-reveal {
+  animation: kip-reveal 120ms ease-out backwards;
+  animation-delay: var(--kip-delay, 0ms);
+}
+/* An inline `[command]` token: text that runs something. Bracket colour comes
+   from the accent so it reads like login's [1] / [ENTER] tokens. */
+.kip-token {
+  color: var(--term-accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  white-space: nowrap;
+}
+.kip-token + .kip-token {
+  margin-left: 6px;
+}
+.kip-token:hover:not(:disabled) {
+  background: var(--term-accent);
+  color: var(--term-base);
+}
+/* A runnable word *inside* a sentence — `catching up on review (review)`. No
+   brackets and no button shape: it is the sentence's own verb, marked only by
+   the accent and an underline, so a suggestion reads as prose. */
+.kip-word {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--term-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-style: dotted;
+}
+.kip-word:hover:not(:disabled),
+.kip-word:focus-visible {
+  text-decoration-style: solid;
+  background: var(--term-accent);
+  color: var(--term-base);
+}
+/* ─── The running line ──────────────────────────────────────────────────────
+   Stands where the prompt would be while a command is in flight. */
+.kip-run {
+  margin-top: 14px;
+}
+.kip-spin {
+  color: var(--term-accent);
+}
+/* TAB's matches, listed directly under the line being completed. Inline, not a
+   dropdown: a shell prints its candidates into the buffer and so does this. */
+.kip-matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-top: 4px;
+  padding-left: 1ch;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.kip-match {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--term-dim);
+  text-align: left;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.kip-match[data-active],
+.kip-match:hover,
+.kip-match:focus-visible {
+  color: var(--term-accent);
+}
+.kip-match[data-active] {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* ─── The prompt ────────────────────────────────────────────────────────────
+   Sits at the end of the output, in the scroll flow, so the caret is exactly
+   where the next line prints. The input carries no frame and is only as wide
+   as what has been typed: a shell has no field, it has a caret.
+
+   Scoped to `.kip-console`: the dashboard's footer prompt wears the same
+   `.kip-prompt` class and loads this file through `TerminalHeader`, but it is a
+   bar with its own alignment — layout rules here must not reach it. The
+   `.kip-prompt-*` parts below are colour only, so they stay shared. */
+.kip-console .kip-prompt {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.kip-prompt-label {
+  white-space: nowrap;
+  font-weight: 700;
+  cursor: text;
+}
+.kip-prompt-user {
+  color: var(--term-accent);
+}
+.kip-prompt-path {
+  color: var(--term-dim);
+}
+.kip-prompt-ask {
+  color: var(--term-accent);
+  font-weight: 400;
+}
+/* Text and caret sit together and share the rest of the line. */
+.kip-console .kip-prompt-entry {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  flex: 1;
+}
+.kip-console .kip-prompt input {
+  min-width: 1ch;
+  max-width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  color: var(--term-ink);
+  caret-color: var(--term-accent);
+  font: inherit;
+}
+/* The block caret stands in for the native one, so hide that while it does —
+   and never draw a focus ring here: a box around the line is exactly what
+   makes a terminal look like a web form. The caret is the focus indicator. */
+.kip-console .kip-prompt[data-caret="block"] input {
+  caret-color: transparent;
+}
+.kip-terminal-theme .kip-prompt input:focus-visible {
+  outline: 0;
+}
+/* ─── The caret ─────────────────────────────────────────────────────────────
+   One cell wide, filled, blinking — the shell's own, not a text glyph. It
+   holds still when the prompt is not focused, the way an unfocused terminal
+   window does. */
+@keyframes kip-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.kip-caret {
+  display: inline-block;
+  width: 1ch;
+  height: 1.05em;
+  vertical-align: -0.18em;
+  flex-shrink: 0;
+  background: var(--term-accent);
+  animation: kip-caret-blink 1.05s steps(1, end) infinite;
+}
+.kip-prompt:not([data-focused]) .kip-caret {
+  animation: none;
+  opacity: 0.4;
+}
+/* Choices for an `ask`, listed as output lines rather than a button stack. */
+.kip-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.kip-choice {
+  max-width: 100%;
+  padding: 1px 0;
+  text-align: left;
+  color: var(--term-text);
+  background: none;
+  border: 0;
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+.kip-choice:hover {
+  color: var(--term-accent);
+}
+/* One status line at the foot, the way a pager prints its own. The nav tokens
+   stay put; the hints beside them are what scrolls when they overflow. */
+.kip-hintbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 7px clamp(12px, 2vw, 22px);
+  border-top: 1px solid var(--term-line);
+  color: var(--term-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.kip-hintbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.kip-hintbar-hints,
+.kip-hintbar-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.kip-hintbar-note {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kip-hintbar-hints::-webkit-scrollbar,
+.kip-hintbar-note::-webkit-scrollbar {
+  display: none;
+}
+.kip-boot {
+  padding: 20px clamp(12px, 2vw, 22px);
+  font-size: 13px;
+  line-height: 1.7;
+}
+/* ─── Flowed markdown ───────────────────────────────────────────────────────
+   A lesson body or an answer. Styled to look typeset by the terminal itself:
+   headings get a `##` marker, lists a `-`, code a faint ground. No frame, no
+   header bar — the caller prints those as ordinary lines around it. */
+.kip-flow {
+  font-size: 13px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.kip-flow > :first-child {
+  margin-top: 0;
+}
+.kip-flow > :last-child {
+  margin-bottom: 0;
+}
+.kip-flow :is(h3, h4, h5, h6) {
+  color: var(--term-accent);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 18px 0 6px;
+}
+.kip-flow h3::before {
+  content: "## ";
+  color: var(--term-dim);
+}
+.kip-flow h4::before {
+  content: "### ";
+  color: var(--term-dim);
+}
+.kip-flow p {
+  margin: 0 0 12px;
+}
+.kip-flow :is(ul, ol) {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+.kip-flow li {
+  margin-bottom: 3px;
+}
+.kip-flow ul {
+  list-style: none;
+  padding-left: 14px;
+}
+.kip-flow ul > li::before {
+  content: "- ";
+  color: var(--term-accent);
+}
+.kip-flow a {
+  color: var(--term-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.kip-flow strong {
+  color: var(--term-ink);
+  font-weight: 700;
+}
+.kip-flow em {
+  color: var(--term-dim);
+  font-style: italic;
+}
+.kip-flow code {
+  padding: 0 3px;
+  background: var(--term-head);
+  color: var(--term-accent);
+}
+.kip-flow pre {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--term-head);
+  border-left: 2px solid var(--term-line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.kip-flow pre code {
+  padding: 0;
+  background: none;
+  color: var(--term-text);
+  line-height: 1.65;
+}
+.kip-flow blockquote {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--term-accent);
+  color: var(--term-dim);
+}
+.kip-flow blockquote p:last-child {
+  margin-bottom: 0;
+}
+.kip-flow hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--term-line);
+}
+.kip-flow img {
+  max-width: 100%;
+  height: auto;
+}
+/* Tables scroll on their own rather than widening the screen. */
+.kip-flow table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 12px;
+  scrollbar-width: thin;
+}
+.kip-flow :is(th, td) {
+  border: 1px solid var(--term-line);
+  padding: 5px 9px;
+  text-align: left;
+}
+.kip-flow th {
+  color: var(--term-accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kip-logout-dialog {
+  margin: auto;
+  padding: 0;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid var(--term-accent);
+  background: var(--term-panel);
+  color: var(--term-text);
+  box-shadow: 6px 6px 0 var(--term-shadow);
+  font: inherit;
+}
+.kip-logout-dialog::backdrop {
+  background: rgb(0 0 0 / 0.65);
+}
+.kip-dialog-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  background: var(--term-head);
+  border-bottom: 1px solid var(--term-line);
+  color: var(--term-accent);
+  padding: 10px 16px;
+  font-size: 11px;
+}
+.kip-dialog-heading button {
+  padding: 4px;
+}
+.kip-dialog-body {
+  padding: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.kip-dialog-body .kip-line + .kip-line {
+  margin-top: 10px;
+}
+.kip-dialog-body .kip-line[data-kind="cmd"] {
+  margin-top: 0;
+}
+.kip-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--term-line);
+  font-size: 13px;
+}
+.kip-dialog-body .kip-dialog-hint {
+  color: var(--term-dim);
+  font-size: 10px;
+  margin-top: 12px;
+}
+/* The route error boundary, which has no chrome above it to sit inside. */
+.kip-error-frame {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+.kip-error-panel {
+  width: min(520px, 100%);
+  border: 1px solid var(--term-line);
+  background: var(--term-panel);
+  box-shadow: 3px 3px 0 var(--term-shadow);
+}
+.kip-error-panel .kip-dialog-actions {
+  flex-wrap: wrap;
+}
+.kip-error-digest {
+  margin-top: 14px;
+  font-size: 10px;
+  color: var(--term-dim);
+  overflow-wrap: anywhere;
+}
+.kip-error-digest span {
+  color: var(--term-accent);
+}
+@media (max-width: 767px) {
+  .kip-topbar {
+    padding: 5px 8px;
+    gap: 6px;
+  }
+  .kip-topbar-brand {
+    flex: 0;
+  }
+  .kip-view-tabs {
+    margin-right: auto;
+    gap: 3px;
+  }
+  .kip-view-tabs a {
+    padding: 5px;
+    font-size: 10px;
+  }
+  .kip-account-actions {
+    flex: 0;
+    gap: 4px;
+  }
+  .kip-account-control {
+    padding: 3px 5px;
+    min-height: 32px;
+  }
+  /* No room to wrap: the strip becomes one scrolling row instead of stacking
+     into three, so the screen keeps its height. */
+  .kip-cmdbar {
+    flex-wrap: nowrap;
+    gap: 9px;
+    padding: 5px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .kip-cmdbar::-webkit-scrollbar {
+    display: none;
+  }
+  .kip-cmdbar-label {
+    display: none;
+  }
+  .kip-cmdbar-item {
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  /* 16px stops iOS zooming the page when the prompt takes focus. The whole row
+     moves up together — label, input and caret share one grid, so sizing only
+     the input would leave `student@kip:~$` a size smaller beside it. */
+  .kip-console .kip-prompt {
+    font-size: 16px;
+  }
+  .kip-hintbar {
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 10px;
+  }
+  .kip-dialog-body {
+    padding: 16px;
+  }
+}
+@media (max-width: 380px) {
+  .kip-topbar {
+    gap: 4px;
+  }
+  .kip-view-tabs a {
+    padding: 4px 3px;
+  }
+  .kip-account-control {
+    padding: 3px 4px;
+  }
+  .kip-screen-lines,
+  .kip-flow {
+    font-size: 12px;
+  }
+  .kip-flow :is(ul, ol) {
+    padding-left: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kip-terminal-theme *,
+  .kip-terminal-theme *::before,
+  .kip-terminal-theme *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

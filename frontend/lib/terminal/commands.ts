@@ -10,6 +10,9 @@
    testable and free of component imports.
    ========================================================================== */
 
+import { LEARNING_COMMANDS } from "./learning-commands";
+import { isAbortError } from "./request";
+import { knownTitles, stuck } from "./output";
 import apiClient from "@/lib/api-client";
 import { User } from "@/lib/auth";
 import {
@@ -20,15 +23,38 @@ import {
 import { detectTimezone, formatDate } from "@/lib/timezone";
 
 // ─── Output model ───────────────────────────────────────────────────────────
-// `kind` maps to a colour in the host component, which owns the palette.
-// `err` is the only kind that renders red — same rule as login.
-
-export type LineKind = "cmd" | "out" | "ok" | "err" | "dim" | "head";
+// A command writes lines. That is the whole surface: no panels, no cards, no
+// button bars — the same contract a program has with a real shell, which is
+// why output here reads like output there.
+//
+// The vocabulary itself — `LineKind`, `TerminalAction`, the sentence builder
+// and the listing index — lives in `output.ts`, which imports nothing, so both
+// this file and `learning-commands.ts` can share it without a cycle. It is
+// re-exported here so consumers keep importing the shell from one place.
+export {
+  segmentsOf,
+  stuck,
+  indexListing,
+  resolveIndex,
+  knownTitles,
+  clearListings,
+  type LineKind,
+  type TerminalAction,
+  type LineSegment,
+  type IndexKind,
+} from "./output";
+import type {
+  IndexKind,
+  LineKind,
+  LineSegment,
+  TerminalAction,
+} from "./output";
 
 export interface TerminalLine {
   id: number;
   kind: LineKind;
   text: string;
+  actions?: TerminalAction[];
 }
 
 /** Raised when the user aborts an `ask` with Esc. The dispatcher catches it
@@ -40,18 +66,39 @@ export class CommandAborted extends Error {
   }
 }
 
+export interface AskOptions {
+  mask?: boolean;
+  /** Extra replies offered beside whatever the command already printed —
+   *  `[skip this question]`, `[stop for now]`. These are *not* a copy of the
+   *  options on screen: a question that has printed its own numbered list
+   *  passes only the escapes, so nothing is listed twice. */
+  choices?: Array<{ label: string; value: string }>;
+}
+
 /** The shell surface a command is allowed to drive. */
 export interface TerminalIO {
-  /** Append one line to the buffer. */
-  print: (text: string, kind?: LineKind) => void;
+  /** Append one line to the buffer. `actions` become inline `[label]` tokens
+   *  at the end of that line. */
+  print: (text: string, kind?: LineKind, actions?: TerminalAction[]) => void;
+  /** Append one line built from segments, so a runnable word can sit inside a
+   *  sentence instead of in a row beneath it. Optional: a host without it
+   *  still gets the sentence through `print`. */
+  say?: (segments: LineSegment[], kind?: LineKind) => void;
+  /** Name what the shell is waiting on, shown beside the spinner while the
+   *  command runs: `asking the AI… ⠹ 2.3s`. */
+  status?: (text: string) => void;
   /** Wipe the buffer. */
   clear: () => void;
   /** Park the prompt and wait for one line of input. `mask` hides it. */
-  ask: (prompt: string, opts?: { mask?: boolean }) => Promise<string>;
+  ask: (prompt: string, opts?: AskOptions) => Promise<string>;
   /** Open the OS file picker. Resolves null if the user cancels. The host
    *  owns the input element, so this module stays free of DOM work. */
   pickFile: (accept: string) => Promise<File | null>;
-  /** Collapse the shell back down to the one-line prompt. */
+  /** Flow one markdown block — a lesson, an answer — as terminal text:
+   *  headings, lists and code, with no frame of its own. The caller prints
+   *  the header and footer lines around it, the way `man` or `glow` do. */
+  doc?: (markdown: string) => void;
+  /** Leave the terminal and return to the dashboard. */
   close: () => void;
 }
 
@@ -67,6 +114,9 @@ export interface CommandCtx {
   isDark: boolean;
   setTheme: (theme: "light" | "dark") => void;
   logout: () => void;
+  confirmLogout?: () => Promise<boolean>;
+  navigate?: (path: string) => void;
+  refreshLearning?: () => Promise<void>;
 }
 
 export interface CommandSpec {
@@ -168,7 +218,7 @@ const help: CommandSpec = {
     }
     io.print("");
     io.print(
-      "  [TAB] complete · [↑/↓] history · [ESC] cancel · exit to collapse",
+      "  [TAB] complete · [↑/↓] history · [ESC] cancel · exit to return to dashboard",
       "dim",
     );
   },
@@ -519,8 +569,8 @@ const logoutCmd: CommandSpec = {
   usage: "logout",
   summary: "end the session and return to login",
   group: "session",
-  run: async ({ io, logout }) => {
-    if (!(await confirm(io, "end session?"))) {
+  run: async ({ io, logout, confirmLogout }) => {
+    if (!(await (confirmLogout ? confirmLogout() : confirm(io, "end session?")))) {
       io.print("logout: cancelled", "dim");
       return;
     }
@@ -562,7 +612,7 @@ const clear: CommandSpec = {
 const exit: CommandSpec = {
   name: "exit",
   usage: "exit",
-  summary: "collapse the terminal",
+  summary: "return to the dashboard",
   group: "shell",
   aliases: ["quit", "q"],
   run: ({ io }) => io.close(),
@@ -573,6 +623,7 @@ const exit: CommandSpec = {
 /** Display order for `help` and the hint strip. */
 export const COMMAND_LIST: CommandSpec[] = [
   help,
+  ...LEARNING_COMMANDS,
   whoami,
   profile,
   timezone,
@@ -600,29 +651,136 @@ function resolve(name: string): CommandSpec | undefined {
   return COMMANDS[name.toLowerCase()];
 }
 
-/** Opening banner. Exported so the CLI tab can boot with the same text. */
-export function bootLines(user?: User): Array<{ text: string; kind: LineKind }> {
+/** The same slant-style letterform login prints, so the shell opens with the
+ *  mark the user just authenticated under. Written as one `banner` line rather
+ *  than six `out` lines because the host renders it in a pre block that must
+ *  not wrap: six independent lines would each wrap on a narrow phone and the
+ *  letters would come apart. */
+const LOGO = ` _  _______ _____
+| |/ /_   _|  __ \\
+| ' /  | | | |__) |
+|  <   | | |  ___/
+| . \\ _| |_| |
+|_|\\_\\_____|_|`;
+
+type BootLine = { text: string; kind: LineKind; actions?: TerminalAction[] };
+
+/** One start-up step: a command the shell types out at its own prompt, then
+ *  what that command printed. The host animates this, so the first thing on
+ *  screen is a prompt doing something — not a page of text that was already
+ *  sitting there when you arrived. */
+export interface BootStep {
+  command: string;
+  lines: BootLine[];
+}
+
+/** The start-up script, in the shape a real shell's would take: probe the
+ *  environment, print the mark, then say what to type. Exported so any host
+ *  boots with identical output. */
+export function bootSequence(user?: User): BootStep[] {
+  const name = user?.name ?? "student";
   return [
-    { text: "KIP profile shell — session 0x01", kind: "head" },
     {
-      text: `authenticated as ${user?.name ?? "..."} <${user?.email ?? "..."}>`,
-      kind: "dim",
+      command: "./kip --boot",
+      lines: [
+        { text: "[OK] learning-shell v1.0 · tty1", kind: "ok" },
+        { text: "[OK] curriculum mounted at /roadmaps", kind: "ok" },
+        {
+          text: `[OK] session opened for ${name} <${user?.email ?? "—"}>`,
+          kind: "ok",
+        },
+        {
+          text: `[OK] role ${(user?.role ?? "student").toUpperCase()} · tz ${user?.timezone || "UTC"}`,
+          kind: "ok",
+        },
+      ],
     },
-    { text: "", kind: "out" },
-    { text: "  profile                 show your record", kind: "out" },
-    { text: "  profile set name <name> rename the account", kind: "out" },
-    { text: "  profile avatar set      upload a picture", kind: "out" },
-    { text: "  timezone auto           adopt the browser zone", kind: "out" },
-    { text: "  passwd                  change password", kind: "out" },
-    { text: "  apply-instructor        apply to teach", kind: "out" },
-    { text: "  logout                  end the session", kind: "out" },
-    { text: "", kind: "out" },
-    { text: "type help for everything · exit to collapse", kind: "dim" },
+    {
+      command: "neofetch",
+      lines: [
+        { text: LOGO, kind: "banner" },
+        { text: "KNOWLEDGE IS POWER // LEARNING SHELL v1.0", kind: "head" },
+      ],
+    },
+    {
+      command: "kip --hints",
+      lines: [
+        {
+          text: "Resume where you stopped:",
+          kind: "out",
+          actions: [{ label: "continue", command: "continue" }],
+        },
+        {
+          text: "Or browse the catalogue:",
+          kind: "out",
+          actions: [{ label: "roadmaps", command: "roadmaps" }],
+        },
+        { text: "", kind: "out" },
+        {
+          text: "Type a command. TAB completes, ↑ recalls, [back] steps back.",
+          kind: "dim",
+          actions: [{ label: "help", command: "help" }],
+        },
+      ],
+    },
   ];
 }
 
+/** The same output with nothing left to animate — what a skipped boot, or one
+ *  under `prefers-reduced-motion`, prints in a single pass. */
+export function bootLines(user?: User): BootLine[] {
+  return bootSequence(user).flatMap<BootLine>((step) => [
+    { text: step.command, kind: "cmd" },
+    ...step.lines,
+  ]);
+}
+
+/** Every multi-word form worth completing or suggesting, longest branch last.
+ *  One table drives both tab-completion and the hint strip, so a subcommand
+ *  added to a command only has to be listed here once to become discoverable.
+ *  A trailing space means "an argument follows". */
+const PHRASES = [
+  "profile set name ",
+  "profile set tz ",
+  "profile avatar set",
+  "profile avatar clear",
+  "qa ask ",
+  "qa open ",
+  "qa edit ",
+  "qa delete ",
+  "qa concept ",
+  "qa mine",
+  "qa unanswered",
+  "qa answered",
+  "review start",
+  "theme dark",
+  "theme light",
+];
+
+/** The words of a phrase, without the argument-follows marker. */
+const wordsOf = (phrase: string) => phrase.trim().split(" ");
+
+/** Phrases the typed line is still a prefix of, comparing word by word so
+ *  `qa op` narrows to `qa open` but `qa open 3f2` — already into the
+ *  argument — matches nothing. */
+function matchingPhrases(input: string): string[] {
+  const trailingSpace = /\s$/.test(input);
+  const parts = tokenise(input);
+  if (!parts.length) return [];
+  return PHRASES.filter((phrase) => {
+    const words = wordsOf(phrase);
+    if (parts.length > words.length) return false;
+    if (parts.length === words.length && trailingSpace) return false;
+    return parts.every((part, index) =>
+      index === parts.length - 1 && !trailingSpace
+        ? words[index].startsWith(part)
+        : words[index] === part,
+    );
+  });
+}
+
 /** Tab-completion. Returns the completed line, or null if there is nothing
- *  unambiguous to add. Handles `profile set <field>` as a second level. */
+ *  unambiguous to add. */
 export function completeCommand(input: string): string | null {
   const trailingSpace = /\s$/.test(input);
   const parts = tokenise(input);
@@ -636,66 +794,74 @@ export function completeCommand(input: string): string | null {
     return null;
   }
 
-  // Second level: only `profile` has subcommands worth completing.
-  if (parts[0] === "profile") {
-    const subs = ["set", "avatar"];
-    if (parts.length === 2 && !trailingSpace) {
-      const m = subs.filter((s) => s.startsWith(parts[1]));
-      if (m.length === 1) return `profile ${m[0]} `;
-      return null;
-    }
-    if (parts[1] === "set" && parts.length === 3 && !trailingSpace) {
-      const m = ["name", "tz"].filter((f) => f.startsWith(parts[2]));
-      if (m.length === 1) return `profile set ${m[0]} `;
-      return null;
-    }
-    if (parts[1] === "avatar" && parts.length === 3 && !trailingSpace) {
-      const m = ["set", "clear"].filter((f) => f.startsWith(parts[2]));
-      if (m.length === 1) return `profile avatar ${m[0]}`;
-      return null;
-    }
-  }
+  // Second level and beyond, from the phrase table. Only the word being
+  // typed is filled in, so `qa o` stops at `qa open ` rather than inventing
+  // the argument that follows, and `profile s` still resolves to `profile
+  // set ` even though two phrases share that branch.
+  const matches = matchingPhrases(input);
+  if (!matches.length) return null;
+  const index = trailingSpace ? parts.length : parts.length - 1;
+  const candidates = new Set(matches.map((phrase) => wordsOf(phrase)[index]));
+  if (candidates.size !== 1) return null;
+  const [word] = candidates;
+  // A space follows unless every match ends here and takes no argument.
+  const ends = matches.every((phrase) => {
+    const words = wordsOf(phrase);
+    return words.length === index + 1 && !/\s$/.test(phrase);
+  });
+  return `${[...parts.slice(0, index), word].join(" ")}${ends ? "" : " "}`;
+}
 
-  return null;
+/** Which listing a command's argument names, so a free-typed lookup can TAB
+ *  against the titles the reader has actually been shown. A command absent from
+ *  this map takes no title argument — `theme`, `help` — and completes only from
+ *  the command name and phrase table above. */
+const ARG_INDEX: Record<string, IndexKind> = {
+  read: "concept",
+  quiz: "concept",
+  complete: "concept",
+  open: "roadmap",
+};
+
+/** Inline argument completion. Given a line whose command takes a title, return
+ *  the candidate *completed lines* — each the same command with one matching
+ *  title filled in — so the host can complete a lone match, or cycle several
+ *  right under the input. Empty when the command takes no title, or nothing a
+ *  title, or nothing seen so far matches what has been typed.
+ *
+ *  This is the second half of tab-completion: `completeCommand` finishes verbs
+ *  and subcommands from the static tables; this finishes the *data* — the
+ *  lessons and paths already on screen — which the tables cannot know. */
+export function completions(input: string): string[] {
+  const trailingSpace = /\s$/.test(input);
+  const parts = tokenise(input);
+  if (parts.length < 1) return [];
+  const kind = ARG_INDEX[parts[0].toLowerCase()];
+  if (!kind) return [];
+  // The verb is there but no argument has been started yet: offer everything
+  // seen, so a bare `read ⇥` lists the lessons to pick from.
+  const typed = trailingSpace ? "" : parts.slice(1).join(" ");
+  const needle = typed.toLowerCase();
+  const titles = knownTitles(kind).filter((title) =>
+    title.toLowerCase().includes(needle),
+  );
+  // A title with a space has to come back quoted, so it survives `tokenise` as
+  // one argument the lookup can match whole.
+  const quote = (title: string) => (/\s/.test(title) ? `"${title}"` : title);
+  return titles.slice(0, 12).map((title) => `${parts[0]} ${quote(title)}`);
 }
 
 /** Second-level suggestions for the hint strip, so `profile set tz` and
- *  `profile avatar set` are discoverable without reading `help` first.
- *  Empty once the user is past the subcommand and into its argument — at
- *  that point the usage line is the more useful thing to show. */
+ *  `qa unanswered` are discoverable without reading `help` first. Empty once
+ *  the user is past the subcommand and into its argument — at that point the
+ *  usage line is the more useful thing to show. */
 export function subHints(input: string): string[] {
   const parts = tokenise(input);
-  if (parts[0] !== "profile") return [];
-  const trailingSpace = /\s$/.test(input);
-
-  // `profile ` — offer every leaf.
-  if (parts.length === 1) {
-    if (!trailingSpace) return [];
-    return ["profile set name", "profile set tz", "profile avatar set"];
-  }
-
-  // `profile set` / `profile se` — narrow to that branch.
-  if (parts.length === 2) {
-    if (parts[1] === "set" || "set".startsWith(parts[1]))
-      return ["profile set name", "profile set tz"];
-    if (parts[1] === "avatar" || "avatar".startsWith(parts[1]))
-      return ["profile avatar set", "profile avatar clear"];
-    return [];
-  }
-
-  // `profile set name` with nothing after it yet.
-  if (parts.length === 3 && !trailingSpace) {
-    if (parts[1] === "set")
-      return ["profile set name", "profile set tz"].filter((s) =>
-        s.startsWith(`profile set ${parts[2]}`),
-      );
-    if (parts[1] === "avatar")
-      return ["profile avatar set", "profile avatar clear"].filter((s) =>
-        s.startsWith(`profile avatar ${parts[2]}`),
-      );
-  }
-
-  return [];
+  // The top level is already covered by `matchCommands`.
+  if (parts.length < 2 && !/\s$/.test(input)) return [];
+  return matchingPhrases(input)
+    .map((phrase) => phrase.trim())
+    .slice(0, 8);
 }
 
 /** Commands whose names start with the word being typed — drives the hint
@@ -723,27 +889,41 @@ export async function runCommand(
 
   const parts = tokenise(raw);
   const name = parts[0].toLowerCase();
-  const spec = resolve(name);
+  // A bare number is the section you just saw numbered under a lesson header.
+  // `jump` says something useful when no lesson is open, so this never becomes
+  // a dead end. Nothing numeric is a command, so the rewrite costs nothing.
+  const bare = /^\d+$/.test(name) && !!resolve("jump");
+  const spec = resolve(bare ? "jump" : name);
 
   if (!spec) {
     base.io.print(`${name}: command not found`, "err");
     const near = COMMAND_LIST.find(
       (s) => s.name.startsWith(name[0]) || s.name.includes(name),
     );
-    base.io.print(
-      near ? `  did you mean ${near.name}? · help lists all` : "  type help",
-      "dim",
+    stuck(
+      base.io,
+      "",
+      near
+        ? `Did you mean {${near.name}}? {help} lists everything, or pick up where you left off with {continue}.`
+        : "Try {help} for the full list, {roadmaps} to browse your paths, or {continue} to resume a lesson.",
     );
     return;
   }
 
   try {
-    await spec.run({ ...base, args: parts.slice(1), raw });
+    await spec.run({ ...base, args: bare ? [name] : parts.slice(1), raw });
   } catch (e) {
-    if (e instanceof CommandAborted) {
+    // An aborted request is the user pressing ^C, not a failure: the command
+    // stopped because they asked it to.
+    if (e instanceof CommandAborted || isAbortError(e)) {
       base.io.print("^C", "dim");
       return;
     }
     base.io.print(`${spec.name}: ${errText(e)}`, "err");
+    stuck(
+      base.io,
+      "",
+      `That did not go through. Run {${spec.name}} again, check {status}, or see {help} for the usage.`,
+    );
   }
 }

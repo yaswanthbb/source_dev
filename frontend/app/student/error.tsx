@@ -1,9 +1,12 @@
-'use client';
+"use client";
 
-import React, { useEffect } from 'react';
-import Link from 'next/link';
-import { AlertCircle, RefreshCw, Home } from 'lucide-react';
+import { useEffect } from "react";
+import Link from "next/link";
+import { TerminalSurface } from "@/components/terminal/terminal-chrome";
 
+/** The student tree has no chrome above this, so the boundary brings its own
+ *  surface — an error must render even when the frame around it is what
+ *  failed. */
 export default function StudentErrorBoundary({
   error,
   reset,
@@ -12,43 +15,44 @@ export default function StudentErrorBoundary({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Student Route Error:', error);
+    console.error("Student Route Error:", error);
   }, [error]);
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center p-6">
-      <div className="max-w-md w-full p-8 rounded-2xl bg-surface border border-border text-center shadow-sm space-y-6">
-        <div className="w-16 h-16 rounded-2xl bg-amber-tint text-amber flex items-center justify-center mx-auto shadow-xs">
-          <AlertCircle className="w-8 h-8" />
+    <TerminalSurface className="kip-error-frame">
+      <div className="kip-error-panel" role="alert">
+        <div className="kip-dialog-heading">
+          <span>kip://student — process halted</span>
+          <span aria-hidden="true">[!]</span>
         </div>
-
-        <div className="space-y-2">
-          <h2 className="text-xl font-bold font-display text-text-primary tracking-tight">
-            Something went wrong
-          </h2>
-          <p className="text-xs text-text-secondary leading-relaxed">
-            An unexpected error occurred while loading this page. You can try refreshing or returning to your dashboard.
+        <div className="kip-dialog-body">
+          <p className="kip-line" data-kind="err">
+            [ERR] SIGNAL_TRAP — the session hit an error
           </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => reset()}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Try Again</span>
-          </button>
-          <Link
-            href="/student/dashboard"
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-bg border border-border text-text-primary font-semibold text-xs hover:bg-border/40 transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Home className="w-4 h-4" />
-            <span>Dashboard</span>
-          </Link>
+          <p className="kip-line" data-kind="out">
+            Something failed while loading this view. Retrying re-runs it from
+            the last good state — your progress is saved on the server, not in
+            this tab.
+          </p>
+          {error.digest && (
+            <p className="kip-error-digest">
+              <span>digest</span> {error.digest}
+            </p>
+          )}
+          <div className="kip-dialog-actions">
+            <Link href="/student/dashboard" className="kip-token">
+              [dashboard]
+            </Link>
+            <button
+              type="button"
+              onClick={() => reset()}
+              className="kip-token"
+            >
+              [retry]
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </TerminalSurface>
   );
 }

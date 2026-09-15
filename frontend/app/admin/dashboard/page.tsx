@@ -223,7 +223,7 @@ export default function AdminDashboardPage() {
                     <tr key={r.roadmapId} className="hover:bg-bg/50 transition-colors">
                       <td className="py-3.5 pr-2 font-bold text-text-primary">
                         <Link
-                          href={`/student/roadmaps/${r.roadmapId}`}
+                          href={`/student/terminal?roadmap=${r.roadmapId}`}
                           target="_blank"
                           className="hover:text-accent transition-colors block truncate max-w-[180px]"
                           title={r.title}
@@ -286,7 +286,7 @@ export default function AdminDashboardPage() {
                     <tr key={c.conceptId} className="hover:bg-bg/50 transition-colors">
                       <td className="py-3.5 pr-2 font-bold text-text-primary">
                         <Link
-                          href={`/student/concepts/${c.conceptId}`}
+                          href={`/student/terminal?concept=${c.conceptId}`}
                           target="_blank"
                           className="hover:text-accent transition-colors block truncate max-w-[220px]"
                           title={c.title}

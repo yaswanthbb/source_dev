@@ -45,7 +45,7 @@ export default function NotFoundPage() {
             <span>Go to Dashboard</span>
           </Link>
           <Link
-            href="/student/roadmaps"
+            href="/student/terminal?view=roadmaps"
             className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-surface border border-border text-text-primary font-semibold text-xs hover:bg-bg transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />

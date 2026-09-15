@@ -324,7 +324,7 @@ export default function InstructorQaPage() {
                     )}
 
                     <Link
-                      href={`/student/concepts/${q.conceptId}`}
+                      href={`/student/terminal?concept=${q.conceptId}`}
                       target="_blank"
                       className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline"
                     >

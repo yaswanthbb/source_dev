@@ -272,7 +272,7 @@ export default function InstructorContentDirectoryPage() {
 
                     <div className="flex items-center gap-2">
                       <Link
-                        href={`/student/roadmaps/${roadmap.id}`}
+                        href={`/student/terminal?roadmap=${roadmap.id}`}
                         target="_blank"
                         title="Preview student view"
                         className="p-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg transition-colors"
@@ -361,7 +361,7 @@ export default function InstructorContentDirectoryPage() {
 
                 <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between">
                   <Link
-                    href={`/student/concepts/${concept.id}`}
+                    href={`/student/terminal?concept=${concept.id}`}
                     target="_blank"
                     className="text-xs text-text-secondary hover:text-accent flex items-center gap-1"
                   >

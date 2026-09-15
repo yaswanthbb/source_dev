@@ -949,7 +949,7 @@ export default function EditConceptPage({ params }: PageProps) {
         <div className="flex items-center gap-3">
           <AiQuotaBadge refreshTrigger={quotaRefreshKey} />
           <Link
-            href={`/student/concepts/${conceptId}`}
+            href={`/student/terminal?concept=${conceptId}`}
             target="_blank"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
           >
