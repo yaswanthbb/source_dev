@@ -1434,8 +1434,8 @@
     "semantic_hash": ""
   },
   "frontend/components/home/retro-homepage.tsx": {
-    "mtime": 1789624149.2444937,
-    "seen": 1789624739.8120356,
+    "mtime": 1789323081.6101892,
+    "seen": 1789464435.170433,
     "ast_hash": "f15b693a7b8665d735cb9f6e38dcc7a2",
     "semantic_hash": ""
   },
@@ -1626,9 +1626,9 @@
     "semantic_hash": ""
   },
   "run-commands-for-me.md": {
-    "mtime": 1789496478.6261227,
-    "seen": 1789624739.8120968,
-    "ast_hash": "15eb567123ca475dfc44250e09910067",
+    "mtime": 1789496315.6038544,
+    "seen": 1789496476.2101462,
+    "ast_hash": "169492c35ea86d1395a4ecdaee5a6c86",
     "semantic_hash": ""
   },
   "frontend/components/terminal/themes/palette.ts": {
@@ -1644,9 +1644,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/fs-commands.ts": {
-    "mtime": 1789496741.829585,
-    "seen": 1789624739.8120637,
-    "ast_hash": "f48515300c9ada35cfdd94ccc9e59f11",
+    "mtime": 1789493808.0394568,
+    "seen": 1789496476.2100883,
+    "ast_hash": "6dde4fb3a82c01eaddf4ec196fef4bac",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/resolve-location.ts": {
@@ -1659,12 +1659,6 @@
     "mtime": 1789492717.9365857,
     "seen": 1789496476.210102,
     "ast_hash": "8babaead3cbcd70d665d4e06c6378c19",
-    "semantic_hash": ""
-  },
-  "frontend/screenshots/neofetch.png": {
-    "mtime": 1789496742.8105335,
-    "seen": 1789624739.8121061,
-    "ast_hash": "56edf8d04fc4aba8759839aec25db8d5",
     "semantic_hash": ""
   }
 }
