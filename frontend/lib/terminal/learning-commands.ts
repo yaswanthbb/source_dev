@@ -16,6 +16,7 @@ import type {
   RoadmapProgressData,
   ConceptProgressInfo,
 } from "@/lib/hooks/use-roadmap-progress";
+import { activeGlyphs } from "./theme-contract";
 import type { CommandCtx, CommandSpec, TerminalAction } from "./commands";
 
 /** The shortest input worth spending a metered AI generation on. Below this,
@@ -148,13 +149,12 @@ function next(ctx: CommandCtx, actions: TerminalAction[], lead = "→") {
   ctx.io.print(lead, "dim", actions);
 }
 
-/** A bar drawn in text, for a percentage that deserves to be seen at a
- *  glance. Twenty cells, so it fits beside a label at 360px. */
+/** A percentage that deserves to be seen at a glance, drawn by whatever the
+ *  active theme considers a meter. The cell count, the fill characters and
+ *  the number formatting all belong to the theme — this layer only decides
+ *  that a meter is the right way to show the value. */
 function bar(percent: number): string {
-  const filled = Math.max(0, Math.min(20, Math.round((percent / 100) * 20)));
-  return `[${"█".repeat(filled)}${"░".repeat(20 - filled)}] ${String(
-    Math.round(percent),
-  ).padStart(3)}%`;
+  return activeGlyphs().meter(percent);
 }
 
 /** Flow a markdown body as terminal text. Falls back to printing it raw when
@@ -653,7 +653,10 @@ const complete: CommandSpec = {
 
 const roadmaps: CommandSpec = {
   name: "roadmaps",
-  aliases: ["ls"],
+  // `ls` used to be an alias here. It is now a real filesystem command in
+  // fs-commands.ts, which lists whatever the current location contains rather
+  // than always listing roadmaps — `ls` inside a module has to show that
+  // module's concepts. `roadmaps` stays as the verb for the catalogue.
   usage: "roadmaps [search]",
   summary: "browse learning paths with open and continue actions",
   group: "learn",

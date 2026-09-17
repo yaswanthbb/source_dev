@@ -1,6 +1,7 @@
 import type { LineKind, LineSegment, TerminalAction } from "./commands";
 import { clearLearningCache } from "./learning-commands";
-import { clearListings } from "./output";
+import { clearListings, clearHistory } from "./output";
+import { clearVfsCache } from "./resolve-location";
 
 export interface ConsoleEntry {
   id: number;
@@ -18,6 +19,10 @@ export interface ConsoleEntry {
   /** Set while the boot script is still typing this line, so the caret sits at
    *  the end of it instead of at the prompt below. */
   typing?: boolean;
+  /** The prompt path this line was printed at, for an echoed command. Recorded
+   *  rather than read at render time so scrollback stays truthful: a `cd` line
+   *  keeps the directory it was typed in, not the one it moved to. */
+  path?: string;
   /** How long after its screen appeared this line should start revealing, in
    *  milliseconds. Stamped when the line is printed — see `pushEntry` — so the
    *  decision is made once, by the code that knows the output arrived as a
@@ -31,6 +36,8 @@ export interface ConsoleEntry {
 export interface Screen {
   id: number;
   command: string;
+  /** The prompt path the command was typed at — see `ConsoleEntry.path`. */
+  path?: string;
   lines: ConsoleEntry[];
 }
 
@@ -58,4 +65,9 @@ export function clearTerminalSessions() {
   // The `[2]` in the last listing means nothing to whoever signs in next, and
   // the titles behind it were another student's.
   clearListings();
+  // Same reasoning, twice over: the history is a transcript of what one person
+  // typed, and the filesystem cache holds their progress markers. Neither may
+  // survive into the next session on a shared machine.
+  clearHistory();
+  clearVfsCache();
 }

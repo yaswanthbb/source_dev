@@ -14,6 +14,9 @@ import {
   type TerminalAction,
 } from "@/lib/terminal/commands";
 import type { ConsoleEntry } from "@/lib/terminal/session";
+import { displayPath } from "@/lib/terminal/location";
+import { getTheme, DEFAULT_THEME_ID } from "./themes";
+import { useUiMode } from "@/providers/ui-mode-provider";
 import {
   TerminalCommandBar,
   TerminalHeader,
@@ -156,8 +159,9 @@ function Line({
   if (entry.kind === "cmd")
     return (
       <div className="kip-line" data-kind="cmd">
-        <span className="kip-prompt-user">student@kip</span>
-        <span className="kip-prompt-path">:~$</span> {entry.text}
+        <span className="kip-prompt-user">student@source-dev</span>
+        <span className="kip-prompt-path">:{entry.path ?? "~"}$</span>{" "}
+        {entry.text}
         {entry.typing && <span className="kip-caret" aria-hidden="true" />}
       </div>
     );
@@ -258,6 +262,7 @@ function Console({
     busy,
     status,
     pending,
+    pagerAt,
     matches,
     matchAt,
     chooseCompletion,
@@ -270,6 +275,11 @@ function Console({
     answer,
     settleFile,
   } = session;
+  // The prompt shows where the user actually is. It reads the same location the
+  // commands do, so `cd` moves the prompt, `pwd` agrees with it, and the address
+  // bar agrees with both — one value, three views.
+  const { location } = useUiMode();
+  const promptPath = displayPath(location);
   const view = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   /** The block caret only stands in for the real one while the caret is at the
@@ -294,7 +304,11 @@ function Console({
     const subs = subHints(cmd);
     return subs.length ? subs : matchCommands(cmd).map((c) => c.name);
   }, [cmd]);
-  const running = busy && !pending;
+  // A paging `less` is technically still running, but it is waiting on a
+  // keypress, not on work — so the spinner would be claiming something untrue.
+  // The pager's own status line stands in its place, exactly as it does for a
+  // question waiting on an answer.
+  const running = busy && !pending && !pagerAt;
   const showCaret = atEnd && !running;
 
   // ─── Streaming reveal ─────────────────────────────────────────────────────
@@ -369,7 +383,12 @@ function Console({
             {screen.command && (
               <div className="kip-reveal">
                 <Line
-                  entry={{ id: 0, kind: "cmd", text: screen.command }}
+                  entry={{
+                    id: 0,
+                    kind: "cmd",
+                    text: screen.command,
+                    path: screen.path,
+                  }}
                   busy={busy}
                   run={run}
                 />
@@ -406,6 +425,23 @@ function Console({
             </div>
           )}
 
+          {/* The pager's status line, where the prompt would be — the prompt is
+              gone while `less` has the keyboard. The text comes from the active
+              theme (`glyphs.more`), not from here and not from the command:
+              `--More--(45%)` is this theme's idiom, and another theme is free to
+              say it differently. */}
+          {pagerAt && (
+            <div className="kip-line" data-kind="head" aria-live="polite">
+              {getTheme(DEFAULT_THEME_ID).glyphs.more(
+                Math.round((pagerAt.shown / pagerAt.total) * 100),
+              )}
+              <span className="kip-prompt-hint">
+                {" "}
+                space = page · enter = line · G = end · q = quit
+              </span>
+            </div>
+          )}
+
           {/* The prompt lives at the end of the output, not in a bar below
               it — so the caret sits exactly where the next line would be
               printed, which is what makes this read as a terminal. It has no
@@ -415,7 +451,7 @@ function Console({
               — the caret is up there with it, and the same is true while a
               command runs: a prompt that silently drops what you type is worse
               than no prompt, so the spinner takes its place. */}
-          {!booting && !running && (
+          {!booting && !running && !pagerAt && (
             <form
               className="kip-prompt"
               data-focused={focused ? "" : undefined}
@@ -431,8 +467,8 @@ function Console({
                   <span className="kip-prompt-ask">{pending.prompt}:</span>
                 ) : (
                   <>
-                    <span className="kip-prompt-user">student@kip</span>
-                    <span className="kip-prompt-path">:~$</span>
+                    <span className="kip-prompt-user">student@source-dev</span>
+                    <span className="kip-prompt-path">:{promptPath}$</span>
                   </>
                 )}
               </label>

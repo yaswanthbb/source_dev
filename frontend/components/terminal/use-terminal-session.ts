@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,8 +23,11 @@ import {
   type ConsoleEntry,
   type Screen,
 } from "@/lib/terminal/session";
+import { readHistory } from "@/lib/terminal/output";
+import { displayPath } from "@/lib/terminal/location";
 import { armRequests } from "@/lib/terminal/request";
 import { useTheme } from "@/providers/theme-provider";
+import { useUiMode } from "@/providers/ui-mode-provider";
 import { useTerminalLogout } from "./logout-dialog";
 
 interface PendingQuestion {
@@ -32,6 +35,23 @@ interface PendingQuestion {
   options?: AskOptions;
   resolve: (value: string) => void;
   reject: (error: Error) => void;
+}
+
+/** A `less` session in progress.
+ *
+ *  The paged text is revealed into the ordinary screen buffer a chunk at a time
+ *  rather than into a viewport of its own, which is both simpler and closer to
+ *  how a pager behaves in a terminal that scrolls: what you have already read
+ *  stays above you. This state is only what is not yet revealed, plus the
+ *  promise `less` is waiting on. */
+interface PagerState {
+  screenId: number;
+  lines: string[];
+  /** How many lines have been revealed so far. */
+  shown: number;
+  /** Lines per keypress, measured from the viewport when paging began. */
+  rows: number;
+  resolve: () => void;
 }
 
 /** How many screens [back] can walk. Deep enough to retrace a lesson you just
@@ -53,6 +73,43 @@ const TYPE_MS = 22;
 const LINE_MS = 45;
 const STEP_MS = 170;
 
+/** How many lines one `less` keypress reveals.
+ *
+ *  Measured rather than fixed, because a page has to be a page: twenty lines is
+ *  a comfortable screenful on a laptop and roughly three screenfuls on a 360px
+ *  phone, which would defeat the point of paging. The floor keeps it useful on
+ *  the shortest viewport, and this is a rendering measurement made in the
+ *  rendering layer — the command only ever says *what* to page. */
+const PAGER_LINE_PX = 22;
+function pageRows(): number {
+  if (typeof window === "undefined") return 16;
+  return Math.max(6, Math.floor((window.innerHeight * 0.62) / PAGER_LINE_PX));
+}
+
+/** Where to end a chunk that starts at `from`.
+ *
+ *  Prefers a blank line just short of the target so a paragraph is not sliced
+ *  mid-sentence, and never stops inside a fenced code block — a chunk ending
+ *  between the two fences would render as an unterminated block and the rest of
+ *  the lesson would come out as code. */
+function chunkEnd(lines: string[], from: number, rows: number): number {
+  const target = Math.min(lines.length, from + rows);
+  let end = target;
+  for (let i = target; i > from + Math.floor(rows / 2); i -= 1) {
+    if (lines[i - 1]?.trim() === "") {
+      end = i;
+      break;
+    }
+  }
+  // Balance the fences: an odd count means the chunk opened one it did not
+  // close, so extend to the line that closes it.
+  const fences = (from: number, to: number) =>
+    lines.slice(from, to).filter((line) => line.trimStart().startsWith("```"))
+      .length;
+  while (end < lines.length && fences(from, end) % 2 === 1) end += 1;
+  return end;
+}
+
 /** Screens plus the one being looked at. They move together — a push trims the
  *  oldest and the cursor has to land on the new last index — so they are one
  *  piece of state, never two that can disagree. */
@@ -68,6 +125,11 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   const queryClient = useQueryClient();
   const { isDark, setTheme } = useTheme();
   const account = useTerminalLogout();
+  // The shell's working directory is not the shell's own state. It is the one
+  // location both modes render off, so it is read from — and written back to —
+  // the provider that owns it. `pwd`, the address bar and a GUI switch are then
+  // three views of one value rather than three copies to keep in step.
+  const { location, setLocation } = useUiMode();
   const screenSeq = useRef(1);
   const sequence = useRef(0);
   /** When the last line was printed and how many have come in this run, so a
@@ -105,6 +167,13 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   const runningScreen = useRef(0);
   const recallIndex = useRef(-1);
   const draft = useRef("");
+  /** The `less` session in progress, if any. Held in a ref because the key
+   *  handler reads it imperatively, and mirrored into state so the status line
+   *  — `--More--(45%)` — re-renders as the reader advances. */
+  const pagerRef = useRef<PagerState | null>(null);
+  const [pagerAt, setPagerAt] = useState<{ shown: number; total: number } | null>(
+    null,
+  );
   /** TAB over titles: the lines TAB is cycling through and where in them the
    *  line currently sits, so a second TAB moves on instead of restarting. */
   const [matches, setMatches] = useState<string[]>([]);
@@ -115,16 +184,15 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   const canBack = view.cursor > 0;
   const canNext = view.cursor < view.screens.length - 1;
 
-  // ↑ walks the commands already on the stack — the same ones [back] walks.
-  // There is no second store: recall and navigation read one list.
-  const recall = useMemo(
-    () =>
-      view.screens
-        .map((entry) => entry.command)
-        .filter(Boolean)
-        .reverse(),
-    [view.screens],
-  );
+  // ↑ walks the same list `history` prints. There is still no second store —
+  // it simply moved to `output.ts`, where the dispatcher records every line and
+  // where a command can read it without reaching into host state.
+  //
+  // Two things improve by sharing it. `clear` no longer wipes what ↑ remembers,
+  // which no real shell does; and recall is no longer capped at the twenty
+  // screens [back] keeps, so a command from earlier in the session is still
+  // reachable. Newest first, because ↑ walks backwards.
+  const recallList = () => readHistory().reverse();
 
   useEffect(() => {
     active.current = true;
@@ -136,6 +204,14 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       // for a screen that no longer exists.
       runAbort.current?.abort();
       runAbort.current = null;
+      // A pager left open holds the promise `less` is awaiting. Unmounting
+      // without settling it would leave that command suspended for good, so it
+      // is resolved here rather than abandoned.
+      const pager = pagerRef.current;
+      if (pager) {
+        pagerRef.current = null;
+        pager.resolve();
+      }
       armRequests(undefined);
       question.current?.reject(new CommandAborted());
       question.current = null;
@@ -295,7 +371,14 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       setView((previous) => {
         const screens = [
           ...previous.screens.slice(0, previous.cursor + 1),
-          { id: screenId, command: line, lines: [] },
+          {
+            id: screenId,
+            command: line,
+            // Stamped now, so the echo keeps the directory the command was typed
+            // in even when the command is the `cd` that leaves it.
+            path: displayPath(location),
+            lines: [],
+          },
         ].slice(-MAX_SCREENS);
         return { screens, cursor: screens.length - 1 };
       });
@@ -314,6 +397,25 @@ export function useTerminalSession(user: User, initialCommand?: string) {
         doc: (markdown) => {
           if (isCurrent()) append(screenId, markdown, "out", undefined, true);
         },
+        page: (text, opts) =>
+          new Promise<void>((resolve) => {
+            if (!isCurrent()) {
+              resolve();
+              return;
+            }
+            if (opts?.title) append(screenId, opts.title, "head");
+            const lines = text.split("\n");
+            const rows = pageRows();
+            // A lesson that already fits needs no pager, and `less` on a short
+            // file behaves the same way: it prints it and returns.
+            if (lines.length <= rows) {
+              append(screenId, text, "out", undefined, true);
+              resolve();
+              return;
+            }
+            pagerRef.current = { screenId, lines, shown: 0, rows, resolve };
+            advancePager();
+          }),
         clear: () => {
           if (isCurrent()) reset(screenId);
         },
@@ -351,6 +453,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
         await runCommand(line, {
           io,
           user,
+          cwd: location,
+          setCwd: setLocation,
           isDark,
           setTheme,
           logout: account.logout,
@@ -393,6 +497,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       queryClient,
       account.logout,
       account.confirmLogout,
+      location,
+      setLocation,
     ],
   );
 
@@ -517,6 +623,15 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       return;
     }
     if (!busyRef.current) return;
+    // ^C out of a pager closes it. Resolving rather than rejecting is right:
+    // `less` was interrupted, but it had already printed what the reader saw,
+    // and the dispatcher prints the `^C` below.
+    if (pagerRef.current) {
+      const pager = pagerRef.current;
+      pagerRef.current = null;
+      setPagerAt(null);
+      pager.resolve();
+    }
     append(runningScreen.current, "^C", "dim");
     generation.current += 1;
     runAbort.current?.abort();
@@ -531,12 +646,80 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   useEffect(() => {
     if (pending) inputRef.current?.focus({ preventScroll: true });
   }, [pending]);
+
+  /** Reveal the next chunk. Resolves `less` once the last line is out and the
+   *  reader acknowledges it, which is what `(END)` is waiting for. */
+  const advancePager = useCallback(
+    (rows?: number) => {
+      const pager = pagerRef.current;
+      if (!pager) return;
+      if (pager.shown >= pager.lines.length) {
+        // Already at the end: the next keypress closes the pager.
+        pagerRef.current = null;
+        setPagerAt(null);
+        pager.resolve();
+        return;
+      }
+      const end = chunkEnd(pager.lines, pager.shown, rows ?? pager.rows);
+      append(
+        pager.screenId,
+        pager.lines.slice(pager.shown, end).join("\n"),
+        "out",
+        undefined,
+        true,
+      );
+      pager.shown = end;
+      setPagerAt({ shown: end, total: pager.lines.length });
+    },
+    [append],
+  );
+
+  /** Stop paging where the reader stopped. What was already revealed stays on
+   *  screen — this is `q`, not an undo. */
+  const quitPager = useCallback(() => {
+    const pager = pagerRef.current;
+    if (!pager) return;
+    pagerRef.current = null;
+    setPagerAt(null);
+    pager.resolve();
+  }, []);
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest(
         "input, textarea, select, [contenteditable=true], dialog",
       );
+      // While `less` is paging, the keyboard belongs to the pager. This comes
+      // first so `q` quits instead of reaching the prompt, and it swallows the
+      // keys it uses so space does not also scroll the page.
+      if (pagerRef.current) {
+        // ^C still interrupts, and is left to the handler below.
+        if (event.ctrlKey || event.metaKey || event.altKey) {
+          // fall through
+        } else if (event.key === " " || event.key === "PageDown") {
+          event.preventDefault();
+          advancePager();
+          return;
+        } else if (
+          event.key === "Enter" ||
+          event.key === "ArrowDown" ||
+          event.key === "j"
+        ) {
+          // One line at a time, as `less` does with Enter.
+          event.preventDefault();
+          advancePager(1);
+          return;
+        } else if (event.key === "G") {
+          // Straight to the end.
+          event.preventDefault();
+          advancePager(pagerRef.current.lines.length);
+          return;
+        } else if (event.key === "q" || event.key === "Q" || event.key === "Escape") {
+          event.preventDefault();
+          quitPager();
+          return;
+        }
+      }
       if (
         event.key === "/" &&
         !event.ctrlKey &&
@@ -574,7 +757,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [cancel, back, forward]);
+  }, [cancel, back, forward, advancePager, quitPager]);
 
   /** Put one completion on the line and stop offering the rest. */
   const chooseCompletion = useCallback((line: string) => {
@@ -653,7 +836,9 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       setCmd(items[0]);
       return;
     }
-    if (event.key === "ArrowUp" && recall.length) {
+    if (event.key === "ArrowUp") {
+      const recall = recallList();
+      if (!recall.length) return;
       event.preventDefault();
       if (recallIndex.current === -1) draft.current = cmd;
       recallIndex.current = Math.min(recallIndex.current + 1, recall.length - 1);
@@ -661,6 +846,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      const recall = recallList();
       recallIndex.current = Math.max(-1, recallIndex.current - 1);
       setCmd(
         recallIndex.current === -1 ? draft.current : recall[recallIndex.current],
@@ -683,6 +869,9 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     busy,
     status,
     pending,
+    /** Non-null while `less` is paging: how far through the text the reader is,
+     *  for the renderer to draw the theme's `--More--` line. */
+    pagerAt,
     matches,
     matchAt,
     chooseCompletion,

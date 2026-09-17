@@ -117,6 +117,42 @@ export function clearListings() {
   known.clear();
 }
 
+// ─── The command history ────────────────────────────────────────────────────
+// `history` needs a record of what was typed, and the dispatcher is the only
+// place every command passes through — so it records, and this is the store.
+// It lives beside the listing index because it is the same kind of thing:
+// session state that belongs to no single command, and that must not outlive
+// the sign-out it was typed in.
+
+const HISTORY_LIMIT = 500;
+
+let history: string[] = [];
+
+/** Record one executed line. Called by the dispatcher, not by commands.
+ *
+ *  Consecutive duplicates collapse, the way bash does with `ignoredups`: three
+ *  `ls` in a row while reading a listing is one thing the user did, and three
+ *  identical rows makes the history harder to read rather than more accurate. */
+export function recordHistory(line: string) {
+  const entry = line.trim();
+  if (!entry) return;
+  if (history[history.length - 1] === entry) return;
+  history.push(entry);
+  // Bounded so a long session cannot grow this without limit.
+  if (history.length > HISTORY_LIMIT) {
+    history = history.slice(-HISTORY_LIMIT);
+  }
+}
+
+/** The history, oldest first. A copy, so a command cannot mutate the store. */
+export function readHistory(): string[] {
+  return [...history];
+}
+
+export function clearHistory() {
+  history = [];
+}
+
 // ─── Dead ends ──────────────────────────────────────────────────────────────
 
 /** The part of `TerminalIO` a dead end needs. Kept structural so `stuck` can be

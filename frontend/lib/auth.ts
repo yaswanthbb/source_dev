@@ -1,3 +1,15 @@
+/** Cross-device user preferences, stored as a single JSONB column on the user
+ *  record. Optional throughout: an account created before a preference existed
+ *  simply has no value for it, and every reader falls back to a default. */
+export interface UserPreferences {
+  uiMode?: 'gui' | 'cli';
+  themeId?: string;
+  /** Serialized virtual-filesystem location, e.g. `/roadmaps/voip/intro`. */
+  lastLocation?: string;
+  hasSeenCliNudge?: boolean;
+  hasSeenCliWelcome?: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -9,6 +21,7 @@ export interface User {
   authProviderId?: string | null;
   hasPassword?: boolean;
   createdAt?: string;
+  preferences?: UserPreferences;
   instructorProfile?: {
     id?: string;
     status?: 'pending' | 'approved' | 'rejected';

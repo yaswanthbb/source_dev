@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import type { User } from "@/lib/auth";
-import { DARK, LIGHT } from "@/lib/terminal/theme";
+import { DARK, LIGHT } from "@/components/terminal/themes";
 import { useTheme } from "@/providers/theme-provider";
 import "./terminal.css";
 

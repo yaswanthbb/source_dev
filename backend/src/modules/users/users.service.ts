@@ -196,6 +196,20 @@ export class UsersService {
       }
     }
 
+    if (dto.preferences !== undefined) {
+      // Merged, not replaced. Every caller sets one key at a time — the mode
+      // toggle writes `uiMode`, the welcome animation writes
+      // `hasSeenCliWelcome` — and a replace would mean each of them silently
+      // clearing the others. Undefined values are dropped so an absent key
+      // never overwrites a stored one with nothing.
+      const incoming = Object.fromEntries(
+        Object.entries(dto.preferences).filter(
+          ([, value]) => value !== undefined,
+        ),
+      );
+      user.preferences = { ...(user.preferences ?? {}), ...incoming };
+    }
+
     const savedUser = await this.userRepository.save(user);
     return this.sanitizeUser(savedUser);
   }

@@ -15,7 +15,7 @@ import apiClient from "@/lib/api-client";
 import { User } from "@/lib/auth";
 import { useTheme } from "@/providers/theme-provider";
 import { useAllRoadmapsProgress } from "@/lib/hooks/use-roadmap-progress";
-import { DARK, LIGHT } from "@/lib/terminal/theme";
+import { DARK, LIGHT } from "@/components/terminal/themes";
 import { TerminalHeader } from "@/components/terminal/terminal-chrome";
 import { useTerminalLogout } from "@/components/terminal/logout-dialog";
 import { queueTerminalCommand } from "@/lib/terminal/session";

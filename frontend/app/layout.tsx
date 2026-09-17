@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter, Space_Grotesk, Outfit, Rubik } from "next/font/google";
 import { QueryProvider } from "../providers/query-provider";
 import { SnackbarProvider } from "../providers/snackbar-provider";
 import { SessionSync } from "../providers/session-sync";
 import { ThemeProvider } from "../providers/theme-provider";
+import { UiModeProvider } from "../providers/ui-mode-provider";
 import { ScrollProgressBar } from "@/components/scroll-progress-bar";
 import "./globals.css";
 
@@ -36,7 +38,7 @@ const rubik = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: "KIP — Knowledge Is Power",
+  title: "source:dev",
   description: "Structured roadmaps, concepts, quizzes, and gamified learning.",
   icons: {
     icon: "/favicon.ico",
@@ -57,17 +59,22 @@ export default function RootLayout({
       className={`${inter.variable} ${spaceGrotesk.variable} ${outfit.variable} ${rubik.variable}`}
     >
       <head>
-        {/* Anti-FOUC blocking script: immediately sync dark mode class before initial paint */}
+        {/* Anti-FOUC blocking script: sync dark mode and interface mode onto
+            the document before first paint, so neither the palette nor the
+            mode flashes the wrong value on a reload. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                var theme = localStorage.getItem('kip_theme');
+                var theme = localStorage.getItem('sd_theme');
                 if (theme === 'dark') {
                   document.documentElement.classList.add('dark');
                 } else {
                   document.documentElement.classList.remove('dark');
                 }
+                var mode = localStorage.getItem('sd_ui_mode');
+                document.documentElement.dataset.uiMode =
+                  mode === 'cli' ? 'cli' : 'gui';
               } catch (e) {}
             `,
           }}
@@ -78,8 +85,15 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             <SnackbarProvider>
-              <SessionSync />
-              {children}
+              {/* UiModeProvider reads the CLI location out of the query
+                  string, so it sits inside Suspense: useSearchParams suspends
+                  up to the nearest boundary during prerendering. */}
+              <Suspense fallback={null}>
+                <UiModeProvider>
+                  <SessionSync />
+                  {children}
+                </UiModeProvider>
+              </Suspense>
             </SnackbarProvider>
           </QueryProvider>
         </ThemeProvider>

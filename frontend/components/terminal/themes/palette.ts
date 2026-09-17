@@ -1,4 +1,14 @@
-// Shared dashboard palette. Keep the console and account controls in sync.
+/* ==========================================================================
+   source:dev — terminal palette
+   --------------------------------------------------------------------------
+   Shared dashboard palette. Keep the console and account controls in sync.
+
+   This lives in the rendering layer, not in `lib/terminal/`, because that is
+   what it is: colour. It used to sit beside the command code, which meant the
+   theme-separation guard failed on it — a palette one import away from the
+   parser is how a `if (isDark)` eventually ends up inside a command.
+   ========================================================================== */
+
 export const DARK = {
   base: "#0a0c0e",
   panel: "#111417",

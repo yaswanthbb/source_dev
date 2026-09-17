@@ -1,6 +1,8 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIanaTimezone } from '../../../common/validators/is-iana-timezone.validator';
+import { UserPreferencesDto } from './user-preferences.dto';
 
 export class UpdateOwnProfileDto {
   @ApiPropertyOptional({
@@ -27,4 +29,14 @@ export class UpdateOwnProfileDto {
   @IsOptional()
   @IsString()
   profilePicture?: string | null;
+
+  @ApiPropertyOptional({
+    type: UserPreferencesDto,
+    description:
+      'UI preferences. Merged field-by-field, so sending one key does not clear the others.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UserPreferencesDto)
+  preferences?: UserPreferencesDto;
 }

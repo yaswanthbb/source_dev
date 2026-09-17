@@ -11,8 +11,11 @@
    ========================================================================== */
 
 import { LEARNING_COMMANDS } from "./learning-commands";
+import { FS_COMMANDS } from "./fs-commands";
 import { isAbortError } from "./request";
-import { knownTitles, stuck } from "./output";
+import { knownTitles, stuck, recordHistory } from "./output";
+import { activeGlyphs } from "./theme-contract";
+import type { Location } from "./location";
 import apiClient from "@/lib/api-client";
 import { User } from "@/lib/auth";
 import {
@@ -98,6 +101,15 @@ export interface TerminalIO {
    *  headings, lists and code, with no frame of its own. The caller prints
    *  the header and footer lines around it, the way `man` or `glow` do. */
   doc?: (markdown: string) => void;
+  /** Page a long text one screen at a time, resolving when the reader quits.
+   *
+   *  The host implements this, not the command, because everything a pager
+   *  needs to decide is the host's: how tall the viewport is, what a keypress
+   *  means, and how the status line is drawn (from `glyphs.more`). `less` here
+   *  only says *what* to page. A host with no viewport — the dashboard's
+   *  single-line prompt — omits this, and `less` prints the lesson instead of
+   *  refusing to work. */
+  page?: (text: string, opts?: { title?: string }) => Promise<void>;
   /** Leave the terminal and return to the dashboard. */
   close: () => void;
 }
@@ -109,6 +121,15 @@ export interface CommandCtx {
   raw: string;
   io: TerminalIO;
   user?: User;
+  /** Where the user is in the virtual filesystem.
+   *
+   *  This is the shared location both modes render off — the same value behind
+   *  the browser route and `pwd` — so it is passed in by the host rather than
+   *  kept here. A command reads it; only `setCwd` changes it. */
+  cwd: Location;
+  /** Move the user. The host updates the URL as well as the state, so the
+   *  address bar and `pwd` cannot disagree. */
+  setCwd: (loc: Location) => void;
   /** Re-fetch the cached user so the navbar reflects an edit immediately. */
   refreshUser: () => Promise<void>;
   isDark: boolean;
@@ -623,6 +644,9 @@ const exit: CommandSpec = {
 /** Display order for `help` and the hint strip. */
 export const COMMAND_LIST: CommandSpec[] = [
   help,
+  // Navigation comes first because it is how everything else is reached: you
+  // find a lesson with `ls` and `cd` before you `read` or `quiz` it.
+  ...FS_COMMANDS,
   ...LEARNING_COMMANDS,
   whoami,
   profile,
@@ -651,17 +675,11 @@ function resolve(name: string): CommandSpec | undefined {
   return COMMANDS[name.toLowerCase()];
 }
 
-/** The same slant-style letterform login prints, so the shell opens with the
- *  mark the user just authenticated under. Written as one `banner` line rather
- *  than six `out` lines because the host renders it in a pre block that must
- *  not wrap: six independent lines would each wrap on a narrow phone and the
- *  letters would come apart. */
-const LOGO = ` _  _______ _____
-| |/ /_   _|  __ \\
-| ' /  | | | |__) |
-|  <   | | |  ___/
-| . \\ _| |_| |
-|_|\\_\\_____|_|`;
+// The boot mark used to live here as a `LOGO` constant — six lines of slant
+// ASCII. It now comes from the active theme via `activeGlyphs().banner`,
+// because the letterform, its width, and the fact that it has to survive a
+// narrow viewport without the letters coming apart are all rendering
+// decisions. This layer still decides *that* a mark is printed, and when.
 
 type BootLine = { text: string; kind: LineKind; actions?: TerminalAction[] };
 
@@ -681,7 +699,7 @@ export function bootSequence(user?: User): BootStep[] {
   const name = user?.name ?? "student";
   return [
     {
-      command: "./kip --boot",
+      command: "./source-dev --boot",
       lines: [
         { text: "[OK] learning-shell v1.0 · tty1", kind: "ok" },
         { text: "[OK] curriculum mounted at /roadmaps", kind: "ok" },
@@ -698,12 +716,12 @@ export function bootSequence(user?: User): BootStep[] {
     {
       command: "neofetch",
       lines: [
-        { text: LOGO, kind: "banner" },
-        { text: "KNOWLEDGE IS POWER // LEARNING SHELL v1.0", kind: "head" },
+        { text: activeGlyphs().banner, kind: "banner" },
+        { text: "source:dev // learning shell v1.0", kind: "head" },
       ],
     },
     {
-      command: "kip --hints",
+      command: "source-dev --hints",
       lines: [
         {
           text: "Resume where you stopped:",
@@ -886,6 +904,12 @@ export async function runCommand(
 ): Promise<void> {
   const raw = input.trim();
   if (!raw) return;
+
+  // Recorded as typed, before anything is resolved — a mistyped command is
+  // still something the user did, and being able to recall and fix it is half
+  // of what a history is for. This is the only choke point every command
+  // passes through, which is why it belongs here and not in any command.
+  recordHistory(raw);
 
   const parts = tokenise(raw);
   const name = parts[0].toLowerCase();

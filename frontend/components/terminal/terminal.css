@@ -354,12 +354,36 @@
   color: var(--term-accent);
   font-weight: 400;
 }
+/* The pager's status line stands in for the prompt while `less` holds the
+   keyboard. `--More--(45%)` is drawn in the accent by the line's own `head`
+   kind; the key list beside it is a footnote, so it steps back to dim and
+   normal weight instead of shouting alongside it. */
+.kip-prompt-hint {
+  color: var(--term-dim);
+  font-weight: 400;
+}
+/* A prompt is as long as the path in it, and a concept three levels down can
+   be wider than a phone. Rather than squeeze the input to nothing, the row
+   wraps: the label keeps its full width and the entry drops to the line below
+   once under 12ch is left for it — what a real shell does with a long PS1. If
+   the label alone still overflows it breaks mid-path rather than pushing the
+   page sideways. Layout only, so scoped to `.kip-console`: the dashboard's
+   footer prompt is a bar with its own alignment. */
+.kip-console .kip-prompt {
+  flex-wrap: wrap;
+}
+.kip-console .kip-prompt-label {
+  flex-shrink: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 /* Text and caret sit together and share the rest of the line. */
 .kip-console .kip-prompt-entry {
   display: inline-flex;
   align-items: baseline;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 12ch;
 }
 .kip-console .kip-prompt input {
   min-width: 1ch;
@@ -718,7 +742,7 @@
   }
   /* 16px stops iOS zooming the page when the prompt takes focus. The whole row
      moves up together — label, input and caret share one grid, so sizing only
-     the input would leave `student@kip:~$` a size smaller beside it. */
+     the input would leave `student@source-dev:~$` a size smaller beside it. */
   .kip-console .kip-prompt {
     font-size: 16px;
   }
