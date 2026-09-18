@@ -234,16 +234,18 @@ export async function resolveLocation(
   if (segments.length === 1) return resolved;
 
   walked = `${walked}/${segments[1]}`;
-  const module = (await moduleEntries(roadmap.id)).find(
+  // Not `module`: that name is the CommonJS one, and assigning it inside a
+  // module Next may transpile is a real hazard rather than a style rule.
+  const found = (await moduleEntries(roadmap.id)).find(
     (e) => e.name === segments[1],
   );
-  if (!module) throw new VfsError(walked, "missing");
-  resolved.moduleId = module.id;
-  resolved.entry = module;
+  if (!found) throw new VfsError(walked, "missing");
+  resolved.moduleId = found.id;
+  resolved.entry = found;
   if (segments.length === 2) return resolved;
 
   walked = `${walked}/${segments[2]}`;
-  const concept = (await conceptEntries(roadmap.id, module.id)).find(
+  const concept = (await conceptEntries(roadmap.id, found.id)).find(
     (e) => e.name === segments[2],
   );
   if (!concept) throw new VfsError(walked, "missing");

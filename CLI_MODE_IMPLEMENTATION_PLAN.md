@@ -12,7 +12,7 @@ This is not a greenfield build. The existing terminal is in good shape and most 
 | Piece | File | State |
 |---|---|---|
 | Command registry + dispatcher | `frontend/lib/terminal/commands.ts` (929 L) | `CommandSpec{name,usage,summary,group,aliases,hidden,run}`, `runCommand()`, `COMMANDS` map, tab-completion, boot sequence |
-| Domain commands | `frontend/lib/terminal/learning-commands.ts` (1392 L) | `roadmaps open continue read jump quiz complete review qa status dashboard` |
+| Domain commands | `frontend/lib/terminal/learning-commands.ts` | `continue jump quiz complete review qa status dashboard` |
 | Output vocabulary | `frontend/lib/terminal/output.ts` (152 L) | `LineKind`, `TerminalAction`, `segmentsOf()`, listing index, `stuck()` |
 | Session/screen state | `frontend/lib/terminal/session.ts` (61 L) | `Screen`, `ConsoleEntry`, command handoff, `clearTerminalSessions()` |
 | React host | `frontend/components/terminal/use-terminal-session.ts` (698 L) | `TerminalIO` impl, boot animation, history, TAB, ^C |
@@ -105,7 +105,9 @@ CLI location rides in `?path=` on the existing `/student/terminal` route rather 
 
 ### 1.2 Resolution: slugs vs ids
 
-Virtual paths use **slugs** (`voip-basics`), the API uses **ids** (UUIDs). A resolver layer `frontend/lib/terminal/resolve-location.ts` maps slug→id so `cat /roadmaps/voip-basics/intro/what-is-voip` works from anywhere without a prior `cd`. Unknown slug → `cat: /roadmaps/x: No such file or directory` (real Unix error text). Existing title/id lookup in `read`/`open` stays, so old commands keep working.
+Virtual paths use **slugs** (`voip-basics`), the API uses **ids** (UUIDs). A resolver layer `frontend/lib/terminal/resolve-location.ts` maps slug→id so `cat /roadmaps/voip-basics/intro/what-is-voip` works from anywhere without a prior `cd`. Unknown slug → `cat: /roadmaps/x: No such file or directory` (real Unix error text).
+
+Ids did not disappear with `read`/`open` (see §7c): a GUI link carries an id, not a path, so `cat` accepts a concept id and `cd` accepts a roadmap id. `cd` translates the id to a **name** before building a `Location`, so a stored location is still made of names only — the invariant every rule in `location.ts` rests on.
 
 > **Correction (applied).** The first draft of this section specified "a React Query cache". That was wrong, and for the same reason a hex colour in a command is wrong: it puts framework awareness inside `lib/terminal/`, which is the layer the theme guard exists to keep pure. A caching strategy that drags React into supposedly pure logic is the same category of violation as a colour, just less visible.
 >
@@ -277,8 +279,8 @@ New `kip_`-equivalent keys use the `sd_` prefix.
 2. ✅ Backend: preferences column + migration + DTO + service. Migration handed over and **run** — `users.preferences jsonb` is live. Two runtime checks still owed, tracked in §8.
 3. ✅ `ui-mode-provider.tsx` + layout FOUC script. Built, typechecks, lint-clean — but **not yet executed**: nothing consumes `useUiMode()` until step 8's navbar exists.
 4. ✅ Theme registry + `scripts/check-theme-separation.mjs`. Failed on first run (39 violations, see §1.3) and was reworked; palette, meter glyphs and boot mark all moved out of the command layer.
-5. `fs-commands.ts` — pwd/ls/cd/cat/less/find/grep/history
-6. `man` infrastructure + backfill every command
+5. ✅ `fs-commands.ts` — pwd/ls/cd/cat/less/find/grep/history, plus `fs-commands.test.mjs` (51 tests). First run was 47/51: all four failures were one bug and the test was right — `ls`/`find`/`grep` with no operand resolved to **home** rather than to the current directory, because `targetOf` delegated a missing argument to `resolvePath`, where absent correctly means home for bare `cd`. `targetOf` now answers "no argument means here" itself and `cd` asks for `~` explicitly. **Re-run queued** in `run-commands-for-me.md`.
+6. `man` infrastructure + backfill every command. `neofetch` landed here early (asked for out of order): a real fetch block — `FetchRow`/`FetchReport`/`fetchText` in `output.ts`, an optional `io.fetch` on `TerminalIO` alongside `io.page`, the command itself, and a `FetchBlock` renderer. The boot script's `neofetch` step now prints the same report rather than a banner and one line.
 7. ~~GUI route pages re-created~~ — **dropped.** Deep content stays CLI-only; `?path=` on `/student/terminal` carries CLI location, no new page files.
 8. Navbar: mode toggle + disabled theme stub
 9. Welcome animation + orientation message + first-login nudge
@@ -289,12 +291,92 @@ New `kip_`-equivalent keys use the `sd_` prefix.
 
 Steps 1–4 are load-bearing; everything after depends on them. **Checked back in after step 4**; 5–13 approved to proceed.
 
+### 7b. Mid-course corrections (raised after step 6, before step 8)
+
+Four fixes required before steps 8–13 continue.
+
+1. ✅ **No buttons inside the terminal window.** Removed: the `RUN:` command strip
+   (`TerminalCommandBar` and its `SHORTCUTS` table, deleted outright), the foot status bar
+   (`[back]` `[next]`, the position counter, the TAB chips, the `[^C cancel]` token), the TAB
+   match listbox, the `ask` choice buttons, the `[^C stop]` button on the running line, and the
+   clickable inline `[read]` tokens — those are now `<span>`s. Consequence, and the reason it is
+   more than a deletion: the screen stack `[back]`/`[next]` paged through **had to go with them**,
+   or scrollback would have been unreachable. The shell now keeps **one continuous buffer** and
+   you scroll it, which is what "scrolled output history" means. Affordances that were controls
+   are printed instead: TAB prints its candidates, `less` prints `--More--(45%)  space: next page
+   · enter: next line · G: end · q: quit` (the whole string is the theme's `more` glyph), the
+   running line prints `^C stops it`, and an `ask`'s escapes print above the prompt.
+   **One button remains, deliberately:** `[reconnect]` on the pre-session error screen
+   (`TerminalWorkspace`, before a shell exists). There is no prompt to type at there, so removing
+   it would leave a dead end. Flagged for a call rather than decided quietly.
+2. ✅ **Help format.** `CommandHelp` in `output.ts` (usage / description / commands / args /
+   options / examples) is now a **required** field on `CommandSpec`, so the compiler refuses a
+   command without one — it listed all 19 that were missing. All 33 have written blocks.
+   `runCommand` intercepts `help`, `--help` and `-h` as the sole argument *before* `run`, so every
+   command answers, including `quiz`, `review` and `qa`. Bare `help` lists by group and ends with
+   exactly `Type "[command] help" or "[command] --help" for more info.`; boot ends with
+   `Type 'help' to see list of available commands.` **Step 6 done in the same pass:** `man`
+   renders the identical data under NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES, so the two
+   cannot drift.
+3. ✅ **TAB completes arguments.** `completePath` lists the real children of the location the
+   operand names — roadmaps at root, modules inside a roadmap, lessons inside a module — through
+   the same cache `ls` uses. Prefix match first, then substring, because these names are generated
+   from titles and run long. Directories complete with `/`, lessons with a space. Which operands
+   are paths is declared per command (`completes: "path"`, or `"path-after-first"` for `grep`,
+   whose first operand is the pattern): cat, cd, complete, find, grep, less, ls, open, quiz, read.
+   TAB is now async — the first one in a directory costs a request, the rest are free — and a
+   stale result is dropped if the line moved on.
+   `cd <roadmap>` → `ls` re-confirmed by the 51/51 run; the four earlier failures were exactly that.
+4. ✅ **Bare vs. `--help`.** Already correct once the intercept landed, and audited command by
+   command: `profile`, `timezone`, `status`, `whoami`, `instructor-status`, `deletion-status`,
+   `review`, `qa`, `continue`, `history`, `pwd`, `ls` and `neofetch` all fetch and
+   print real state when bare. Because help is intercepted ahead of `run`, a bare invocation
+   reaches the data path untouched — the split is structural, not per-command.
+
+New: `lib/terminal/commands.test.mjs` — the registry contract. Every command has a written help
+block (not a placeholder), `help`/`--help`/`-h` agree, **asking for help never runs the command**
+(the fake host throws on every side effect), aliases resolve to the same block, `man` carries the
+same synopsis, and no two commands answer to the same word.
+
+
 ### Out of scope for this branch
 
 - `backend/src/modules/quiz/quiz.service.spec.ts:368,378,388` — 3 pre-existing `TS2571` (*object is of type 'unknown'*) errors. Predate this branch and are unrelated to CLI mode. **Deliberately left out** so this diff stays about one thing; fix in its own pass.
 
 
 ---
+
+### 7c. Removal of `roadmaps`, `open` and `read` (after 7b)
+
+✅ All three deleted outright — specs, implementations, and registry entries — not hidden or
+aliased. They duplicated filesystem commands that already did the same job:
+
+| Removed | Survivor |
+|---|---|
+| `roadmaps [search]` | `ls` at the root, and `find <term>` for name search |
+| `open <roadmap>` | `cd <roadmap>` |
+| `read <lesson>` | `cat <lesson>` / `less <lesson>` |
+
+`learn/` is now exactly `continue jump quiz complete review qa status`.
+
+What the removal dragged with it, each of which had to be handled rather than left dangling:
+
+- **Ten GUI deep links address content by id**, not by path (`?concept=<id>`, `?roadmap=<id>`,
+  across admin, instructor and student pages), and the route turned those into `read <id>` /
+  `open <id>`. `cat` now accepts a concept id and `cd` a roadmap id — `cd` translating id→name
+  *before* building a `Location`, so names-only stays true. `?view=roadmaps` now opens `ls`.
+- **Inline `[read]` and `[open]` tokens** in quiz, qa and `ls` output pointed at dead verbs.
+  All now read `[cat]` / `[cd]` and run those.
+- **The roadmap listing index lost its only producer** (`roadmaps` printed the numbers), so
+  `resolveIndex("roadmap", …)` could never hit again and was removed from `findRoadmap`. The
+  *concept* index survives — `qa ask`'s picker still numbers lessons — so `quiz <n>` still works.
+- `ARG_INDEX` lost its `read`/`open` entries; `bar()` and the `activeGlyphs` import went with
+  the progress meters that only `roadmaps` drew.
+- Dead-end and boot text that said "browse with {roadmaps}" now says `{ls}`.
+
+Three new tests lock the subtraction in: the four words (`roadmaps`, `open`, `read`, `lesson`)
+resolve to nothing, the `learn/` group is exactly the seven survivors, and **no help block
+anywhere names a removed command** — which is where a dead verb would otherwise survive longest.
 
 ## 8. Verification
 

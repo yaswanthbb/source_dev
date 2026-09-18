@@ -9,7 +9,7 @@ import {
   bootSequence,
   CommandAborted,
   completeCommand,
-  completions,
+  completeArgument,
   runCommand,
   type AskOptions,
   type LineKind,
@@ -21,9 +21,8 @@ import {
   queueTerminalCommand,
   takeTerminalCommand,
   type ConsoleEntry,
-  type Screen,
 } from "@/lib/terminal/session";
-import { readHistory } from "@/lib/terminal/output";
+import { fetchText, readHistory } from "@/lib/terminal/output";
 import { displayPath } from "@/lib/terminal/location";
 import { armRequests } from "@/lib/terminal/request";
 import { useTheme } from "@/providers/theme-provider";
@@ -39,13 +38,12 @@ interface PendingQuestion {
 
 /** A `less` session in progress.
  *
- *  The paged text is revealed into the ordinary screen buffer a chunk at a time
- *  rather than into a viewport of its own, which is both simpler and closer to
- *  how a pager behaves in a terminal that scrolls: what you have already read
- *  stays above you. This state is only what is not yet revealed, plus the
- *  promise `less` is waiting on. */
+ *  The paged text is revealed into the ordinary buffer a chunk at a time rather
+ *  than into a viewport of its own, which is both simpler and closer to how a
+ *  pager behaves in a terminal that scrolls: what you have already read stays
+ *  above you. This state is only what is not yet revealed, plus the promise
+ *  `less` is waiting on. */
 interface PagerState {
-  screenId: number;
   lines: string[];
   /** How many lines have been revealed so far. */
   shown: number;
@@ -54,11 +52,14 @@ interface PagerState {
   resolve: () => void;
 }
 
-/** How many screens [back] can walk. Deep enough to retrace a lesson you just
- *  left, shallow enough that the shell never becomes a transcript again. */
-const MAX_SCREENS = 20;
-/** A runaway command can't push the screen past this. */
-const MAX_LINES = 400;
+/** How deep the scrollback goes.
+ *
+ *  The shell keeps one continuous transcript and you reach the past by
+ *  scrolling, the way a terminal emulator works — there is no screen stack and
+ *  nothing to page between. A bound is still needed so a runaway command cannot
+ *  grow the DOM without limit, and this is far past anything a session prints
+ *  by hand. */
+const MAX_LINES = 2000;
 
 /** Streaming reveal pacing. Lines printed in one burst stagger on; a pause of
  *  this long between prints means the command moved on, so the next line starts
@@ -110,12 +111,11 @@ function chunkEnd(lines: string[], from: number, rows: number): number {
   return end;
 }
 
-/** Screens plus the one being looked at. They move together — a push trims the
- *  oldest and the cursor has to land on the new last index — so they are one
- *  piece of state, never two that can disagree. */
-interface View {
-  screens: Screen[];
-  cursor: number;
+/** What TAB prints when more than one name matches: the candidates, and
+ *  nothing else. A shell prints the column and leaves the line alone. */
+function candidateOf(line: string): string {
+  const at = line.indexOf(" ");
+  return at === -1 ? line : line.slice(at + 1);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -130,18 +130,15 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   // the provider that owns it. `pwd`, the address bar and a GUI switch are then
   // three views of one value rather than three copies to keep in step.
   const { location, setLocation } = useUiMode();
-  const screenSeq = useRef(1);
   const sequence = useRef(0);
   /** When the last line was printed and how many have come in this run, so a
    *  burst of output can be staggered and a lone line cannot. */
   const burst = useRef({ at: 0, count: 0 });
-  // Every mount boots, and the boot screen starts empty: the start-up script
-  // types itself in below. Nothing is carried over from a previous visit —
-  // the shell holds no transcript, so there is nothing to restore.
-  const [view, setView] = useState<View>(() => ({
-    screens: [{ id: 1, command: "", lines: [] }],
-    cursor: 0,
-  }));
+  // One buffer, appended to forever and scrolled. Every mount boots into an
+  // empty one: nothing is carried over from a previous visit, because a
+  // transcript stored across sign-outs would be one student's output waiting
+  // for whoever signs in next.
+  const [lines, setLines] = useState<ConsoleEntry[]>([]);
   /** True while the start-up script is still printing. The prompt stays out of
    *  the way until it finishes, so the caret is only ever in one place. */
   const [booting, setBooting] = useState(true);
@@ -162,9 +159,6 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   const fileRef = useRef<HTMLInputElement>(null);
   const active = useRef(true);
   const generation = useRef(0);
-  /** The screen the running command prints into — `answer` echoes there too,
-   *  so a quiz reply lands under the question that asked for it. */
-  const runningScreen = useRef(0);
   const recallIndex = useRef(-1);
   const draft = useRef("");
   /** The `less` session in progress, if any. Held in a ref because the key
@@ -174,24 +168,15 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   const [pagerAt, setPagerAt] = useState<{ shown: number; total: number } | null>(
     null,
   );
-  /** TAB over titles: the lines TAB is cycling through and where in them the
-   *  line currently sits, so a second TAB moves on instead of restarting. */
-  const [matches, setMatches] = useState<string[]>([]);
-  const [matchAt, setMatchAt] = useState(-1);
+  /** What TAB is walking and where in it the line sits, so a second TAB moves
+   *  on instead of restarting. The candidates are printed into the buffer the
+   *  first time round, so nothing about this has to be rendered as UI. */
   const cycle = useRef<{ items: string[]; at: number } | null>(null);
 
-  const screen = view.screens[view.cursor];
-  const canBack = view.cursor > 0;
-  const canNext = view.cursor < view.screens.length - 1;
-
-  // ↑ walks the same list `history` prints. There is still no second store —
-  // it simply moved to `output.ts`, where the dispatcher records every line and
-  // where a command can read it without reaching into host state.
-  //
-  // Two things improve by sharing it. `clear` no longer wipes what ↑ remembers,
-  // which no real shell does; and recall is no longer capped at the twenty
-  // screens [back] keeps, so a command from earlier in the session is still
-  // reachable. Newest first, because ↑ walks backwards.
+  // ↑ walks the same list `history` prints. There is no second store — the
+  // dispatcher records every line in `output.ts`, and a command can read it
+  // there without reaching into host state. Newest first, because ↑ walks
+  // backwards.
   const recallList = () => readHistory().reverse();
 
   useEffect(() => {
@@ -201,7 +186,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       active.current = false;
       generation.current += 1;
       // Leaving the page is an interrupt too: nothing should still be in flight
-      // for a screen that no longer exists.
+      // for a session that no longer exists.
       runAbort.current?.abort();
       runAbort.current = null;
       // A pager left open holds the promise `less` is awaiting. Unmounting
@@ -220,48 +205,31 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     };
   }, []);
 
-  /** Print into the screen a command owns, wherever it currently sits, and
-   *  hand back the line's id so a caller that keeps writing to the same line —
-   *  the boot script typing a command out — can find it again. */
-  const pushEntry = useCallback(
-    (screenId: number, entry: Omit<ConsoleEntry, "id">) => {
-      if (!active.current) return 0;
-      const id = ++sequence.current;
-      // Each line of one burst starts a step after the line above it, so output
-      // types itself on rather than landing whole. The offset is decided here,
-      // where the burst is actually happening, and travels with the line — a
-      // later re-render for any other reason must not re-animate it.
-      const now = Date.now();
-      const run = burst.current;
-      const consecutive = now - run.at < BURST_GAP_MS ? run.count : 0;
-      burst.current = { at: now, count: consecutive + 1 };
-      const delay = Math.min(consecutive, REVEAL_DEPTH) * REVEAL_MS;
-      setView((previous) => ({
-        ...previous,
-        screens: previous.screens.map((screenEntry) =>
-          screenEntry.id === screenId
-            ? {
-                ...screenEntry,
-                lines: [...screenEntry.lines, { ...entry, id, delay }].slice(
-                  -MAX_LINES,
-                ),
-              }
-            : screenEntry,
-        ),
-      }));
-      return id;
-    },
-    [],
-  );
+  /** Append one line, and hand back its id so a caller that keeps writing to
+   *  the same line — the boot script typing a command out — can find it. */
+  const pushEntry = useCallback((entry: Omit<ConsoleEntry, "id">) => {
+    if (!active.current) return 0;
+    const id = ++sequence.current;
+    // Each line of one burst starts a step after the line above it, so output
+    // types itself on rather than landing whole. The offset is decided here,
+    // where the burst is actually happening, and travels with the line — a
+    // later re-render for any other reason must not re-animate it.
+    const now = Date.now();
+    const run = burst.current;
+    const consecutive = now - run.at < BURST_GAP_MS ? run.count : 0;
+    burst.current = { at: now, count: consecutive + 1 };
+    const delay = Math.min(consecutive, REVEAL_DEPTH) * REVEAL_MS;
+    setLines((previous) => [...previous, { ...entry, id, delay }].slice(-MAX_LINES));
+    return id;
+  }, []);
 
   const append = useCallback(
     (
-      screenId: number,
       text: string,
       kind: LineKind = "out",
       actions?: TerminalAction[],
       markdown?: boolean,
-    ) => pushEntry(screenId, { text, kind, actions, markdown }),
+    ) => pushEntry({ text, kind, actions, markdown }),
     [pushEntry],
   );
 
@@ -269,8 +237,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
    *  text is kept alongside so a screen reader and the log's aria-live read the
    *  whole sentence, not a gap where each word would be. */
   const speak = useCallback(
-    (screenId: number, segments: LineSegment[], kind: LineKind = "out") =>
-      pushEntry(screenId, {
+    (segments: LineSegment[], kind: LineKind = "out") =>
+      pushEntry({
         text: segments
           .map((s) => (typeof s === "string" ? s : s.label))
           .join(""),
@@ -283,21 +251,13 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   /** Rewrite a line already on screen — how the boot script types: one line,
    *  one character longer each tick. */
   const amend = useCallback(
-    (screenId: number, lineId: number, text: string, typing = true) => {
+    (lineId: number, text: string, typing = true) => {
       if (!active.current) return;
-      setView((previous) => ({
-        ...previous,
-        screens: previous.screens.map((screenEntry) =>
-          screenEntry.id === screenId
-            ? {
-                ...screenEntry,
-                lines: screenEntry.lines.map((line) =>
-                  line.id === lineId ? { ...line, text, typing } : line,
-                ),
-              }
-            : screenEntry,
+      setLines((previous) =>
+        previous.map((line) =>
+          line.id === lineId ? { ...line, text, typing } : line,
         ),
-      }));
+      );
     },
     [],
   );
@@ -316,33 +276,48 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     return () => input?.removeEventListener("cancel", cancel);
   }, [settleFile]);
 
-  const back = useCallback(() => {
-    if (busyRef.current) return;
-    setView((previous) => ({
-      ...previous,
-      cursor: Math.max(0, previous.cursor - 1),
-    }));
-  }, []);
+  /** `clear`. Empties the buffer and nothing else — it does not touch what ↑
+   *  remembers, which is what a real shell does too. */
+  const reset = useCallback(() => setLines([]), []);
 
-  const forward = useCallback(() => {
-    if (busyRef.current) return;
-    setView((previous) => ({
-      ...previous,
-      cursor: Math.min(previous.screens.length - 1, previous.cursor + 1),
-    }));
-  }, []);
+  /** Reveal the next chunk. Resolves `less` once the last line is out and the
+   *  reader acknowledges it, which is what `(END)` is waiting for.
+   *
+   *  Above `execute` rather than below it because `execute` lists this in its
+   *  dependencies, and a dependency array is evaluated during render — naming
+   *  a `const` declared further down would read it before it exists. */
+  const advancePager = useCallback(
+    (rows?: number) => {
+      const pager = pagerRef.current;
+      if (!pager) return;
+      if (pager.shown >= pager.lines.length) {
+        // Already at the end: the next keypress closes the pager.
+        pagerRef.current = null;
+        setPagerAt(null);
+        pager.resolve();
+        return;
+      }
+      const end = chunkEnd(pager.lines, pager.shown, rows ?? pager.rows);
+      append(
+        pager.lines.slice(pager.shown, end).join("\n"),
+        "out",
+        undefined,
+        true,
+      );
+      pager.shown = end;
+      setPagerAt({ shown: end, total: pager.lines.length });
+    },
+    [append],
+  );
 
-  /** Collapse the stack to a single screen — that is what `clear` means now
-   *  that [back] exists: it drops the history, not just the visible lines.
-   *  `keepId` preserves the identity of a screen a command is still printing
-   *  into, so output that arrives after the clear still lands somewhere. */
-  const reset = useCallback((keepId?: number) => {
-    setView({
-      screens: [
-        { id: keepId ?? ++screenSeq.current, command: "", lines: [] },
-      ],
-      cursor: 0,
-    });
+  /** Stop paging where the reader stopped. What was already revealed stays on
+   *  screen — this is `q`, not an undo. */
+  const quitPager = useCallback(() => {
+    const pager = pagerRef.current;
+    if (!pager) return;
+    pagerRef.current = null;
+    setPagerAt(null);
+    pager.resolve();
   }, []);
 
   const execute = useCallback(
@@ -356,7 +331,6 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       setBusy(true);
       setCmd("");
       setStatus(null);
-      setMatches([]);
       cycle.current = null;
       recallIndex.current = -1;
       // One controller for this command, armed for the request layer, so ^C
@@ -364,38 +338,39 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       const abort = new AbortController();
       runAbort.current = abort;
       armRequests(abort.signal);
-      // A new command from an older screen drops whatever [next] led to, the
-      // way stepping off a browser's back stack does.
-      const screenId = ++screenSeq.current;
-      runningScreen.current = screenId;
-      setView((previous) => {
-        const screens = [
-          ...previous.screens.slice(0, previous.cursor + 1),
-          {
-            id: screenId,
-            command: line,
-            // Stamped now, so the echo keeps the directory the command was typed
-            // in even when the command is the `cd` that leaves it.
-            path: displayPath(location),
-            lines: [],
-          },
-        ].slice(-MAX_SCREENS);
-        return { screens, cursor: screens.length - 1 };
+      // The echo, above the output it produced. The path is stamped now, so
+      // scrollback stays truthful: a `cd` line keeps the directory it was typed
+      // in rather than the one it moved to.
+      pushEntry({
+        text: line,
+        kind: "cmd",
+        path: displayPath(location),
       });
       const run = generation.current;
       const isCurrent = () => active.current && generation.current === run;
       const io: TerminalIO = {
         print: (text, kind, actions) => {
-          if (isCurrent()) append(screenId, text, kind, actions);
+          if (isCurrent()) append(text, kind, actions);
         },
         say: (segments, kind) => {
-          if (isCurrent()) speak(screenId, segments, kind);
+          if (isCurrent()) speak(segments, kind);
         },
         status: (text) => {
           if (isCurrent()) setStatus(text);
         },
         doc: (markdown) => {
-          if (isCurrent()) append(screenId, markdown, "out", undefined, true);
+          if (isCurrent()) append(markdown, "out", undefined, true);
+        },
+        fetch: (report) => {
+          if (isCurrent())
+            pushEntry({
+              // The block draws itself from `report`; `text` is the linear
+              // reading kept alongside, so the entry is not a line with no
+              // text in it.
+              text: fetchText(report),
+              kind: "out",
+              report,
+            });
         },
         page: (text, opts) =>
           new Promise<void>((resolve) => {
@@ -403,21 +378,21 @@ export function useTerminalSession(user: User, initialCommand?: string) {
               resolve();
               return;
             }
-            if (opts?.title) append(screenId, opts.title, "head");
-            const lines = text.split("\n");
+            if (opts?.title) append(opts.title, "head");
+            const paged = text.split("\n");
             const rows = pageRows();
             // A lesson that already fits needs no pager, and `less` on a short
             // file behaves the same way: it prints it and returns.
-            if (lines.length <= rows) {
-              append(screenId, text, "out", undefined, true);
+            if (paged.length <= rows) {
+              append(text, "out", undefined, true);
               resolve();
               return;
             }
-            pagerRef.current = { screenId, lines, shown: 0, rows, resolve };
+            pagerRef.current = { lines: paged, shown: 0, rows, resolve };
             advancePager();
           }),
         clear: () => {
-          if (isCurrent()) reset(screenId);
+          if (isCurrent()) reset();
         },
         close: () => {
           if (isCurrent()) router.push("/student/dashboard");
@@ -431,6 +406,14 @@ export function useTerminalSession(user: User, initialCommand?: string) {
             // Waiting on a person is not waiting on the network: the spinner
             // comes down so the question is the only thing asking for input.
             setStatus(null);
+            // The escapes a question offers are printed, not rendered as
+            // controls: `[skip]` on the line above the prompt is something you
+            // type, exactly like every other verb in this shell.
+            if (options?.choices?.length)
+              append(
+                `  (${options.choices.map((c) => c.value).join(" · ")})`,
+                "dim",
+              );
             const next = { prompt, options, resolve, reject };
             question.current = next;
             setCmd("");
@@ -486,11 +469,17 @@ export function useTerminalSession(user: User, initialCommand?: string) {
         }
       }
     },
+    // Every value `execute` closes over. `advancePager` is listed too, which is
+    // why it is declared above this rather than beside the other pager
+    // helpers — a dependency array is read during render, so a `const` from
+    // further down would be read before it exists.
     [
       user,
       append,
       speak,
+      pushEntry,
       reset,
+      advancePager,
       router,
       isDark,
       setTheme,
@@ -509,19 +498,15 @@ export function useTerminalSession(user: User, initialCommand?: string) {
 
   const startup = useRef(initialCommand);
   const bootUser = useRef(user);
+
   useEffect(() => {
-    // The start-up script types itself out at the prompt: a command, then what
-    // it printed, then the next one. Any key or click skips the rest — nobody
-    // should have to sit through an animation to type, so this is impatient by
-    // design rather than something to wait out.
     let cancelled = false;
     const skip = () => {
       skipBoot.current = true;
     };
     window.addEventListener("keydown", skip);
     window.addEventListener("pointerdown", skip);
-    // A handoff from the dashboard, or a `?view=` deep link, is what the user
-    // actually asked for: print the boot output at once and get out of the way.
+
     // The route builds `initialCommand` from an allowlist; never run arbitrary
     // URL input.
     // Read once, outside the closure the cleanup captures: the value is set at
@@ -537,13 +522,13 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       skipBoot.current = true;
 
     void (async () => {
-      // Start from an empty screen every run, so React's development
+      // Start from an empty buffer every run, so React's development
       // double-invoke restarts the script instead of typing it out twice.
-      setView({ screens: [{ id: 1, command: "", lines: [] }], cursor: 0 });
+      setLines([]);
       for (const step of bootSequence(bootUser.current)) {
         if (cancelled) return;
         const typing = !skipBoot.current;
-        const lineId = pushEntry(1, {
+        const lineId = pushEntry({
           text: typing ? "" : step.command,
           kind: "cmd",
           typing,
@@ -552,16 +537,16 @@ export function useTerminalSession(user: User, initialCommand?: string) {
           await sleep(TYPE_MS);
           if (cancelled) return;
           if (skipBoot.current) break;
-          amend(1, lineId, step.command.slice(0, at));
+          amend(lineId, step.command.slice(0, at));
         }
         // Whether it was typed or skipped, the line ends up whole and the caret
         // leaves it.
-        amend(1, lineId, step.command, false);
+        amend(lineId, step.command, false);
         for (const line of step.lines) {
           if (cancelled) return;
           if (!skipBoot.current) await sleep(LINE_MS);
           if (cancelled) return;
-          pushEntry(1, line);
+          pushEntry(line);
         }
         if (!skipBoot.current) await sleep(STEP_MS);
       }
@@ -593,10 +578,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       question.current = null;
       setPending(null);
       setCmd("");
-      // Echo the reply into the running command's screen, the way a terminal
-      // shows what you typed at a prompt.
+      // Echo the reply the way a terminal shows what you typed at a prompt.
       append(
-        runningScreen.current,
         `${current.prompt}: ${current.options?.mask ? "••••••" : value}`,
         "dim",
       );
@@ -611,8 +594,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
    *  not that the spinner goes away while it finishes unwatched.
    *
    *  The generation is bumped so the command being interrupted can no longer
-   *  print into this screen as it unwinds, which is also why the `^C` is
-   *  printed here rather than left to the dispatcher's own handler. */
+   *  print as it unwinds, which is also why the `^C` is printed here rather
+   *  than left to the dispatcher's own handler. */
   const cancel = useCallback(() => {
     const current = question.current;
     if (current) {
@@ -632,7 +615,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       setPagerAt(null);
       pager.resolve();
     }
-    append(runningScreen.current, "^C", "dim");
+    append("^C", "dim");
     generation.current += 1;
     runAbort.current?.abort();
     runAbort.current = null;
@@ -647,42 +630,6 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     if (pending) inputRef.current?.focus({ preventScroll: true });
   }, [pending]);
 
-  /** Reveal the next chunk. Resolves `less` once the last line is out and the
-   *  reader acknowledges it, which is what `(END)` is waiting for. */
-  const advancePager = useCallback(
-    (rows?: number) => {
-      const pager = pagerRef.current;
-      if (!pager) return;
-      if (pager.shown >= pager.lines.length) {
-        // Already at the end: the next keypress closes the pager.
-        pagerRef.current = null;
-        setPagerAt(null);
-        pager.resolve();
-        return;
-      }
-      const end = chunkEnd(pager.lines, pager.shown, rows ?? pager.rows);
-      append(
-        pager.screenId,
-        pager.lines.slice(pager.shown, end).join("\n"),
-        "out",
-        undefined,
-        true,
-      );
-      pager.shown = end;
-      setPagerAt({ shown: end, total: pager.lines.length });
-    },
-    [append],
-  );
-
-  /** Stop paging where the reader stopped. What was already revealed stays on
-   *  screen — this is `q`, not an undo. */
-  const quitPager = useCallback(() => {
-    const pager = pagerRef.current;
-    if (!pager) return;
-    pagerRef.current = null;
-    setPagerAt(null);
-    pager.resolve();
-  }, []);
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -714,7 +661,11 @@ export function useTerminalSession(user: User, initialCommand?: string) {
           event.preventDefault();
           advancePager(pagerRef.current.lines.length);
           return;
-        } else if (event.key === "q" || event.key === "Q" || event.key === "Escape") {
+        } else if (
+          event.key === "q" ||
+          event.key === "Q" ||
+          event.key === "Escape"
+        ) {
           event.preventDefault();
           quitPager();
           return;
@@ -751,22 +702,10 @@ export function useTerminalSession(user: User, initialCommand?: string) {
         event.preventDefault();
         cancel();
       }
-      // Alt+←/→ moves screens from anywhere, the way a browser's own do.
-      if (event.altKey && !typing && event.key === "ArrowLeft") back();
-      if (event.altKey && !typing && event.key === "ArrowRight") forward();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [cancel, back, forward, advancePager, quitPager]);
-
-  /** Put one completion on the line and stop offering the rest. */
-  const chooseCompletion = useCallback((line: string) => {
-    cycle.current = null;
-    setMatches([]);
-    setMatchAt(-1);
-    setCmd(line);
-    inputRef.current?.focus({ preventScroll: true });
-  }, []);
+  }, [cancel, advancePager, quitPager]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
@@ -779,39 +718,24 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       return;
     }
     if (pending || busy) return;
-    // Anything other than another TAB ends the cycle — the list under the line
-    // describes what TAB is walking, so it goes as soon as it stops walking.
+    // Anything other than another TAB ends the cycle.
     if (event.key !== "Tab" && event.key !== "Shift" && cycle.current) {
       cycle.current = null;
-      setMatches([]);
-      setMatchAt(-1);
     }
     if (event.ctrlKey && event.key === "l") {
       event.preventDefault();
       reset();
       return;
     }
-    if (event.altKey && event.key === "ArrowLeft") {
-      event.preventDefault();
-      back();
-      return;
-    }
-    if (event.altKey && event.key === "ArrowRight") {
-      event.preventDefault();
-      forward();
-      return;
-    }
     if (event.key === "Tab") {
       event.preventDefault();
-      // Already cycling: TAB steps on, Shift+TAB steps back. The line follows
-      // the highlight, so Enter runs whichever is showing.
+      // Already cycling: TAB steps on, Shift+TAB steps back.
       if (cycle.current) {
         const { items } = cycle.current;
         const at =
           (cycle.current.at + (event.shiftKey ? -1 : 1) + items.length) %
           items.length;
         cycle.current = { items, at };
-        setMatchAt(at);
         setCmd(items[at]);
         return;
       }
@@ -823,17 +747,29 @@ export function useTerminalSession(user: User, initialCommand?: string) {
         setCmd(completed);
         return;
       }
-      // Then the data: lessons and paths already listed on screen.
-      const items = completions(cmd);
-      if (!items.length) return;
-      if (items.length === 1) {
+      // Then the data. This one waits on a listing, because completing against
+      // what is really at this location means having read it — the same
+      // listing `ls` reads, through the same cache, so the first TAB in a
+      // directory costs one request and every TAB after it costs nothing.
+      const typed = cmd;
+      void (async () => {
+        const items = await completeArgument(typed, location);
+        // The line moved on while the listing was in flight: completing it now
+        // would overwrite what was typed in the meantime.
+        if (!active.current || inputRef.current?.value !== typed) return;
+        if (!items.length) return;
+        if (items.length === 1) {
+          setCmd(items[0]);
+          return;
+        }
+        // More than one. A shell prints the candidates and leaves the line for
+        // you to keep typing or to TAB through — so they go into the buffer as
+        // output, not into a list of things to click.
+        pushEntry({ text: typed, kind: "cmd", path: displayPath(location) });
+        append(items.map(candidateOf).join("   "), "dim");
+        cycle.current = { items, at: 0 };
         setCmd(items[0]);
-        return;
-      }
-      cycle.current = { items, at: 0 };
-      setMatches(items);
-      setMatchAt(0);
-      setCmd(items[0]);
+      })();
       return;
     }
     if (event.key === "ArrowUp") {
@@ -856,14 +792,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   };
 
   return {
-    screen,
+    lines,
     booting,
-    position: view.cursor + 1,
-    total: view.screens.length,
-    canBack,
-    canNext,
-    back,
-    forward,
     cmd,
     setCmd,
     busy,
@@ -872,9 +802,6 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     /** Non-null while `less` is paging: how far through the text the reader is,
      *  for the renderer to draw the theme's `--More--` line. */
     pagerAt,
-    matches,
-    matchAt,
-    chooseCompletion,
     execute,
     answer,
     cancel,

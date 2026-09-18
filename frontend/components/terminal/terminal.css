@@ -86,70 +86,8 @@
 .kip-topbar :is(button, a):hover {
   filter: brightness(0.88);
 }
-/* ─── Command strip ─────────────────────────────────────────────────────────
-   The old RUN: row, back where it belongs: one line under the header, full
-   width, reading as the same `[token]` text the output prints. Hovering one
-   says what it does, for anyone who has not learnt the verbs yet. */
-.kip-cmdbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  flex-shrink: 0;
-  padding: 5px clamp(8px, 2vw, 16px);
-  font-size: 11px;
-}
-.kip-cmdbar-label {
-  color: var(--term-dim);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  flex-shrink: 0;
-}
-.kip-cmdbar-item {
-  position: relative;
-  padding: 2px 0;
-  color: var(--term-accent);
-  background: none;
-  border: 0;
-  font: inherit;
-  white-space: nowrap;
-}
-.kip-cmdbar-item:hover:not(:disabled),
-.kip-cmdbar-item:focus-visible {
-  background: var(--term-accent);
-  color: var(--term-base);
-}
-/* Pointer-only: a tooltip that needs hover has nothing to say on a phone, and
-   the strip scrolls there, which would clip it anyway. */
-@media (hover: hover) and (pointer: fine) {
-  .kip-cmdbar-item::after {
-    content: attr(data-hint);
-    position: absolute;
-    top: calc(100% + 5px);
-    left: 0;
-    z-index: 40;
-    padding: 3px 7px;
-    border: 1px solid var(--term-line);
-    background: var(--term-panel);
-    color: var(--term-dim);
-    font-size: 10px;
-    letter-spacing: 0;
-    white-space: nowrap;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-  }
-  /* The last few would run off the right edge, so they hang the other way. */
-  .kip-cmdbar-item:nth-last-child(-n + 3)::after {
-    left: auto;
-    right: 0;
-  }
-  .kip-cmdbar-item:hover::after,
-  .kip-cmdbar-item:focus-visible::after {
-    opacity: 1;
-    visibility: visible;
-  }
-}
+/* The `RUN:` command strip that used to sit here is gone. Nothing inside the
+   terminal window is clickable, so there is no strip to style. */
 .kip-console {
   height: 100dvh;
   min-height: 0;
@@ -230,6 +168,104 @@
   margin: 10px 0;
   border-top: 1px solid var(--term-line);
 }
+/* ─── The fetch block ───────────────────────────────────────────────────────
+   `neofetch`: the mark on the left, the identity and the facts on the right,
+   the palette underneath. The command supplied only strings — every width,
+   glyph and colour below is this layer's.
+
+   Mobile first, and the breakpoint is the honest one: a 360px screen has room
+   for the mark or for a column of facts beside it, not both. So the default is
+   one column with the mark above, and the two-column grid starts only where
+   the art can keep its own width without squeezing the labels. */
+.kip-fetch {
+  display: grid;
+  gap: 4px 20px;
+  align-items: center;
+  margin: 6px 0 12px;
+}
+.kip-fetch-art {
+  margin: 0 0 8px;
+  color: var(--term-accent);
+  font-weight: 700;
+  font-size: clamp(9px, 2.6vw, 13px);
+  line-height: 1.05;
+  overflow-x: auto;
+  scrollbar-width: none;
+  user-select: none;
+}
+.kip-fetch-art::-webkit-scrollbar {
+  display: none;
+}
+.kip-fetch-facts {
+  min-width: 0;
+}
+.kip-fetch-id,
+.kip-fetch-underline,
+.kip-fetch-palette {
+  margin: 0;
+}
+.kip-fetch-id {
+  font-weight: 700;
+}
+.kip-fetch-user {
+  color: var(--term-accent);
+}
+.kip-fetch-sep,
+.kip-fetch-host {
+  color: var(--term-ink);
+}
+/* As wide as the identity above it and no wider — the rule is built from the
+   theme's glyph repeated to that string's length, so it clips rather than
+   wraps when the name is long. */
+.kip-fetch-underline {
+  color: var(--term-line);
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* Labels in one column, values in the next, so the block scans down the way a
+   real fetch does. The label column is sized in characters rather than pixels
+   because the type is monospace and the longest label is what has to fit. */
+.kip-fetch-rows {
+  display: grid;
+  margin: 6px 0 0;
+  row-gap: 1px;
+}
+.kip-fetch-row {
+  display: grid;
+  grid-template-columns: 9ch 1fr;
+  gap: 8px;
+}
+.kip-fetch-row dt {
+  color: var(--term-accent);
+  font-weight: 700;
+}
+.kip-fetch-row dd {
+  margin: 0;
+  color: var(--term-text);
+  overflow-wrap: anywhere;
+}
+.kip-fetch-palette {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.kip-swatch {
+  width: 1.4em;
+  height: 0.9em;
+  border: 1px solid var(--term-line);
+  /* One shared edge between neighbours, so the strip reads as a palette
+     rather than as a row of separate chips. */
+  margin-right: -1px;
+}
+@media (min-width: 560px) {
+  .kip-fetch {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .kip-fetch-art {
+    margin-bottom: 0;
+  }
+}
 /* ─── Streaming reveal ──────────────────────────────────────────────────────
    Output prints on rather than landing whole: each line of one burst starts a
    step after the line above it. The delay is set per line by the host; the
@@ -265,24 +301,11 @@
   background: var(--term-accent);
   color: var(--term-base);
 }
-/* A runnable word *inside* a sentence — `catching up on review (review)`. No
-   brackets and no button shape: it is the sentence's own verb, marked only by
-   the accent and an underline, so a suggestion reads as prose. */
+/* A runnable word printed inside output — `[read]`, or a verb inside a
+   sentence. Text, not a control: no button shape, no hover state, nothing to
+   click. The accent alone marks it as something you can type. */
 .kip-word {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
   color: var(--term-accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-style: dotted;
-}
-.kip-word:hover:not(:disabled),
-.kip-word:focus-visible {
-  text-decoration-style: solid;
-  background: var(--term-accent);
-  color: var(--term-base);
 }
 /* ─── The running line ──────────────────────────────────────────────────────
    Stands where the prompt would be while a command is in flight. */
@@ -291,36 +314,6 @@
 }
 .kip-spin {
   color: var(--term-accent);
-}
-/* TAB's matches, listed directly under the line being completed. Inline, not a
-   dropdown: a shell prints its candidates into the buffer and so does this. */
-.kip-matches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 14px;
-  margin-top: 4px;
-  padding-left: 1ch;
-  font-size: 13px;
-  line-height: 1.7;
-}
-.kip-match {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: var(--term-dim);
-  text-align: left;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-.kip-match[data-active],
-.kip-match:hover,
-.kip-match:focus-visible {
-  color: var(--term-accent);
-}
-.kip-match[data-active] {
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 /* ─── The prompt ────────────────────────────────────────────────────────────
    Sits at the end of the output, in the scroll flow, so the caret is exactly
@@ -355,13 +348,9 @@
   font-weight: 400;
 }
 /* The pager's status line stands in for the prompt while `less` holds the
-   keyboard. `--More--(45%)` is drawn in the accent by the line's own `head`
-   kind; the key list beside it is a footnote, so it steps back to dim and
-   normal weight instead of shouting alongside it. */
-.kip-prompt-hint {
-  color: var(--term-dim);
-  font-weight: 400;
-}
+   keyboard. The whole string — position and keys together — comes from the
+   theme's `more` glyph and is drawn in the accent by the line's own `head`
+   kind, so there is no second style to keep in step with it. */
 /* A prompt is as long as the path in it, and a concept three levels down can
    be wider than a phone. Rather than squeeze the input to nothing, the row
    wraps: the label keeps its full width and the entry drops to the line below
@@ -432,65 +421,11 @@
   animation: none;
   opacity: 0.4;
 }
-/* Choices for an `ask`, listed as output lines rather than a button stack. */
-.kip-choices {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 1.7;
-}
-.kip-choice {
-  max-width: 100%;
-  padding: 1px 0;
-  text-align: left;
-  color: var(--term-text);
-  background: none;
-  border: 0;
-  font: inherit;
-  overflow-wrap: anywhere;
-}
-.kip-choice:hover {
-  color: var(--term-accent);
-}
-/* One status line at the foot, the way a pager prints its own. The nav tokens
-   stay put; the hints beside them are what scrolls when they overflow. */
-.kip-hintbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  padding: 7px clamp(12px, 2vw, 22px);
-  border-top: 1px solid var(--term-line);
-  color: var(--term-dim);
-  font-size: 11px;
-  white-space: nowrap;
-}
-.kip-hintbar-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.kip-hintbar-hints,
-.kip-hintbar-note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.kip-hintbar-note {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.kip-hintbar-hints::-webkit-scrollbar,
-.kip-hintbar-note::-webkit-scrollbar {
-  display: none;
-}
+/* The choice stack and the foot's status bar both used to be styled here. Both
+   are gone: an `ask`'s escapes are printed as a dim line above the prompt, and
+   the foot — `[back]` `[next]`, the position counter, the TAB chips — was
+   pagination for a screen stack this shell no longer has. One scrollback, one
+   prompt, nothing else. */
 .kip-boot {
   padding: 20px clamp(12px, 2vw, 22px);
   font-size: 13px;
@@ -718,38 +653,11 @@
     padding: 3px 5px;
     min-height: 32px;
   }
-  /* No room to wrap: the strip becomes one scrolling row instead of stacking
-     into three, so the screen keeps its height. */
-  .kip-cmdbar {
-    flex-wrap: nowrap;
-    gap: 9px;
-    padding: 5px 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-  }
-  .kip-cmdbar::-webkit-scrollbar {
-    display: none;
-  }
-  .kip-cmdbar-label {
-    display: none;
-  }
-  .kip-cmdbar-item {
-    min-height: 30px;
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
   /* 16px stops iOS zooming the page when the prompt takes focus. The whole row
      moves up together — label, input and caret share one grid, so sizing only
      the input would leave `student@source-dev:~$` a size smaller beside it. */
   .kip-console .kip-prompt {
     font-size: 16px;
-  }
-  .kip-hintbar {
-    gap: 8px;
-    padding: 7px 10px;
-    font-size: 10px;
   }
   .kip-dialog-body {
     padding: 16px;

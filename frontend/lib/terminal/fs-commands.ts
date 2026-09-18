@@ -31,6 +31,7 @@ import {
   formatPath,
   fromSegments,
   resolvePath,
+  ROOT,
   segmentsOf as pathSegments,
   type Location,
 } from "./location";
@@ -196,6 +197,15 @@ function globToRegExp(pattern: string): RegExp {
 const pwd: CommandSpec = {
   name: "pwd",
   usage: "pwd",
+  help: {
+    usage: "pwd",
+    description: [
+      "Print the working directory — where in the curriculum you are now.",
+      "The output is a path you can paste straight back into cd, and it is the",
+      "same value the address bar shows, because there is only one.",
+    ],
+    examples: ["pwd", "cd /roadmaps/voip-basics", "pwd"],
+  },
   summary: "print the current directory",
   group: "filesystem",
   run: ({ io, cwd }) => {
@@ -208,6 +218,33 @@ const pwd: CommandSpec = {
 const ls: CommandSpec = {
   name: "ls",
   usage: "ls [-l] [path]",
+  completes: "path",
+  help: {
+    usage: "ls [-l] [path]...",
+    description: [
+      "List what is here: roadmaps at the top level, modules inside a roadmap,",
+      "lessons inside a module.",
+      "Each row opens with its progress marker — [x] done, [~] in progress,",
+      "[ ] not started — so a listing doubles as a progress report.",
+    ],
+    args: [
+      {
+        name: "[path]",
+        text: "What to list; the current directory when omitted",
+      },
+    ],
+    options: [
+      { name: "-l", text: "Long form: the human title beside each name" },
+      { name: "--", text: "End of options, so a path may start with a dash" },
+    ],
+    examples: [
+      "ls",
+      "ls -l",
+      "ls voip-basics",
+      "ls /roadmaps/voip-basics/introduction",
+      "ls ~",
+    ],
+  },
   summary: "list directory contents",
   group: "filesystem",
   run: async (ctx) => {
@@ -285,7 +322,7 @@ function printEntry(
     // The name is runnable, so a listing is navigable by pointer as well as by
     // keyboard — both go through the same command, which is the point.
     ctx.io.print(left, "out", [
-      { label: isDir ? "cd" : "read", command: isDir ? `cd ${name}` : `cat ${name}` },
+      { label: isDir ? "cd" : "cat", command: isDir ? `cd ${name}` : `cat ${name}` },
     ]);
     return;
   }
@@ -297,6 +334,26 @@ function printEntry(
 const cd: CommandSpec = {
   name: "cd",
   usage: "cd [path]",
+  completes: "path",
+  help: {
+    usage: "cd [path]",
+    description: [
+      "Change the working directory. Steps one level at a time, or jumps",
+      "anywhere with an absolute path — both reach the same places.",
+      "With no argument, goes home to /roadmaps.",
+    ],
+    args: [
+      { name: "[path]", text: "Where to go; home when omitted" },
+      { name: "..", text: "Up one level; stays put at the top" },
+      { name: "~", text: "Home, the same as no argument" },
+    ],    examples: [
+      "cd voip-basics",
+      "cd introduction",
+      "cd ..",
+      "cd /roadmaps/voip-basics/introduction",
+      "cd",
+    ],
+  },
   summary: "change the current directory",
   group: "filesystem",
   run: async (ctx) => {
@@ -306,13 +363,25 @@ const cd: CommandSpec = {
       return;
     }
 
+    // A roadmap id, as a link spells it. `?roadmap=<id>` opens as `cd <id>`,
+    // and the id is translated to the directory name here — before a Location
+    // is built — so a stored location is still made of names only, which is
+    // the invariant every path rule in `location.ts` rests on.
+    let operand = operands[0];
+    if (operand && CONCEPT_ID.test(operand)) {
+      const named = await listChildren(ROOT)
+        .then((entries) => entries.find((e) => e.id === operand))
+        .catch(() => undefined);
+      if (named) operand = named.name;
+    }
+
     let loc: Location;
     try {
       // Bare `cd` and `cd ~` both go home; `..` clamps at the root. `~` and
       // `..` are `resolvePath`'s rules, not re-decided here — the bare form is
       // spelled as `~` because to every *other* command a missing argument
       // means the current directory, which `targetOf` answers first.
-      loc = targetOf(ctx, operands[0] ?? "~");
+      loc = targetOf(ctx, operand ?? "~");
     } catch (error) {
       ctx.io.print(vfsErrorText("cd", error), "err");
       return;
@@ -346,17 +415,36 @@ const cd: CommandSpec = {
 // ─── cat and less ───────────────────────────────────────────────────────────
 
 /** Fetch the text behind a path, refusing directories the way `cat` does. */
+/** A concept id, as a link hands one over. */
+const CONCEPT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function contentOf(
   ctx: CommandCtx,
   command: string,
   arg?: string,
-): Promise<{ title: string; text: string; loc: Location } | null> {
+): Promise<{ title: string; text: string } | null> {
   if (!arg) {
     // Real `cat` with no operand reads stdin. There is no stdin here, and
     // hanging would be a worse imitation than saying so.
     ctx.io.print(`${command}: missing operand`, "err");
     ctx.io.print(`usage: ${command} <lesson>`, "dim");
     return null;
+  }
+
+  // An id rather than a path. The GUI links into the shell by id — a
+  // `?concept=<id>` link opens as `cat <id>` — and an id names exactly one
+  // lesson from anywhere, so there is nothing to resolve it against. A path is
+  // what a person types; this is what a link passes.
+  if (CONCEPT_ID.test(arg)) {
+    try {
+      ctx.io.status?.("reading");
+      const concept = await readConcept(arg);
+      return { title: concept.title || arg, text: concept.content || "" };
+    } catch (error) {
+      ctx.io.print(vfsErrorText(command, error), "err");
+      return null;
+    }
   }
 
   let loc: Location;
@@ -381,7 +469,6 @@ async function contentOf(
     return {
       title: concept.title || entry?.title || basename(loc),
       text: concept.content || "",
-      loc,
     };
   } catch (error) {
     ctx.io.print(vfsErrorText(command, error), "err");
@@ -392,6 +479,26 @@ async function contentOf(
 const cat: CommandSpec = {
   name: "cat",
   usage: "cat <lesson>",
+  completes: "path",
+  help: {
+    usage: "cat <lesson>...",
+    description: [
+      "Print a lesson in full, without paging. More than one operand prints",
+      "them one after another, which is what the name means.",
+      "Reading a lesson marks it started, exactly as opening it used to.",
+    ],
+    args: [
+      {
+        name: "<lesson>",
+        text: "A lesson name, a path ending in one, or an id",
+      },
+    ],
+    examples: [
+      "cat what-is-voip",
+      "cat /roadmaps/voip-basics/introduction/what-is-voip",
+      "cat what-is-voip sip-basics",
+    ],
+  },
   summary: "print a lesson in full",
   group: "filesystem",
   run: async (ctx) => {
@@ -402,7 +509,7 @@ const cat: CommandSpec = {
       const found = await contentOf(ctx, "cat", arg);
       if (!found) continue;
       if (!found.text) {
-        ctx.io.print(`${basename(found.loc)}: no content published yet`, "dim");
+        ctx.io.print(`${found.title}: no content published yet`, "dim");
         continue;
       }
       if (ctx.io.doc) ctx.io.doc(found.text);
@@ -414,6 +521,26 @@ const cat: CommandSpec = {
 const less: CommandSpec = {
   name: "less",
   usage: "less <lesson>",
+  completes: "path",
+  help: {
+    usage: "less <lesson>",
+    description: [
+      "Read a lesson one screenful at a time. Space pages on, Enter moves one",
+      "line, G jumps to the end, q stops — the keys less itself uses.",
+      "A lesson that already fits is simply printed, as less does with a short",
+      "file.",
+    ],
+    args: [
+      {
+        name: "<lesson>",
+        text: "A lesson name, a path ending in one, or an id",
+      },
+    ],
+    examples: [
+      "less what-is-voip",
+      "less /roadmaps/voip-basics/introduction/what-is-voip",
+    ],
+  },
   summary: "page through a lesson one screen at a time",
   group: "filesystem",
   aliases: ["more"],
@@ -422,7 +549,7 @@ const less: CommandSpec = {
     const found = await contentOf(ctx, "less", operands[0]);
     if (!found) return;
     if (!found.text) {
-      ctx.io.print(`${basename(found.loc)}: no content published yet`, "dim");
+      ctx.io.print(`${found.title}: no content published yet`, "dim");
       return;
     }
 
@@ -444,6 +571,30 @@ const less: CommandSpec = {
 const find: CommandSpec = {
   name: "find",
   usage: "find [path] [-name pattern] [-type f|d]",
+  completes: "path",
+  help: {
+    usage: "find [path] [-name pattern] [-type f|d] [-maxdepth n]",
+    description: [
+      "Walk the tree from a starting point and print what is under it,",
+      "breadth-first. With no path it walks from the current directory.",
+    ],
+    args: [{ name: "[path]", text: "Where to start; here when omitted" }],
+    options: [
+      {
+        name: "-name <pattern>",
+        text: "Match the name or title against a glob (* and ?)",
+      },
+      { name: "-type f", text: "Lessons only" },
+      { name: "-type d", text: "Roadmaps and modules only" },
+      { name: "-maxdepth <n>", text: "Do not descend more than n levels" },
+    ],
+    examples: [
+      "find",
+      "find -name '*voip*'",
+      "find -type f",
+      "find /roadmaps -type d -maxdepth 1",
+    ],
+  },
   summary: "search the tree by name",
   group: "filesystem",
   run: async (ctx) => {
@@ -543,6 +694,31 @@ const find: CommandSpec = {
 const grep: CommandSpec = {
   name: "grep",
   usage: "grep [-i] [-n] [-r] <pattern> [path]",
+  // The pattern comes first and is not a path; everything after it is.
+  completes: "path-after-first",
+  help: {
+    usage: "grep [-i] [-n] [-r] [-l] <pattern> [path]",
+    description: [
+      "Search lesson text for a pattern and print the lines that match.",
+      "A directory needs -r, exactly as GNU grep insists.",
+    ],
+    args: [
+      { name: "<pattern>", text: "A regular expression" },
+      { name: "[path]", text: "What to search; here when omitted" },
+    ],
+    options: [
+      { name: "-i", text: "Ignore case" },
+      { name: "-n", text: "Prefix each line with its line number" },
+      { name: "-r", text: "Search a directory and everything under it" },
+      { name: "-l", text: "Print the matching lesson names only, one hit each" },
+    ],
+    examples: [
+      "grep codec what-is-voip",
+      "grep -i sip -r .",
+      "grep -rn 'packet loss' /roadmaps/voip-basics",
+      "grep -rl jitter",
+    ],
+  },
   summary: "search lesson text for a pattern",
   group: "filesystem",
   run: async (ctx) => {
@@ -641,6 +817,17 @@ const grep: CommandSpec = {
 const history: CommandSpec = {
   name: "history",
   usage: "history [-c] [n]",
+  help: {
+    usage: "history [-c] [n]",
+    description: [
+      "Print the commands typed this session, oldest first and numbered from",
+      "one. Consecutive duplicates collapse, the way bash does with ignoredups.",
+      "↑ walks this same list, and clear does not empty it.",
+    ],
+    args: [{ name: "[n]", text: "Print only the last n lines" }],
+    options: [{ name: "-c", text: "Clear the history" }],
+    examples: ["history", "history 20", "history -c"],
+  },
   summary: "list the commands run this session",
   group: "shell",
   run: (ctx) => {

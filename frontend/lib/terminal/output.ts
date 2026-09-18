@@ -69,6 +69,88 @@ export function segmentsOf(template: string): LineSegment[] {
   return segments;
 }
 
+// ─── The fetch report ───────────────────────────────────────────────────────
+// `neofetch` prints facts about a machine beside its logo. Ours prints facts
+// about the account beside the product mark, and the shape is the same one: an
+// identity line, a rule the width of it, then aligned label/value rows.
+//
+// A command gathers the facts and stops there. Two columns or one, how wide
+// the rule runs, which swatches the palette shows, and what any of it does on
+// a phone are all layout — so none of them appear in this type. It carries no
+// widths, no glyphs and no colours, only what is true.
+
+/** One row of the block. `label` prints as written; the column it is padded
+ *  into is the renderer's business, because only the renderer knows how much
+ *  room there is. */
+export interface FetchRow {
+  label: string;
+  value: string;
+}
+
+/** Everything `neofetch` has to say.
+ *
+ *  `user` and `host` stay apart rather than arriving pre-joined as `user@host`
+ *  because a theme may well colour the two halves differently — real neofetch
+ *  does — and a command that had already glued them together would have taken
+ *  that decision away from the only layer entitled to make it. */
+export interface FetchReport {
+  user: string;
+  host: string;
+  rows: FetchRow[];
+}
+
+/** The block as one line of text.
+ *
+ *  A report renders as layout, and an entry whose text is empty is an entry
+ *  that nothing reading the buffer as text can do anything with. This is the
+ *  linear reading kept beside it, and it lives here rather than in the renderer
+ *  because it is pure composition — no glyph, no width, nothing a theme has a
+ *  view on. What is drawn on screen carries its own labels. */
+export function fetchText(report: FetchReport): string {
+  const facts = report.rows.map((r) => `${r.label}: ${r.value}`).join(", ");
+  return `${report.user}@${report.host} — ${facts}`;
+}
+
+// ─── Command help ───────────────────────────────────────────────────────────
+// Every command answers `<command> help` and `<command> --help` with the same
+// block: what to type, what it does, what each argument and option means, and
+// examples that would actually work. It is the one piece of documentation a
+// shell has, so no command is allowed to be missing it — `COMMAND_LIST` is
+// checked, not trusted.
+//
+// The shape is data rather than pre-formatted text on purpose. Column widths,
+// indentation and which heading is drawn how are all rendering, and keeping
+// them out of here is what lets `man` print the same facts in a different
+// arrangement without a second copy of the content.
+
+/** One row of a help section: the thing, then what it means. */
+export interface HelpRow {
+  /** `-r, --recursive`, `<path>`, `add <text>` — printed as written. */
+  name: string;
+  text: string;
+}
+
+/** What `<command> --help` prints.
+ *
+ *  `usage` and `examples` are required because they are the two parts a reader
+ *  actually uses; the middle sections appear only when the command has any. A
+ *  command with no options prints no `Options:` heading rather than an empty
+ *  one. */
+export interface CommandHelp {
+  /** The synopsis, without the leading `Usage:` — `cat <path>...`. */
+  usage: string;
+  /** One or two lines. Sentences, not a restatement of the name. */
+  description: string[];
+  /** Subcommands, for a command that dispatches on its first word. */
+  commands?: HelpRow[];
+  /** Positional arguments. */
+  args?: HelpRow[];
+  /** Flags. */
+  options?: HelpRow[];
+  /** Lines a reader could type as they stand. At least one. */
+  examples: string[];
+}
+
 // ─── The listing index ──────────────────────────────────────────────────────
 // A UUID is unreadable and unguessable, so a listing prints `[1] VOIP Basics`
 // and the next command may say `open 1`. The numbering belongs to whichever

@@ -13,9 +13,10 @@
 import { LEARNING_COMMANDS } from "./learning-commands";
 import { FS_COMMANDS } from "./fs-commands";
 import { isAbortError } from "./request";
-import { knownTitles, stuck, recordHistory } from "./output";
-import { activeGlyphs } from "./theme-contract";
+import { knownTitles, stuck, recordHistory, fetchText } from "./output";
 import type { Location } from "./location";
+import { childKindOf, resolvePath } from "./location";
+import { listChildren, type VfsEntry } from "./resolve-location";
 import apiClient from "@/lib/api-client";
 import { User } from "@/lib/auth";
 import {
@@ -41,12 +42,21 @@ export {
   resolveIndex,
   knownTitles,
   clearListings,
+  fetchText,
   type LineKind,
   type TerminalAction,
   type LineSegment,
   type IndexKind,
+  type FetchRow,
+  type FetchReport,
+  type CommandHelp,
+  type HelpRow,
 } from "./output";
 import type {
+  CommandHelp,
+  FetchReport,
+  FetchRow,
+  HelpRow,
   IndexKind,
   LineKind,
   LineSegment,
@@ -110,6 +120,16 @@ export interface TerminalIO {
    *  single-line prompt — omits this, and `less` prints the lesson instead of
    *  refusing to work. */
   page?: (text: string, opts?: { title?: string }) => Promise<void>;
+  /** Draw a fetch report: the mark, the identity line, and the facts under it.
+   *
+   *  Here for the same reason `page` is. Everything still undecided once the
+   *  facts are gathered belongs to the host — whether there is room beside the
+   *  art for a second column, how wide the rule under the identity runs, and
+   *  what the palette actually is — and none of it is anything `neofetch`
+   *  could answer from where it stands. A host with no such layout, the
+   *  dashboard's single-line prompt, omits this and gets the same facts as
+   *  plain rows rather than nothing. */
+  fetch?: (report: FetchReport) => void;
   /** Leave the terminal and return to the dashboard. */
   close: () => void;
 }
@@ -150,7 +170,94 @@ export interface CommandSpec {
   aliases?: string[];
   /** Kept out of `help` and the hint strip. */
   hidden?: boolean;
+  /** Which of this command's operands name a place in the tree, so TAB can
+   *  complete them against what is actually there. Absent means the command
+   *  takes no path — `theme`, `history`, `whoami`. */
+  completes?: PathArity;
+  /** What `<command> help` and `<command> --help` print. Required — a command
+   *  with no help is a command nobody can learn, and `commands.test.mjs`
+   *  asserts every entry in `COMMAND_LIST` has one. */
+  help: CommandHelp;
   run: (ctx: CommandCtx) => void | Promise<void>;
+}
+
+// ─── Help rendering ─────────────────────────────────────────────────────────
+// Two arrangements of one set of facts. `--help` prints the shape a modern CLI
+// prints — Usage, Description, then the tables, then examples. `man` prints the
+// same content under the headings a man page uses. Neither is allowed to hold
+// content the other does not, because there is only one `CommandHelp` behind
+// both of them.
+
+/** The gutter every help table aligns its second column to. Wide enough for
+ *  `-r, --recursive` and short enough that a 360px screen still has room for
+ *  the text beside it; a name longer than this pushes its own text along
+ *  rather than truncating, the way `--help` output does everywhere. */
+const HELP_GUTTER = 18;
+
+function helpRows(io: TerminalIO, title: string, rows?: HelpRow[]) {
+  if (!rows?.length) return;
+  io.print("");
+  io.print(`${title}:`, "head");
+  for (const entry of rows) {
+    const pad = entry.name.padEnd(HELP_GUTTER);
+    io.print(`  ${pad} ${entry.text}`);
+  }
+}
+
+/** `<command> --help`. */
+function printHelp(io: TerminalIO, name: string, help: CommandHelp) {
+  io.print(`Usage: ${help.usage}`, "head");
+  io.print("");
+  io.print("Description:", "head");
+  for (const line of help.description) io.print(`  ${line}`);
+  helpRows(io, "Commands", help.commands);
+  helpRows(io, "Arguments", help.args);
+  helpRows(io, "Options", help.options);
+  io.print("");
+  io.print("Examples:", "head");
+  for (const example of help.examples) io.print(`  ${example}`);
+  io.print("");
+  io.print(`Run ${name} with no arguments to see its default output.`, "dim");
+}
+
+/** `man <command>`. The same facts, under the headings a man page uses. */
+export function printMan(io: TerminalIO, spec: CommandSpec) {
+  const { help } = spec;
+  io.print(`${spec.name.toUpperCase()}(1)`, "head");
+  io.print("");
+  io.print("NAME", "head");
+  io.print(`  ${spec.name} — ${spec.summary}`);
+  io.print("");
+  io.print("SYNOPSIS", "head");
+  io.print(`  ${help.usage}`);
+  io.print("");
+  io.print("DESCRIPTION", "head");
+  for (const line of help.description) io.print(`  ${line}`);
+  helpRows(io, "COMMANDS", help.commands);
+  helpRows(io, "ARGUMENTS", help.args);
+  helpRows(io, "OPTIONS", help.options);
+  helpRows(
+    io,
+    "SEE ALSO",
+    spec.aliases?.length
+      ? [{ name: "aliases", text: spec.aliases.join(", ") }]
+      : undefined,
+  );
+  io.print("");
+  io.print("EXAMPLES", "head");
+  for (const example of help.examples) io.print(`  ${example}`);
+}
+
+/** Whether this argument list is asking for the help block rather than for the
+ *  command's own work.
+ *
+ *  `help`, `--help` and `-h` all mean the same thing, and they only count as
+ *  the *first* argument: `grep --help` is a request for documentation, while
+ *  `grep --help notes` is a search for the string `--help`, which is the
+ *  distinction GNU tools draw too. */
+function wantsHelp(args: string[]): boolean {
+  const first = args[0]?.toLowerCase();
+  return args.length === 1 && (first === "help" || first === "--help" || first === "-h");
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -215,33 +322,45 @@ const help: CommandSpec = {
   usage: "help [command]",
   summary: "list commands, or explain one",
   group: "shell",
-  aliases: ["?", "--help"],
+  aliases: ["?"],
+  help: {
+    usage: "help [command]",
+    description: [
+      "List every command, grouped by what it is for.",
+      "With a command name, print that command's full help block — the same",
+      "thing `<command> --help` prints.",
+    ],
+    args: [{ name: "[command]", text: "Print this command's help instead of the list" }],
+    examples: ["help", "help ls", "help quiz", "ls --help"],
+  },
   run: ({ args, io }) => {
     const [target] = args;
     if (target) {
       const spec = resolve(target);
       if (!spec) {
         io.print(`help: no such command: ${target}`, "err");
+        stuck(io, "", "Run {help} with no arguments to see the full list.");
         return;
       }
-      io.print(spec.usage, "head");
-      io.print(`  ${spec.summary}`, "dim");
+      printHelp(io, spec.name, spec.help);
       return;
     }
 
     io.print("AVAILABLE COMMANDS", "head");
     const groups = [...new Set(COMMAND_LIST.map((s) => s.group))];
     for (const group of groups) {
+      io.print("");
       io.print(`  ${group}/`, "dim");
       for (const spec of COMMAND_LIST.filter((s) => s.group === group)) {
         io.print(`    ${spec.usage.padEnd(28)} ${spec.summary}`);
       }
     }
     io.print("");
-    io.print(
-      "  [TAB] complete · [↑/↓] history · [ESC] cancel · exit to return to dashboard",
-      "dim",
-    );
+    io.print("  [TAB] completes · [↑/↓] history · [^C] interrupt · [^L] clear", "dim");
+    io.print("");
+    // The closing line of the list, and the only place the two spellings are
+    // named together — every command answers both.
+    io.print('Type "[command] help" or "[command] --help" for more info.');
   },
 };
 
@@ -250,6 +369,14 @@ const whoami: CommandSpec = {
   usage: "whoami",
   summary: "print the signed-in identity",
   group: "profile",
+  help: {
+    usage: "whoami",
+    description: [
+      "Print who this session belongs to: name, email address and role.",
+      "Answered from the session itself, so nothing is fetched.",
+    ],
+    examples: ["whoami"],
+  },
   run: ({ io, user }) => {
     if (!user) {
       io.print("whoami: session not loaded yet", "err");
@@ -264,6 +391,32 @@ const profile: CommandSpec = {
   usage: "profile [set name|set tz|avatar set|avatar clear]",
   summary: "show or edit your profile",
   group: "profile",
+  help: {
+    usage: "profile [set name <value>] [set tz <zone>] [avatar set|clear]",
+    description: [
+      "Show your account record, or change part of it.",
+      "With no arguments it fetches and prints the record as it stands.",
+    ],
+    commands: [
+      {
+        name: "set name <value>",
+        text: "Rename the account; the rest of the line is the name",
+      },
+      {
+        name: "set tz <zone>",
+        text: "Set the timezone to an IANA zone, e.g. Asia/Kolkata",
+      },
+      { name: "avatar set", text: "Upload a picture, cropped to 256x256" },
+      { name: "avatar clear", text: "Remove the current picture" },
+    ],
+    examples: [
+      "profile",
+      "profile set name Yaswanth K",
+      "profile set tz Asia/Kolkata",
+      "profile avatar set",
+      "profile avatar clear",
+    ],
+  },
   run: async (ctx) => {
     const { args, io } = ctx;
     const [sub] = args;
@@ -402,6 +555,24 @@ const timezone: CommandSpec = {
   summary: "show or change your timezone",
   group: "profile",
   aliases: ["tz"],
+  help: {
+    usage: "timezone [zone|auto]",
+    description: [
+      "Show the timezone every date in the shell is printed in, or change it.",
+      "Dates are stored in UTC and rendered in this zone, so changing it never",
+      "alters a record — only how it reads.",
+    ],
+    args: [
+      { name: "<zone>", text: "An IANA zone name, e.g. Europe/Berlin" },
+      { name: "auto", text: "Adopt the zone this browser reports" },
+    ],
+    examples: [
+      "timezone",
+      "timezone auto",
+      "timezone Asia/Kolkata",
+      "tz America/New_York",
+    ],
+  },
   run: async ({ args, io, user, refreshUser }) => {
     const [arg] = args;
     const detected = detectTimezone();
@@ -443,6 +614,14 @@ const passwd: CommandSpec = {
   usage: "passwd",
   summary: "change your password",
   group: "profile",
+  help: {
+    usage: "passwd",
+    description: [
+      "Change the account password. Prompts for the current one, then the new",
+      "one twice; nothing is echoed as you type it.",
+    ],
+    examples: ["passwd"],
+  },
   run: async ({ io }) => {
     const current = await io.ask("current password", { mask: true });
     if (!current) {
@@ -476,6 +655,15 @@ const applyInstructor: CommandSpec = {
   usage: "apply-instructor",
   summary: "submit an instructor application",
   group: "profile",
+  help: {
+    usage: "apply-instructor",
+    description: [
+      "Submit an application to teach on the platform. Prompts for the",
+      "expertise and the motivation an admin will read.",
+      "One application at a time — check on it with instructor-status.",
+    ],
+    examples: ["apply-instructor", "instructor-status"],
+  },
   run: async ({ io, user, refreshUser }) => {
     if (user && (user.role === "instructor" || user.role === "admin")) {
       io.print(`apply-instructor: you are already ${user.role}`, "err");
@@ -500,6 +688,14 @@ const instructorStatus: CommandSpec = {
   usage: "instructor-status",
   summary: "check your instructor application",
   group: "profile",
+  help: {
+    usage: "instructor-status",
+    description: [
+      "Print the state of your instructor application: PENDING, APPROVED or",
+      "REJECTED, with the date it was decided and any note left on it.",
+    ],
+    examples: ["instructor-status", "apply-instructor"],
+  },
   run: async ({ io }) => {
     try {
       const { data } = await apiClient.get<User>("/users/me");
@@ -533,6 +729,14 @@ const deletionStatus: CommandSpec = {
   usage: "deletion-status",
   summary: "check an account deletion request",
   group: "danger",
+  help: {
+    usage: "deletion-status",
+    description: [
+      "Print the state of an account deletion request, if one is open.",
+      "Says so plainly when nothing has been requested.",
+    ],
+    examples: ["deletion-status"],
+  },
   run: async ({ io, user }) => {
     try {
       const { data } = await apiClient.get<DeletionRequest | null>(
@@ -558,6 +762,15 @@ const deleteAccount: CommandSpec = {
   usage: "delete-account",
   summary: "request permanent account deletion",
   group: "danger",
+  help: {
+    usage: "delete-account",
+    description: [
+      "Submit a request for an admin to delete this account permanently.",
+      "Requires typing DELETE to confirm, and takes an optional reason.",
+      "Approval erases progress, XP and badges; it cannot be undone.",
+    ],
+    examples: ["delete-account", "deletion-status"],
+  },
   run: async ({ io, user }) => {
     if (user?.role === "admin") {
       io.print("delete-account: administrators cannot self-delete", "err");
@@ -590,6 +803,15 @@ const logoutCmd: CommandSpec = {
   usage: "logout",
   summary: "end the session and return to login",
   group: "session",
+  help: {
+    usage: "logout",
+    description: [
+      "End the session, clear the stored credentials and return to the login",
+      "screen. Asks for confirmation first.",
+      "exit is the other one: it leaves the shell but stays signed in.",
+    ],
+    examples: ["logout", "exit"],
+  },
   run: async ({ io, logout, confirmLogout }) => {
     if (!(await (confirmLogout ? confirmLogout() : confirm(io, "end session?")))) {
       io.print("logout: cancelled", "dim");
@@ -605,6 +827,18 @@ const theme: CommandSpec = {
   usage: "theme [dark|light]",
   summary: "switch the colour scheme",
   group: "session",
+  help: {
+    usage: "theme [dark|light]",
+    description: [
+      "Switch the colour scheme. With no argument it toggles to the other one.",
+      "The choice is remembered for this browser.",
+    ],
+    args: [
+      { name: "dark", text: "Force the dark scheme" },
+      { name: "light", text: "Force the light scheme" },
+    ],
+    examples: ["theme", "theme dark", "theme light"],
+  },
   run: ({ args, io, isDark, setTheme }) => {
     const [want] = args;
     if (!want) {
@@ -621,12 +855,174 @@ const theme: CommandSpec = {
   },
 };
 
+// ─── neofetch ───────────────────────────────────────────────────────────────
+// The screenshot-on-a-forum command: the mark, `user@host`, and a column of
+// facts about what you are running. Ours answers the same question about a
+// different kind of machine, so the fields are mapped rather than invented.
+//
+// Mapped honestly, which is the part worth being strict about. `Uptime` is the
+// streak because that is the same fact — how long this has been running
+// without going down. `Packages` counts what is installed to learn from.
+// `Shell` and `Terminal` name what is actually interpreting the line. The
+// fields with no truthful analogue here — Kernel, CPU, GPU, Memory,
+// Resolution — are absent rather than filled with a joke, because a fetch
+// block that lies about one row is not worth reading for the others.
+
+const SHELL_VERSION = "1.0";
+
+/** The whole block, in order.
+ *
+ *  `extra` is whatever had to be asked for — the streak, the package count, the
+ *  XP, the queue — and it sits directly under `OS`, the way neofetch puts what
+ *  the machine is doing right now above what it was set up as. Boot passes
+ *  nothing and gets the same block without those rows, because a start-up that
+ *  waits on four requests before drawing its first screen is not a boot.
+ *
+ *  One function rather than two so the order is decided once. A caller can add
+ *  rows; it cannot reorder the ones it did not supply. */
+function factsFor(user: User | undefined, extra: FetchRow[] = []): FetchRow[] {
+  return [
+    { label: "OS", value: `source:dev ${SHELL_VERSION}` },
+    ...extra,
+    { label: "Shell", value: `sd-sh ${SHELL_VERSION}` },
+    { label: "Terminal", value: "web console" },
+    { label: "Role", value: (user?.role ?? "student").toUpperCase() },
+    { label: "Account", value: user?.email ?? "—" },
+    { label: "Timezone", value: user?.timezone || "UTC" },
+    { label: "Joined", value: fmtDate(user?.createdAt, user?.timezone) },
+  ];
+}
+
+/** The identity line. The user half is the role because that is what the
+ *  prompt says too — `student@source-dev` — and two names for the same account
+ *  in the same window would be one name too many. */
+function reportFor(user: User | undefined, rows: FetchRow[]): FetchReport {
+  return {
+    user: (user?.role ?? "student").toLowerCase(),
+    host: "source-dev",
+    rows,
+  };
+}
+
+const neofetch: CommandSpec = {
+  name: "neofetch",
+  usage: "neofetch",
+  summary: "print the mark and what this account is running",
+  group: "shell",
+  aliases: ["fetch", "sysinfo"],
+  help: {
+    usage: "neofetch",
+    description: [
+      "Print the product mark beside what this account is running: the shell",
+      "version, how long the streak has held, how much is installed to learn",
+      "from, the XP, the review queue, and the account's own settings.",
+    ],
+    examples: ["neofetch", "fetch", "sysinfo"],
+  },
+  run: async (ctx) => {
+    const { io, user, isDark } = ctx;
+    io.status?.("probing");
+
+    // Every probe is allowed to come back empty. neofetch prints what it can
+    // read and omits what it cannot; it does not fail the whole block because
+    // one number was unavailable.
+    const [stats, due, roadmaps, lessons] = await Promise.all([
+      apiClient
+        .get<{ totalXp: number; currentStreak: number }>("/gamification/me")
+        .then((r) => r.data)
+        .catch(() => undefined),
+      apiClient
+        .get<{ count?: number; dueCount?: number }>("/review/due-count")
+        .then((r) => r.data.dueCount ?? r.data.count ?? 0)
+        .catch(() => undefined),
+      apiClient
+        .get<unknown[]>("/roadmaps")
+        .then((r) => r.data.length)
+        .catch(() => undefined),
+      apiClient
+        .get<unknown[]>("/concepts")
+        .then((r) => r.data.length)
+        .catch(() => undefined),
+    ]);
+
+    const count = (n: number, one: string) =>
+      `${n} ${n === 1 ? one : `${one}s`}`;
+
+    const live: FetchRow[] = [];
+    if (stats)
+      live.push({ label: "Uptime", value: count(stats.currentStreak, "day") });
+    if (roadmaps !== undefined && lessons !== undefined)
+      live.push({
+        label: "Packages",
+        value: `${count(roadmaps, "roadmap")}, ${count(lessons, "lesson")}`,
+      });
+    if (stats) live.push({ label: "XP", value: String(stats.totalXp) });
+    if (due !== undefined)
+      live.push({
+        label: "Reviews",
+        value: due ? `${count(due, "review")} due` : "none due",
+      });
+    live.push({ label: "Theme", value: isDark ? "dark" : "light" });
+
+    const report = reportFor(user, factsFor(user, live));
+
+    if (io.fetch) {
+      io.fetch(report);
+      return;
+    }
+    // A host with no room for the block still gets the facts — the same
+    // reasoning `less` follows when there is no pager.
+    io.print(`${report.user}@${report.host}`, "head");
+    for (const fact of report.rows) io.print(row(fact.label, fact.value));
+  },
+};
+
+const man: CommandSpec = {
+  name: "man",
+  usage: "man <command>",
+  summary: "read a command's manual page",
+  group: "shell",
+  help: {
+    usage: "man <command>",
+    description: [
+      "Print the manual page for a command: NAME, SYNOPSIS, DESCRIPTION, the",
+      "argument and option tables, and examples.",
+      "Same content as <command> --help, under the headings a man page uses.",
+    ],
+    args: [{ name: "<command>", text: "The command to document" }],
+    examples: ["man ls", "man grep", "man quiz", "man qa"],
+  },
+  run: ({ args, io }) => {
+    const [target] = args;
+    if (!target) {
+      io.print("What manual page do you want?", "err");
+      stuck(io, "", "Try {man ls}, or {help} for the list of commands.");
+      return;
+    }
+    const spec = resolve(target);
+    if (!spec) {
+      io.print(`No manual entry for ${target}`, "err");
+      stuck(io, "", "Run {help} to see every command that has one.");
+      return;
+    }
+    printMan(io, spec);
+  },
+};
+
 const clear: CommandSpec = {
   name: "clear",
   usage: "clear",
   summary: "empty the screen buffer",
   group: "shell",
   aliases: ["cls"],
+  help: {
+    usage: "clear",
+    description: [
+      "Empty the scrollback. What ↑ remembers is untouched, the same way a",
+      "real shell behaves — clear hides the output, not the history.",
+    ],
+    examples: ["clear", "cls"],
+  },
   run: ({ io }) => io.clear(),
 };
 
@@ -636,6 +1032,14 @@ const exit: CommandSpec = {
   summary: "return to the dashboard",
   group: "shell",
   aliases: ["quit", "q"],
+  help: {
+    usage: "exit",
+    description: [
+      "Leave the shell and return to the dashboard. The session stays open.",
+      "logout is the other one: it ends the session.",
+    ],
+    examples: ["exit", "quit", "q"],
+  },
   run: ({ io }) => io.close(),
 };
 
@@ -644,6 +1048,7 @@ const exit: CommandSpec = {
 /** Display order for `help` and the hint strip. */
 export const COMMAND_LIST: CommandSpec[] = [
   help,
+  man,
   // Navigation comes first because it is how everything else is reached: you
   // find a lesson with `ls` and `cd` before you `read` or `quiz` it.
   ...FS_COMMANDS,
@@ -657,6 +1062,7 @@ export const COMMAND_LIST: CommandSpec[] = [
   deletionStatus,
   deleteAccount,
   theme,
+  neofetch,
   clear,
   exit,
   logoutCmd,
@@ -676,12 +1082,20 @@ function resolve(name: string): CommandSpec | undefined {
 }
 
 // The boot mark used to live here as a `LOGO` constant — six lines of slant
-// ASCII. It now comes from the active theme via `activeGlyphs().banner`,
-// because the letterform, its width, and the fact that it has to survive a
-// narrow viewport without the letters coming apart are all rendering
-// decisions. This layer still decides *that* a mark is printed, and when.
+// ASCII. It now comes from the active theme, because the letterform, its width,
+// and the fact that it has to survive a narrow viewport without the letters
+// coming apart are all rendering decisions. This layer still decides *that* a
+// mark is printed, and when — it does so by asking for a fetch report, which
+// is the block the mark belongs to.
 
-type BootLine = { text: string; kind: LineKind; actions?: TerminalAction[] };
+type BootLine = {
+  text: string;
+  kind: LineKind;
+  actions?: TerminalAction[];
+  /** Set when this line is a `neofetch` block rather than text. `text` stays
+   *  filled in as the plain reading of it, for a host that cannot draw one. */
+  report?: FetchReport;
+};
 
 /** One start-up step: a command the shell types out at its own prompt, then
  *  what that command printed. The host animates this, so the first thing on
@@ -690,6 +1104,12 @@ type BootLine = { text: string; kind: LineKind; actions?: TerminalAction[] };
 export interface BootStep {
   command: string;
   lines: BootLine[];
+}
+
+/** The `neofetch` block boot prints: the facts that cost no request. */
+function bootFetch(user?: User): BootLine {
+  const report = reportFor(user, factsFor(user));
+  return { text: fetchText(report), kind: "out", report };
 }
 
 /** The start-up script, in the shape a real shell's would take: probe the
@@ -715,10 +1135,7 @@ export function bootSequence(user?: User): BootStep[] {
     },
     {
       command: "neofetch",
-      lines: [
-        { text: activeGlyphs().banner, kind: "banner" },
-        { text: "source:dev // learning shell v1.0", kind: "head" },
-      ],
+      lines: [bootFetch(user)],
     },
     {
       command: "source-dev --hints",
@@ -731,13 +1148,19 @@ export function bootSequence(user?: User): BootStep[] {
         {
           text: "Or browse the catalogue:",
           kind: "out",
-          actions: [{ label: "roadmaps", command: "roadmaps" }],
+          actions: [{ label: "ls", command: "ls" }],
         },
         { text: "", kind: "out" },
+        // The one line every shell opens with. It is the last thing printed
+        // before the prompt arrives, because it is the answer to the question
+        // an empty prompt asks.
         {
-          text: "Type a command. TAB completes, ↑ recalls, [back] steps back.",
+          text: "Type 'help' to see list of available commands.",
+          kind: "out",
+        },
+        {
+          text: "TAB completes · ↑ recalls · ^C interrupts · ^L clears",
           kind: "dim",
-          actions: [{ label: "help", command: "help" }],
         },
       ],
     },
@@ -835,10 +1258,8 @@ export function completeCommand(input: string): string | null {
  *  this map takes no title argument — `theme`, `help` — and completes only from
  *  the command name and phrase table above. */
 const ARG_INDEX: Record<string, IndexKind> = {
-  read: "concept",
   quiz: "concept",
   complete: "concept",
-  open: "roadmap",
 };
 
 /** Inline argument completion. Given a line whose command takes a title, return
@@ -867,6 +1288,104 @@ export function completions(input: string): string[] {
   // one argument the lookup can match whole.
   const quote = (title: string) => (/\s/.test(title) ? `"${title}"` : title);
   return titles.slice(0, 12).map((title) => `${parts[0]} ${quote(title)}`);
+}
+
+// ─── Path completion ────────────────────────────────────────────────────────
+// The other half of the data: not what has been listed on screen, but what is
+// actually addressable from where the user is standing. `cat voip⇥` at the root
+// completes against the roadmaps; the same keystroke inside a module completes
+// against that module's lessons. It is the same rule a shell follows, and it
+// reads the same listing `ls` does, through the same cache — so the first TAB
+// in a directory costs one request and every TAB after it costs nothing.
+
+/** Where in a command's operands a path may appear. */
+export type PathArity =
+  /** Every operand names a place: `ls`, `cd`, `cat`, `less`, `find`, `open`. */
+  | "path"
+  /** The first operand is something else — `grep`'s pattern — and the rest
+   *  name places. */
+  | "path-after-first";
+
+/** The operand being typed, and which operand it is.
+ *
+ *  Options are skipped rather than counted: in `grep -i sip ⇥` the path is
+ *  still the second operand, because `-i` is not one. */
+function operandUnderCursor(
+  parts: string[],
+  trailingSpace: boolean,
+): { fragment: string; position: number } | null {
+  const fragment = trailingSpace ? "" : (parts[parts.length - 1] ?? "");
+  // A half-typed option is an option, not a path.
+  if (fragment.startsWith("-")) return null;
+  const before = parts.slice(1, trailingSpace ? undefined : -1);
+  return { fragment, position: before.filter((p) => !p.startsWith("-")).length };
+}
+
+/** Complete the operand being typed against what is really there.
+ *
+ *  Prefix first, the way a shell matches, then a substring pass — because the
+ *  names here are generated from lesson titles and can run to fifty characters,
+ *  and the part a reader remembers is rarely the start of one. */
+export async function completePath(
+  input: string,
+  cwd: Location,
+): Promise<string[]> {
+  const trailingSpace = /\s$/.test(input);
+  const parts = tokenise(input);
+  if (!parts.length) return [];
+  const spec = resolve(parts[0]);
+  if (!spec?.completes) return [];
+  // Nothing to complete for a command that is still being named.
+  if (parts.length === 1 && !trailingSpace) return [];
+
+  const operand = operandUnderCursor(parts, trailingSpace);
+  if (!operand) return [];
+  if (spec.completes === "path-after-first" && operand.position < 1) return [];
+
+  // Split what has been typed into the directory it names and the prefix still
+  // being written — `voip-basics/intro` looks in `voip-basics` for `intro`.
+  const cut = operand.fragment.lastIndexOf("/");
+  const dir = cut === -1 ? "" : operand.fragment.slice(0, cut + 1);
+  const prefix = cut === -1 ? operand.fragment : operand.fragment.slice(cut + 1);
+
+  const base = dir ? resolvePath(cwd, dir) : cwd;
+  if (!base) return [];
+  const kind = childKindOf(base);
+  if (!kind) return [];
+
+  let entries: VfsEntry[];
+  try {
+    entries = await listChildren(base);
+  } catch {
+    // Completion is a convenience; it never reports an error of its own. The
+    // command the reader goes on to run will say what went wrong.
+    return [];
+  }
+
+  const needle = prefix.toLowerCase();
+  const starts = entries.filter((e) => e.name.toLowerCase().startsWith(needle));
+  const hits = starts.length
+    ? starts
+    : entries.filter((e) => e.name.toLowerCase().includes(needle));
+  if (!hits.length) return [];
+
+  // A directory ends in `/` so the next TAB descends into it; a lesson ends in
+  // a space, because there is nothing below it to type.
+  const tail = kind === "concept" ? " " : "/";
+  const head = trailingSpace ? parts : parts.slice(0, -1);
+  return hits
+    .slice(0, 24)
+    .map((entry) => [...head, `${dir}${entry.name}`].join(" ") + tail);
+}
+
+/** Everything TAB can offer for the argument being typed: what is addressable
+ *  from here first, then the titles already seen on screen. */
+export async function completeArgument(
+  input: string,
+  cwd: Location,
+): Promise<string[]> {
+  const paths = await completePath(input, cwd);
+  return paths.length ? paths : completions(input);
 }
 
 /** Second-level suggestions for the hint strip, so `profile set tz` and
@@ -929,13 +1448,21 @@ export async function runCommand(
       "",
       near
         ? `Did you mean {${near.name}}? {help} lists everything, or pick up where you left off with {continue}.`
-        : "Try {help} for the full list, {roadmaps} to browse your paths, or {continue} to resume a lesson.",
+        : "Try {help} for the full list, {ls} to browse your paths, or {continue} to resume a lesson.",
     );
     return;
   }
 
   try {
-    await spec.run({ ...base, args: bare ? [name] : parts.slice(1), raw });
+    const args = bare ? [name] : parts.slice(1);
+    // Documentation before work, for every command without exception. One
+    // interception rather than a branch inside each `run`, so a command cannot
+    // be added that forgets to answer `--help`.
+    if (!bare && wantsHelp(args)) {
+      printHelp(base.io, spec.name, spec.help);
+      return;
+    }
+    await spec.run({ ...base, args, raw });
   } catch (e) {
     // An aborted request is the user pressing ^C, not a failure: the command
     // stopped because they asked it to.

@@ -1,27 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import apiClient from "@/lib/api-client";
 import type { User } from "@/lib/auth";
-import {
-  matchCommands,
-  subHints,
-  type LineSegment,
-  type TerminalAction,
+import type {
+  FetchReport,
+  LineSegment,
+  TerminalAction,
 } from "@/lib/terminal/commands";
 import type { ConsoleEntry } from "@/lib/terminal/session";
 import { displayPath } from "@/lib/terminal/location";
 import { getTheme, DEFAULT_THEME_ID } from "./themes";
 import { useUiMode } from "@/providers/ui-mode-provider";
-import {
-  TerminalCommandBar,
-  TerminalHeader,
-  TerminalSurface,
-} from "./terminal-chrome";
+import { TerminalHeader, TerminalSurface } from "./terminal-chrome";
 import { useTerminalSession } from "./use-terminal-session";
 
 /** The page already owns an h1, so a lesson's own headings start below it and
@@ -53,94 +48,152 @@ function usePrefersReducedMotion() {
   return still;
 }
 
-/** `[command]` tokens, printed inline at the end of the line they belong to.
- *  They are text that happens to be clickable — not buttons — so output reads
- *  as output. Clicking one types its command and runs it, which is the same
- *  path a typed line takes. */
-function InlineActions({
-  actions,
-  busy,
-  run,
-}: {
-  actions: TerminalAction[];
-  busy: boolean;
-  run: (command: string) => void;
-}) {
+/** A runnable word printed inside a line, as text.
+ *
+ *  It looks like `[read]` because that is how a shell writes a word you are
+ *  meant to type, and it is a `<span>` rather than a `<button>` on purpose:
+ *  nothing inside the terminal viewport is clickable. The brackets come from
+ *  the theme's token glyphs, so a theme that marks a verb differently — angle
+ *  brackets, a colour alone — changes them in one place.
+ *
+ *  The command layer still emits these as `TerminalAction`s. Saying *which*
+ *  verbs follow an output is semantic and stays a command's job; whether they
+ *  are text or controls is this layer's, and here they are text. */
+function Token({ label }: { label: string }) {
+  const { tokenOpen, tokenClose } = getTheme(DEFAULT_THEME_ID).glyphs;
+  return (
+    <span className="kip-word">
+      {tokenOpen}
+      {label}
+      {tokenClose}
+    </span>
+  );
+}
+
+/** The verbs that follow a line, printed after it. */
+function InlineActions({ actions }: { actions: TerminalAction[] }) {
   return (
     <>
-      {actions.map((action) => (
-        <button
-          type="button"
-          key={action.command}
-          className="kip-token"
-          disabled={busy}
-          onClick={() => run(action.command)}
-          title={action.command}
-          aria-label={`Run ${action.command}`}
-        >
-          [{action.label}]
-        </button>
+      {actions.map((action, index) => (
+        <span key={`${action.command}-${index}`}>
+          {index > 0 ? " " : null}
+          <Token label={action.label} />
+        </span>
       ))}
     </>
   );
 }
 
-/** A sentence with its verbs inside it — `catching up on review (review)`,
- *  where `review` runs. The words carry no brackets: the prose around them is
- *  already doing that work, and a suggestion should read as a sentence rather
- *  than as a row of controls. */
-function Sentence({
-  segments,
-  busy,
-  run,
-}: {
-  segments: LineSegment[];
-  busy: boolean;
-  run: (command: string) => void;
-}) {
+/** A sentence with its verbs inside it rather than in a row beneath. */
+function Sentence({ segments }: { segments: LineSegment[] }) {
   return (
     <>
       {segments.map((segment, index) =>
         typeof segment === "string" ? (
           <span key={index}>{segment}</span>
         ) : (
-          <button
-            type="button"
-            key={index}
-            className="kip-word"
-            disabled={busy}
-            onClick={() => run(segment.command)}
-            title={segment.command}
-            aria-label={`Run ${segment.command}`}
-          >
-            {segment.label}
-          </button>
+          <Token key={index} label={segment.label} />
         ),
       )}
     </>
   );
 }
 
-/** One line of output. A `banner` is ASCII art and must not wrap, so it gets
- *  a pre that scrolls; a `rule` is a divider whose width is the terminal's,
- *  not a run of dashes; a `cmd` line is echoed under its own prompt the way a
- *  shell does, and carries the caret while the boot script is still typing it;
- *  markdown is flowed. Everything else is text. */
+/** The palette `neofetch` ends on. Real neofetch prints the sixteen colours
+ *  the terminal is actually configured with; this prints the twelve this shell
+ *  is actually painted with, read straight off the custom properties
+ *  `TerminalSurface` sets — so a swatch cannot drift from the colour it claims
+ *  to be, and a second theme changes the row by changing the theme. */
+const SWATCHES = [
+  "base",
+  "panel",
+  "head",
+  "hover",
+  "line",
+  "faint",
+  "dim",
+  "text",
+  "ink",
+  "accent",
+  "alert",
+  "error",
+];
+
+/** The `neofetch` block: the mark on the left, the identity and the facts on
+ *  the right, the palette underneath.
+ *
+ *  The command handed over nothing but strings, and everything still being
+ *  decided here is the reason why. The rule under the identity is exactly as
+ *  wide as the identity, the way neofetch draws it, built from the theme's
+ *  rule glyph rather than a dash typed in place. The two columns become one
+ *  under the layout's breakpoint: at 360px there is room for a logo or a
+ *  column of facts beside it, not both, and a crushed mark reads as corruption
+ *  rather than as a logo. */
+function FetchBlock({ report }: { report: FetchReport }) {
+  const theme = getTheme(DEFAULT_THEME_ID);
+  const id = `${report.user}@${report.host}`;
+  return (
+    <div className="kip-fetch">
+      <pre className="kip-fetch-art" aria-hidden="true">
+        {theme.banner}
+      </pre>
+      <div className="kip-fetch-facts">
+        {/* One line, two halves, coloured apart — the only place in the shell
+            where the prompt's own identity is restated, so it is worth
+            reading as `user@host` and not as one grey run. */}
+        <p className="kip-fetch-id">
+          <span className="kip-fetch-user">{report.user}</span>
+          <span className="kip-fetch-sep">@</span>
+          <span className="kip-fetch-host">{report.host}</span>
+        </p>
+        <p className="kip-fetch-underline" aria-hidden="true">
+          {theme.glyphs.rule.repeat(id.length)}
+        </p>
+        <dl className="kip-fetch-rows">
+          {report.rows.map((fact) => (
+            <div className="kip-fetch-row" key={fact.label}>
+              <dt>{fact.label}</dt>
+              <dd>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="kip-fetch-palette" aria-hidden="true">
+          {SWATCHES.map((name) => (
+            <span
+              key={name}
+              className="kip-swatch"
+              style={{ background: `var(--term-${name})` }}
+            />
+          ))}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** One line of output. A `report` is the `neofetch` block and gets its own
+ *  layout; a `banner` is ASCII art and must not wrap, so it gets a pre that
+ *  scrolls; a `rule` is a divider whose width is the terminal's, not a run of
+ *  dashes; a `cmd` line is echoed under its own prompt the way a shell does,
+ *  and carries the caret while the boot script is still typing it; markdown is
+ *  flowed. Everything else is text. */
 function Line({
   entry,
-  busy,
-  run,
 }: {
   entry: ConsoleEntry;
-  busy: boolean;
-  run: (command: string) => void;
 }) {
   if (entry.kind === "rule")
     return <div className="kip-rule" role="separator" />;
 
+  if (entry.report) return <FetchBlock report={entry.report} />;
+
+  // No command emits `banner` today — the mark now arrives inside a fetch
+  // report, which is where it belongs. The kind stays because it is the
+  // vocabulary's answer to "this is art, do not reflow it", and the next thing
+  // that needs that answer should not have to reinvent it.
   if (entry.kind === "banner")
     return (
-      <pre className="kip-banner" aria-label="KIP">
+      <pre className="kip-banner" aria-label="source:dev">
         {entry.text}
       </pre>
     );
@@ -169,7 +222,7 @@ function Line({
   if (entry.segments)
     return (
       <div className="kip-line" data-kind={entry.kind}>
-        <Sentence segments={entry.segments} busy={busy} run={run} />
+        <Sentence segments={entry.segments} />
       </div>
     );
 
@@ -179,7 +232,7 @@ function Line({
       {Boolean(entry.actions?.length) && (
         <>
           {entry.text ? " " : ""}
-          <InlineActions actions={entry.actions ?? []} busy={busy} run={run} />
+          <InlineActions actions={entry.actions ?? []} />
         </>
       )}
     </div>
@@ -191,15 +244,13 @@ function Line({
  *  that cannot be typed into is a lie — and it says three things: what is being
  *  waited on, that it is still going, and how to stop it.
  *
+ *  How to stop it is printed, not offered as a control: `^C` is a keystroke,
+ *  and a button that says `^C` would be teaching the wrong thing about the
+ *  thing it is a button for.
+ *
  *  It keeps its own clock so the ticking frame re-renders this line alone and
- *  not the whole screen of output above it. */
-function RunIndicator({
-  label,
-  onCancel,
-}: {
-  label: string | null;
-  onCancel: () => void;
-}) {
+ *  not the whole buffer of output above it. */
+function RunIndicator({ label }: { label: string | null }) {
   const still = usePrefersReducedMotion();
   // The elapsed count is state, not a value read at render time: the start
   // instant is captured once inside the effect and each tick publishes a new
@@ -224,18 +275,13 @@ function RunIndicator({
     <div className="kip-line kip-run" data-kind="dim" role="status">
       {/* The count changes ten times a second: announcing it would be noise,
           so the spoken version says what is happening, once. */}
-      <span className="sr-only">{said}, in progress. Press control C to stop.</span>
-      <span aria-hidden="true">
-        {said}… <span className="kip-spin">{frame}</span> {seconds.toFixed(1)}s{" "}
+      <span className="sr-only">
+        {said}, in progress. Press control C to stop.
       </span>
-      <button
-        type="button"
-        className="kip-token"
-        onClick={onCancel}
-        aria-label="Stop the running command"
-      >
-        [^C stop]
-      </button>
+      <span aria-hidden="true">
+        {said}… <span className="kip-spin">{frame}</span> {seconds.toFixed(1)}s
+        {"  ^C stops it"}
+      </span>
     </div>
   );
 }
@@ -249,29 +295,19 @@ function Console({
 }) {
   const session = useTerminalSession(user, initialCommand);
   const {
-    screen,
+    lines,
     booting,
-    position,
-    total,
-    canBack,
-    canNext,
-    back,
-    forward,
     cmd,
     setCmd,
     busy,
     status,
     pending,
     pagerAt,
-    matches,
-    matchAt,
-    chooseCompletion,
     execute,
     account,
     inputRef,
     fileRef,
     onKeyDown,
-    cancel,
     answer,
     settleFile,
   } = session;
@@ -299,11 +335,6 @@ function Console({
   useEffect(() => {
     syncCaret();
   }, [cmd, syncCaret]);
-  const suggestions = useMemo(() => {
-    if (!cmd.trim()) return [];
-    const subs = subHints(cmd);
-    return subs.length ? subs : matchCommands(cmd).map((c) => c.name);
-  }, [cmd]);
   // A paging `less` is technically still running, but it is waiting on a
   // keypress, not on work — so the spinner would be claiming something untrue.
   // The pager's own status line stands in its place, exactly as it does for a
@@ -312,7 +343,7 @@ function Console({
   const showCaret = atEnd && !running;
 
   // ─── Streaming reveal ─────────────────────────────────────────────────────
-  // A command prints its whole screen in one pass, which arrives as a wall of
+  // A command prints its whole output in one pass, which arrives as a wall of
   // text. Each line carries the offset it was printed with — one step after the
   // line above it, within a burst — so output types itself on rather than
   // landing at once, and a line the reader has already seen keeps the offset it
@@ -331,41 +362,43 @@ function Console({
     inputRef.current?.focus({ preventScroll: true });
   }, [running, booting, inputRef]);
 
-  // A screen change starts at the top — it is a new page of output, not more
-  // of the last one. Lines appended to the screen you are already on don't
-  // move you, so a long lesson stays where you were reading.
-  useEffect(() => {
-    view.current?.scrollTo({ top: 0 });
-  }, [screen.id]);
-
-  // The start-up script is the exception: it is typing at the bottom, and the
-  // caret has to stay in sight the way it would in a real terminal. On a short
-  // screen the mark alone fills it, so this follows the output down until the
-  // ready prompt lands.
-  useEffect(() => {
-    if (!booting) return;
+  // One continuous scrollback, so the view follows the newest line the way a
+  // terminal does — except while the reader has scrolled up to read something,
+  // when yanking them back to the bottom would be the rudest thing this
+  // component could do. "At the bottom" is measured with a tolerance, because
+  // fractional scroll heights never land exactly.
+  const atBottom = useRef(true);
+  const onScroll = useCallback(() => {
     const el = view.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [booting, screen.lines.length]);
-
-  const run = (command: string) => void execute(command);
-
+    if (!el) return;
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  }, []);
+  useEffect(() => {
+    const el = view.current;
+    if (!el) return;
+    // Boot is the exception that is not an exception: it is printing at the
+    // bottom too, so the same rule keeps its caret in sight.
+    if (!atBottom.current && !booting) return;
+    el.scrollTop = el.scrollHeight;
+  }, [lines, booting]);
   return (
     <TerminalSurface className="kip-console">
+      {/* The only chrome left. It sits outside the terminal window, which is
+          why it is allowed to have controls at all — everything inside the
+          window below is text. */}
       <TerminalHeader
         user={user}
         active="terminal"
         onLogout={account.requestLogout}
-        onProfile={() => run("profile")}
       />
-      <TerminalCommandBar onCommand={run} busy={busy} />
       <main className="kip-console-main" aria-label="Terminal">
-        <h1 className="sr-only">KIP learning shell</h1>
+        <h1 className="sr-only">source:dev learning shell</h1>
         {/* The whole screen is one click target: clicking anywhere in the
             output focuses the prompt, the way a terminal emulator does. */}
         <div
           ref={view}
           className="kip-screen"
+          onScroll={onScroll}
           onMouseUp={() => {
             if (!window.getSelection()?.toString())
               inputRef.current?.focus({ preventScroll: true });
@@ -378,23 +411,7 @@ function Console({
             aria-live="polite"
             aria-relevant="additions"
           >
-            {/* The command that produced this screen, echoed above its own
-                output the way it would sit above it in a transcript. */}
-            {screen.command && (
-              <div className="kip-reveal">
-                <Line
-                  entry={{
-                    id: 0,
-                    kind: "cmd",
-                    text: screen.command,
-                    path: screen.path,
-                  }}
-                  busy={busy}
-                  run={run}
-                />
-              </div>
-            )}
-            {screen.lines.map((entry) => (
+            {lines.map((entry) => (
               <div
                 key={entry.id}
                 className="kip-reveal"
@@ -402,28 +419,11 @@ function Console({
                   { "--kip-delay": `${entry.delay ?? 0}ms` } as CSSProperties
                 }
               >
-                <Line entry={entry} busy={busy} run={run} />
+                <Line entry={entry} />
               </div>
             ))}
-            {running && <RunIndicator label={status} onCancel={cancel} />}
+            {running && <RunIndicator label={status} />}
           </div>
-
-          {/* An `ask` with choices lists them as output the way a shell
-              prompt does — pick one by clicking or by typing it. */}
-          {pending?.options?.choices && (
-            <div className="kip-choices">
-              {pending.options.choices.map((choice) => (
-                <button
-                  type="button"
-                  key={choice.value}
-                  className="kip-choice"
-                  onClick={() => answer(choice.value)}
-                >
-                  {choice.label}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* The pager's status line, where the prompt would be — the prompt is
               gone while `less` has the keyboard. The text comes from the active
@@ -435,10 +435,6 @@ function Console({
               {getTheme(DEFAULT_THEME_ID).glyphs.more(
                 Math.round((pagerAt.shown / pagerAt.total) * 100),
               )}
-              <span className="kip-prompt-hint">
-                {" "}
-                space = page · enter = line · G = end · q = quit
-              </span>
             </div>
           )}
 
@@ -459,7 +455,7 @@ function Console({
               onSubmit={(event) => {
                 event.preventDefault();
                 if (pending) answer(cmd);
-                else run(cmd);
+                else void execute(cmd);
               }}
             >
               <label htmlFor="terminal-input" className="kip-prompt-label">
@@ -500,98 +496,15 @@ function Console({
               </span>
             </form>
           )}
-
-          {/* What TAB is cycling through, directly under the line it is
-              completing — the way a shell lists its matches, not off in a
-              panel somewhere else on screen. The line already shows the
-              highlighted one, so Enter runs it without touching this list. */}
-          {matches.length > 1 && !running && (
-            <div className="kip-matches" role="listbox" aria-label="Completions">
-              {matches.map((match, index) => (
-                <button
-                  type="button"
-                  key={match}
-                  role="option"
-                  aria-selected={index === matchAt}
-                  className="kip-match"
-                  data-active={index === matchAt ? "" : undefined}
-                  onClick={() => chooseCompletion(match)}
-                >
-                  {match.slice(match.indexOf(" ") + 1)}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* One status line: where you are in the stack, and what TAB would
-            complete. `[back]` / `[next]` are the same inline tokens the
-            output uses, so the foot reads as terminal text too. */}
-        <div className="kip-hintbar">
-          <span className="kip-hintbar-nav">
-            <button
-              type="button"
-              className="kip-token"
-              onClick={back}
-              disabled={!canBack || busy}
-              aria-label="Previous screen"
-            >
-              [back]
-            </button>
-            <button
-              type="button"
-              className="kip-token"
-              onClick={forward}
-              disabled={!canNext || busy}
-              aria-label="Next screen"
-            >
-              [next]
-            </button>
-            <span aria-hidden="true">
-              {position}/{total}
-            </span>
-          </span>
-          {running ? (
-            // [back], [next] and the command strip are all disabled while a
-            // command runs. Saying so here is the difference between "disabled"
-            // and "broken" — and it says how to get them back.
-            <span className="kip-hintbar-note">
-              running — ^C stops it and returns the prompt
-            </span>
-          ) : pending ? (
-            <span>
-              answer above ·{" "}
-              <button type="button" className="kip-token" onClick={cancel}>
-                [^C cancel]
-              </button>
-            </span>
-          ) : suggestions.length ? (
-            <span className="kip-hintbar-hints">
-              <span aria-hidden="true">TAB:</span>
-              {suggestions.slice(0, 8).map((suggestion) => (
-                <button
-                  type="button"
-                  key={suggestion}
-                  className="kip-token"
-                  aria-label={`Complete ${suggestion}`}
-                  onClick={() => {
-                    setCmd(`${suggestion} `);
-                    inputRef.current?.focus();
-                  }}
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </span>
-          ) : (
-            <span className="kip-hintbar-note">
-              {cmd
-                ? "no matching command — try help"
-                : `${user.name} · ${user.role.toUpperCase()} · ↑ recalls · ^L clears · exit leaves`}
-            </span>
-          )}
-        </div>
-
+        {/* Nothing else. The window holds scrolled output and one prompt line,
+            which is the whole of a terminal — what used to sit below here was a
+            status bar with `[back]`/`[next]` and a strip of command chips, and
+            both were the old panelled dashboard showing through. Anything the
+            reader needs to know now gets printed: TAB prints its candidates,
+            `less` prints `--More--`, a running command prints how to stop it,
+            and `help` prints the rest. */}
         <input
           ref={fileRef}
           type="file"

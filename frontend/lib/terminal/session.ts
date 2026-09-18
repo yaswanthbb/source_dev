@@ -1,4 +1,9 @@
-import type { LineKind, LineSegment, TerminalAction } from "./commands";
+import type {
+  FetchReport,
+  LineKind,
+  LineSegment,
+  TerminalAction,
+} from "./commands";
 import { clearLearningCache } from "./learning-commands";
 import { clearListings, clearHistory } from "./output";
 import { clearVfsCache } from "./resolve-location";
@@ -16,6 +21,10 @@ export interface ConsoleEntry {
   /** Set when `text` is markdown the host should flow rather than print
    *  verbatim — a lesson body or an answer. */
   markdown?: boolean;
+  /** Set when this line is a `neofetch` block: the mark, the identity, and the
+   *  facts beside it. The host draws it; `text` is the plain reading kept for
+   *  anything that reads the buffer rather than looks at it. */
+  report?: FetchReport;
   /** Set while the boot script is still typing this line, so the caret sits at
    *  the end of it instead of at the prompt below. */
   typing?: boolean;

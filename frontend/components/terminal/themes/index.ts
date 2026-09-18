@@ -71,7 +71,12 @@ const TERMINAL: ThemeDefinition = {
     todo: "[ ]",
     tokenOpen: "[",
     tokenClose: "]",
-    more: (percent) => `--More--(${percent}%)`,
+    /** `less`'s status line. It carries the keys as well as the position,
+     *  because the pager is the one place in this shell where the keyboard
+     *  does something the prompt has not taught you — and the affordance is
+     *  printed, since nothing inside the terminal window is clickable. */
+    more: (percent) =>
+      `--More--(${percent}%)  space: next page · enter: next line · G: end · q: quit`,
     banner: BANNER,
     meter: (percent) => {
       const filled = Math.max(

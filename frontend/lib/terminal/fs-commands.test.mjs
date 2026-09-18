@@ -386,7 +386,7 @@ test("every listing row carries the command that opens it", async () => {
 
   const files = await shell(L.parsePath(INTRO)).run("ls");
   assert.deepEqual(files.lines[0].actions, [
-    { label: "read", command: "cat what-is-voip" },
+    { label: "cat", command: "cat what-is-voip" },
   ]);
 });
 

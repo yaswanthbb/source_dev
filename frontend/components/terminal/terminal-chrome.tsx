@@ -198,60 +198,9 @@ export function TerminalHeader({
   );
 }
 
-/** Shortcuts, not routes. Every student surface — paths, lessons, reviews,
- *  discussions — is a command in the same shell, so these dispatch rather than
- *  navigate: clicking `[ROADMAPS]` and typing `roadmaps` are the same act. The
- *  hint is what the command does, shown on hover for anyone who has not learnt
- *  the verbs yet. */
-const SHORTCUTS: Array<{ command: string; hint: string }> = [
-  { command: "continue", hint: "resume your last lesson" },
-  { command: "roadmaps", hint: "browse the learning paths" },
-  { command: "review", hint: "practise what is due today" },
-  { command: "qa", hint: "ask questions, read answers" },
-  { command: "status", hint: "xp, streak and progress" },
-  { command: "profile", hint: "your account record" },
-  { command: "theme", hint: "switch dark or light" },
-  { command: "help", hint: "list every command" },
-  { command: "clear", hint: "wipe the screen" },
-  { command: "exit", hint: "back to the dashboard" },
-];
-
-/** One strip under the header — the `RUN:` row, not a sidebar: the shell owns
- *  the full width, and these read as the tokens the output prints. */
-export function TerminalCommandBar({
-  onCommand,
-  busy = false,
-}: {
-  onCommand: (command: string) => void;
-  busy?: boolean;
-}) {
-  const { isDark } = useTheme();
-  const c = isDark ? DARK : LIGHT;
-  return (
-    <nav
-      className="kip-cmdbar"
-      aria-label="Terminal shortcuts"
-      style={{
-        backgroundColor: c.head,
-        borderBottom: `1px solid ${c.line}`,
-      }}
-    >
-      <span className="kip-cmdbar-label" aria-hidden="true">
-        RUN:
-      </span>
-      {SHORTCUTS.map(({ command, hint }) => (
-        <button
-          type="button"
-          key={command}
-          className="kip-cmdbar-item"
-          onClick={() => onCommand(command)}
-          disabled={busy}
-          data-hint={`${command} — ${hint}`}
-          aria-label={`Run ${command} — ${hint}`}
-        >
-          [{command.toUpperCase()}]
-        </button>
-      ))}
-    </nav>
-  );
-}
+// The `RUN:` strip that used to live here — a row of `[ROADMAPS]` `[REVIEW]`
+// chips under the header — is gone, along with the shortcut table behind it.
+// It was the last of the panelled dashboard showing through into CLI mode, and
+// the shell's contract is that the window holds output and a prompt: a verb
+// you can click is a verb you never learn to type. `help` lists them, TAB
+// completes them, and ↑ recalls them.

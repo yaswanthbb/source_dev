@@ -16,7 +16,6 @@ import type {
   RoadmapProgressData,
   ConceptProgressInfo,
 } from "@/lib/hooks/use-roadmap-progress";
-import { activeGlyphs } from "./theme-contract";
 import type { CommandCtx, CommandSpec, TerminalAction } from "./commands";
 
 /** The shortest input worth spending a metered AI generation on. Below this,
@@ -149,14 +148,6 @@ function next(ctx: CommandCtx, actions: TerminalAction[], lead = "→") {
   ctx.io.print(lead, "dim", actions);
 }
 
-/** A percentage that deserves to be seen at a glance, drawn by whatever the
- *  active theme considers a meter. The cell count, the fill characters and
- *  the number formatting all belong to the theme — this layer only decides
- *  that a meter is the right way to show the value. */
-function bar(percent: number): string {
-  return activeGlyphs().meter(percent);
-}
-
 /** Flow a markdown body as terminal text. Falls back to printing it raw when
  *  the host has no markdown renderer, which is what the dashboard's one-line
  *  prompt does. */
@@ -184,14 +175,12 @@ export function nextConcept(concepts: ConceptProgressInfo[]) {
 
 async function findRoadmap(value: string): Promise<Roadmap> {
   const all = await catalog();
-  // `open 2` means the second line of the listing still on screen. The
-  // numbering is reprinted with every listing, so it can only ever refer to
-  // what the reader is actually looking at.
-  const byIndex = resolveIndex("roadmap", value);
-  const query = (byIndex ?? value).toLowerCase();
+  // No listing numbers roadmaps any more — `ls` prints names, not a numbered
+  // index — so a roadmap is named by its directory name, title, slug or id.
+  const query = value.toLowerCase();
   const exact = all.find(
     (r) =>
-      r.id === (byIndex ?? value) ||
+      r.id === value ||
       r.slug?.toLowerCase() === query ||
       r.title.toLowerCase() === query,
   );
@@ -200,8 +189,8 @@ async function findRoadmap(value: string): Promise<Roadmap> {
   if (matches.length === 1) return matches[0];
   throw new Error(
     matches.length
-      ? "Several roadmaps match. Use the full title, its number from the last listing, or a result’s [open] button."
-      : "Roadmap not found. Run roadmaps to see the available paths.",
+      ? "Several roadmaps match. Use the full title, or the directory name ls prints."
+      : "Roadmap not found. Run ls at the root to see the available paths.",
   );
 }
 
@@ -229,8 +218,8 @@ async function findConceptId(value: string): Promise<string> {
   if (matches.length === 1) return matches[0].id;
   throw new Error(
     matches.length
-      ? `Several lessons match “${value}”. Use the full title, its number from the last listing, or a result’s [read] button.`
-      : `No lesson matches “${value}”. Run roadmaps to browse what is published.`,
+      ? `Several lessons match “${value}”. Use the full title, or the name ls prints.`
+      : `No lesson matches “${value}”. Browse what is published with ls and cd.`,
   );
 }
 
@@ -369,7 +358,7 @@ async function showConcept(ctx: CommandCtx, conceptId: string) {
     { label: "qa ask", command: `qa ask ${concept.id}` },
     { label: "qa concept", command: `qa concept ${concept.id}` },
     ...(following
-      ? [{ label: "read next", command: `read ${following.conceptId}` }]
+      ? [{ label: "cat next", command: `cat ${following.conceptId}` }]
       : []),
   ]);
 }
@@ -416,6 +405,15 @@ function rememberSections(sections: Section[]) {
 const jump: CommandSpec = {
   name: "jump",
   usage: "jump <n>",
+  help: {
+    usage: "jump <n>",
+    description: [
+      "Jump to a numbered section of the lesson on screen. The numbers come",
+      "from the header the lesson printed, so `3` alone means the same thing.",
+    ],
+    args: [{ name: "<n>", text: "A section number from the lesson header" }],
+    examples: ["jump 2", "3"],
+  },
   summary: "reopen one section of the lesson you are reading",
   group: "learn",
   run: (ctx) => {
@@ -423,7 +421,7 @@ const jump: CommandSpec = {
       stuck(
         ctx.io,
         "No lesson is open.",
-        "Open one with {continue}, pick from a path with {roadmaps}, or name it directly with {read}.",
+        "Open one with {continue}, browse for one with {ls}, or name it directly with {cat}.",
       );
       return;
     }
@@ -448,27 +446,22 @@ const jump: CommandSpec = {
   },
 };
 
-const read: CommandSpec = {
-  name: "read",
-  aliases: ["lesson"],
-  usage: "read <lesson>",
-  summary: "read a lesson in the terminal",
-  group: "learn",
-  run: async (ctx) => {
-    if (!ctx.args.length) {
-      ctx.io.print(
-        "usage: read <lesson title or id> · open a roadmap for clickable lessons",
-        "dim",
-      );
-      return;
-    }
-    await showConcept(ctx, await findConceptId(ctx.args.join(" ")));
-  },
-};
-
 const quiz: CommandSpec = {
   name: "quiz",
   usage: "quiz <lesson>",
+  completes: "path",
+  help: {
+    usage: "quiz <lesson>",
+    description: [
+      "Answer a lesson's quiz here at the prompt: one question at a time,",
+      "numbered options, and the result after each answer.",
+      "Attempts are limited per question, and the count left is shown as you go.",
+    ],
+    args: [
+      { name: "<lesson>", text: "Name, title, or an unambiguous fragment" },
+    ],
+    examples: ["quiz what-is-voip", "quiz 3"],
+  },
   summary: "answer a lesson's knowledge check",
   group: "learn",
   run: async (ctx) => {
@@ -492,7 +485,7 @@ const quiz: CommandSpec = {
       stuck(
         ctx.io,
         "This lesson has no knowledge check.",
-        `Lessons without one are finished by hand: {complete:complete ${conceptId}} marks it done, {read:read ${conceptId}} reopens it, or {continue} moves you on.`,
+        `Lessons without one are finished by hand: {complete:complete ${conceptId}} marks it done, {cat:cat ${conceptId}} reopens it, or {continue} moves you on.`,
       );
       return;
     }
@@ -622,7 +615,7 @@ const quiz: CommandSpec = {
       ...(final?.allQuestionsResolved
         ? []
         : [{ label: "quiz", command: `quiz ${conceptId}` }]),
-      { label: "read", command: `read ${conceptId}` },
+      { label: "cat", command: `cat ${conceptId}` },
       { label: "continue", command: "continue" },
     ]);
   },
@@ -631,6 +624,19 @@ const quiz: CommandSpec = {
 const complete: CommandSpec = {
   name: "complete",
   usage: "complete <lesson>",
+  completes: "path",
+  help: {
+    usage: "complete <lesson>",
+    description: [
+      "Mark a lesson finished and collect the XP for it. Refuses while the",
+      "lesson still has an unresolved quiz, which is the same rule the old",
+      "reading page enforced.",
+    ],
+    args: [
+      { name: "<lesson>", text: "Name, title, or an unambiguous fragment" },
+    ],
+    examples: ["complete what-is-voip", "complete 3"],
+  },
   summary: "mark a lesson without a quiz as finished",
   group: "learn",
   run: async (ctx) => {
@@ -644,142 +650,8 @@ const complete: CommandSpec = {
     await ctx.refreshLearning?.();
     next(ctx, [
       { label: "continue", command: "continue" },
-      { label: "roadmaps", command: "roadmaps" },
+      { label: "ls", command: "ls" },
     ]);
-  },
-};
-
-// ─── Roadmaps ───────────────────────────────────────────────────────────────
-
-const roadmaps: CommandSpec = {
-  name: "roadmaps",
-  // `ls` used to be an alias here. It is now a real filesystem command in
-  // fs-commands.ts, which lists whatever the current location contains rather
-  // than always listing roadmaps — `ls` inside a module has to show that
-  // module's concepts. `roadmaps` stays as the verb for the catalogue.
-  usage: "roadmaps [search]",
-  summary: "browse learning paths with open and continue actions",
-  group: "learn",
-  run: async (ctx) => {
-    ctx.io.print("fetching learning paths…", "dim");
-    const query = ctx.args.join(" ").toLowerCase();
-    const all = (await catalog()).filter(
-      (r) =>
-        !query ||
-        `${r.title} ${r.description ?? ""}`.toLowerCase().includes(query),
-    );
-    if (!all.length) {
-      if (query)
-        stuck(
-          ctx.io,
-          `No roadmaps match “${ctx.args.join(" ")}”.`,
-          "Try {roadmaps} with no search to see every path, {continue} to pick up your last lesson, or {qa} to ask about something.",
-        );
-      else
-        stuck(
-          ctx.io,
-          "No roadmaps published yet.",
-          "Nothing to browse until an instructor publishes one — check {status} for your XP and streak, or {review} anything you have already learnt.",
-        );
-      return;
-    }
-    const results = await Promise.allSettled(all.map((r) => progressFor(r.id)));
-    heading(
-      ctx,
-      `roadmaps / ${all.length} ${all.length === 1 ? "path" : "paths"}`,
-    );
-    // Number the rows so the next command can say `open 2` instead of pasting
-    // a UUID. The numbers belong to this listing until another replaces them.
-    indexListing(
-      "roadmap",
-      all.map((r) => ({ id: r.id, title: r.title })),
-    );
-    all.forEach((r, index) => {
-      const result = results[index];
-      const progress = result.status === "fulfilled" ? result.value : undefined;
-      const done =
-        progress?.completedConceptsCount ?? progress?.completedConcepts ?? 0;
-      const percent =
-        progress?.completionPercentage ?? progress?.percentage ?? 0;
-      const resume = progress ? nextConcept(progress.concepts ?? []) : undefined;
-      const state = !progress
-        ? "ERR"
-        : percent >= 100
-          ? "DONE"
-          : resume?.status === "in_progress" || done > 0
-            ? "WIP"
-            : "READY";
-
-      entry(ctx, `[${state}]`, `[${index + 1}] ${r.title}`, [
-        { label: "open", command: `open ${r.id}` },
-        ...(resume ? [{ label: "continue", command: `continue ${r.id}` }] : []),
-      ]);
-      if (progress)
-        detail(
-          ctx,
-          `${bar(percent)}  ${done}/${progress.totalConcepts} concepts`,
-        );
-      else detail(ctx, "progress unavailable — open to retry");
-    });
-    ctx.io.print("");
-    ctx.io.print(
-      "open <roadmap> lists its lessons · continue <roadmap> resumes one · open <number> works too",
-      "dim",
-    );
-  },
-};
-
-const open: CommandSpec = {
-  name: "open",
-  usage: "open <roadmap>",
-  summary: "inspect a roadmap and its available lessons",
-  group: "learn",
-  run: async (ctx) => {
-    if (!ctx.args.length) {
-      ctx.io.print("usage: open <roadmap title, slug, or id>", "dim");
-      return;
-    }
-    const roadmap = await findRoadmap(ctx.args.join(" "));
-    const progress = await progressFor(roadmap.id);
-    heading(ctx, `${roadmap.title} / lessons`);
-    if (roadmap.description) ctx.io.print(`  ${roadmap.description}`, "dim");
-    const concepts = progress.concepts ?? [];
-    if (!concepts.length) {
-      stuck(
-        ctx.io,
-        "No published lessons in this roadmap yet.",
-        "Browse another path with {roadmaps}, resume where you were with {continue}, or ask about the topic with {qa ask}.",
-      );
-      return;
-    }
-    ctx.io.print("");
-    // The lessons are numbered so `read 3` opens the third — the number refers
-    // to this list until another listing replaces it.
-    indexListing(
-      "concept",
-      concepts.map((c) => ({ id: c.conceptId, title: c.conceptTitle })),
-    );
-    concepts.forEach((c, index) => {
-      const unmet = (c.prerequisites ?? []).filter(
-        (p) => !p.isCompletedByCurrentUser,
-      );
-      const state = unmet.length
-        ? "LOCK"
-        : c.status === "completed"
-          ? "DONE"
-          : c.status === "in_progress"
-            ? "WIP"
-            : "----";
-      entry(
-        ctx,
-        `[${state}]`,
-        `[${index + 1}] ${c.conceptTitle}`,
-        unmet.length ? [] : [{ label: "read", command: `read ${c.conceptId}` }],
-      );
-      if (unmet.length)
-        detail(ctx, `needs: ${unmet.map((p) => p.title).join(", ")}`);
-    });
-    next(ctx, [{ label: "continue", command: `continue ${roadmap.id}` }]);
   },
 };
 
@@ -787,6 +659,16 @@ const continueLearning: CommandSpec = {
   name: "continue",
   aliases: ["resume"],
   usage: "continue [roadmap]",
+  help: {
+    usage: "continue [roadmap]",
+    description: [
+      "Pick up where you stopped: the most recent unfinished lesson, or the",
+      "next unlocked one when nothing is in progress.",
+      "With a roadmap, the next unlocked lesson inside that path only.",
+    ],
+    args: [{ name: "[roadmap]", text: "Stay inside this path" }],
+    examples: ["continue", "continue voip-basics", "resume"],
+  },
   summary: "resume your latest lesson or the next unlocked concept",
   group: "learn",
   run: async (ctx) => {
@@ -798,7 +680,7 @@ const continueLearning: CommandSpec = {
         stuck(
           ctx.io,
           `Nothing unfinished and unlocked in ${roadmap.title}.`,
-          `Inspect the path with {open ${roadmap.id}}, browse the others with {roadmaps}, or catch up on recall with {review}.`,
+          "Browse the paths with {ls}, resume somewhere else with {continue}, or catch up on recall with {review}.",
         );
         return;
       }
@@ -834,7 +716,7 @@ const continueLearning: CommandSpec = {
       stuck(
         ctx.io,
         "No unfinished, unlocked lessons right now.",
-        "Try browsing your paths ({roadmaps}), catching up on review ({review}), or asking a question ({qa}).",
+        "Try browsing your paths ({ls}), catching up on review ({review}), or asking a question ({qa}).",
       );
       return;
     }
@@ -847,6 +729,16 @@ const continueLearning: CommandSpec = {
 const review: CommandSpec = {
   name: "review",
   usage: "review [start]",
+  help: {
+    usage: "review [start]",
+    description: [
+      "Show how many spaced-repetition reviews are due, or answer them.",
+      "Bare, it reports the queue. With start, it runs the session here at the",
+      "prompt and reschedules each card by how you answered.",
+    ],
+    commands: [{ name: "start", text: "Answer the due reviews now" }],
+    examples: ["review", "review start"],
+  },
   summary: "check your queue or answer reviews inside the terminal",
   group: "learn",
   run: async (ctx) => {
@@ -874,7 +766,7 @@ const review: CommandSpec = {
         stuck(
           ctx.io,
           "",
-          "Nothing to recall yet. Learn something new with {continue}, browse a path with {roadmaps}, or ask about what you have read with {qa}.",
+          "Nothing to recall yet. Learn something new with {continue}, browse a path with {ls}, or ask about what you have read with {qa}.",
         );
       return;
     }
@@ -884,7 +776,7 @@ const review: CommandSpec = {
       stuck(
         ctx.io,
         "",
-        "Come back when something is scheduled — until then, {continue} a lesson, browse with {roadmaps}, or check {status}.",
+        "Come back when something is scheduled — until then, {continue} a lesson, browse with {ls}, or check {status}.",
       );
       return;
     }
@@ -1027,8 +919,8 @@ function printThread(
     answers ? "[ANS]" : "[OPEN]",
     `${index ? `[${index}] ` : ""}${thread.conceptTitle ?? "lesson"} — ${mine ? "you" : askerOf(thread)} · ${shortDate(thread.createdAt)} · ${plural(answers, "answer")}`,
     [
-      { label: "open", command: `qa open ${thread.id}` },
-      { label: "read", command: `read ${thread.conceptId}` },
+      { label: "qa open", command: `qa open ${thread.id}` },
+      { label: "cat", command: `cat ${thread.conceptId}` },
       ...(mine && !answers
         ? [{ label: "edit", command: `qa edit ${thread.id}` }]
         : []),
@@ -1091,7 +983,7 @@ function renderThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
 
   ctx.io.print("", "rule");
   next(ctx, [
-    { label: "read", command: `read ${thread.conceptId}` },
+    { label: "cat", command: `cat ${thread.conceptId}` },
     { label: "qa ask", command: `qa ask ${thread.conceptId}` },
     ...(mine && !answers.length
       ? [{ label: "edit", command: `qa edit ${thread.id}` }]
@@ -1111,7 +1003,7 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
       stuck(
         ctx.io,
         "No lessons are published yet.",
-        "There is nothing to ask about until an instructor publishes one — check {status}, or see what exists with {roadmaps}.",
+        "There is nothing to ask about until an instructor publishes one — check {status}, or see what exists with {ls}.",
       );
       return;
     }
@@ -1179,7 +1071,7 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
     ctx.io.print("[OK] Posted — an instructor will answer on the board.", "ok");
     next(ctx, [
       { label: "qa mine", command: "qa mine" },
-      { label: "read", command: `read ${conceptId}` },
+      { label: "cat", command: `cat ${conceptId}` },
     ]);
     return;
   }
@@ -1199,6 +1091,33 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
 const qa: CommandSpec = {
   name: "qa",
   usage: "qa [mine|unanswered|search]",
+  help: {
+    usage:
+      "qa [ask|open <id>|mine|unanswered|concept <lesson>|edit <id>|delete <id>|search]",
+    description: [
+      "The question board. Bare, it lists recent threads with their answer",
+      "counts; the subcommands ask, read and manage them.",
+    ],
+    commands: [
+      { name: "ask", text: "Start a thread; prompts for the question" },
+      { name: "open <id>", text: "Read one thread and its answers" },
+      { name: "mine", text: "Only threads you started" },
+      { name: "unanswered", text: "Only threads with no answer yet" },
+      { name: "concept <lesson>", text: "Only threads about one lesson" },
+      { name: "edit <id>", text: "Reword a question you asked" },
+      { name: "delete <id>", text: "Remove a question you asked" },
+    ],
+    args: [{ name: "[search]", text: "Only threads containing this text" }],
+    examples: [
+      "qa",
+      "qa ask",
+      "qa open 2",
+      "qa mine",
+      "qa unanswered",
+      "qa concept what-is-voip",
+      "qa codec",
+    ],
+  },
   summary: "browse discussions, ask, and read answers",
   group: "learn",
   run: async (ctx) => {
@@ -1351,6 +1270,14 @@ const qa: CommandSpec = {
 const status: CommandSpec = {
   name: "status",
   usage: "status",
+  help: {
+    usage: "status",
+    description: [
+      "Print your XP, the current streak, and how many reviews are due.",
+      "The three numbers that say whether today has been a learning day.",
+    ],
+    examples: ["status", "review", "continue"],
+  },
   summary: "show XP, streak, and reviews due",
   group: "learn",
   run: async (ctx) => {
@@ -1375,10 +1302,7 @@ const status: CommandSpec = {
 };
 
 export const LEARNING_COMMANDS: CommandSpec[] = [
-  roadmaps,
-  open,
   continueLearning,
-  read,
   jump,
   quiz,
   complete,
@@ -1388,6 +1312,15 @@ export const LEARNING_COMMANDS: CommandSpec[] = [
   {
     name: "dashboard",
     usage: "dashboard",
+    help: {
+      usage: "dashboard",
+      description: [
+        "Leave the shell for the graphical dashboard, keeping the session.",
+        "Where you are is remembered underneath, so switching back to CLI",
+        "returns you to this exact location.",
+      ],
+      examples: ["dashboard"],
+    },
     summary: "return to mission control",
     group: "navigate",
     run: (ctx) => navigate(ctx, "/student/dashboard"),
