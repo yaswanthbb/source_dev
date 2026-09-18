@@ -1206,10 +1206,10 @@
     "semantic_hash": "992e03bfe295f2f85c3cb74d0e1885a1"
   },
   "frontend/public/logo.png": {
-    "mtime": 1786717114.7471578,
-    "seen": 1787327437.294765,
-    "ast_hash": "0eb39f7708373a1b2642abe53b758dae",
-    "semantic_hash": "0eb39f7708373a1b2642abe53b758dae"
+    "mtime": 1789647473.4501436,
+    "seen": 1789730509.9012136,
+    "ast_hash": "58c7d1fd5c91f22de0b6feb63ca85156",
+    "semantic_hash": ""
   },
   "backend/src/migrations/1787300000000-AddOAuthColumns.ts": {
     "mtime": 1787331373.771964,
@@ -1494,9 +1494,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.ts": {
-    "mtime": 1789636812.0615957,
-    "seen": 1789637722.4149292,
-    "ast_hash": "2d717c7941a89d23f57e68fc1654db88",
+    "mtime": 1789666203.3640487,
+    "seen": 1789730509.9011836,
+    "ast_hash": "a4426db534caf3342c7e3423700e652d",
     "semantic_hash": ""
   },
   "frontend/lib/timezone.ts": {
@@ -1530,39 +1530,39 @@
     "semantic_hash": ""
   },
   "frontend/components/terminal/terminal-chrome.tsx": {
-    "mtime": 1789627286.3765287,
-    "seen": 1789637722.4149213,
-    "ast_hash": "2e7b89b0f81fc52c619670d43d7c83af",
+    "mtime": 1789664075.5756342,
+    "seen": 1789730509.9011738,
+    "ast_hash": "d7cacab8d9fbc51d01f901a5816481c6",
     "semantic_hash": ""
   },
   "frontend/components/terminal/terminal-workspace.tsx": {
-    "mtime": 1789637015.9156995,
-    "seen": 1789637722.414922,
-    "ast_hash": "4df6d72efda2204c6d67304f5ea9a5af",
+    "mtime": 1789730300.542542,
+    "seen": 1789730509.9011753,
+    "ast_hash": "7f1f0834c78a7f83da9bbe3f6787817b",
     "semantic_hash": ""
   },
   "frontend/components/terminal/use-terminal-session.ts": {
-    "mtime": 1789637391.1192555,
-    "seen": 1789637722.4149237,
-    "ast_hash": "77401fa367c0a9778dd559936d1f3559",
+    "mtime": 1789729891.463738,
+    "seen": 1789730509.9011774,
+    "ast_hash": "1540086695de96c25958651d4ca939b2",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.test.mjs": {
-    "mtime": 1789627286.377472,
-    "seen": 1789637722.4149287,
-    "ast_hash": "78c9a9b45929f73cbed1c8887645f59e",
+    "mtime": 1789730290.2517025,
+    "seen": 1789730509.9011827,
+    "ast_hash": "8ed1cf8a1211e76d9bc9914ee88b19ad",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/learning-commands.ts": {
-    "mtime": 1789627286.377663,
-    "seen": 1789637722.414931,
-    "ast_hash": "7bf64d404ef9a8855aa0dbeddd7497be",
+    "mtime": 1789729865.1835895,
+    "seen": 1789730509.9011853,
+    "ast_hash": "194aab4ebb80f382e4897f8425957a64",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/output.ts": {
-    "mtime": 1789637367.0490282,
-    "seen": 1789637722.414933,
-    "ast_hash": "1926674058ebdbe425c7d8a482b29aec",
+    "mtime": 1789664505.9690127,
+    "seen": 1789730509.9011874,
+    "ast_hash": "9ae353c85000985a5b941511b5477dcd",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/request.ts": {
@@ -1590,9 +1590,9 @@
     "semantic_hash": ""
   },
   "frontend/components/terminal/themes/index.ts": {
-    "mtime": 1789492745.9132507,
-    "seen": 1789496476.210062,
-    "ast_hash": "c4f9c0a6dfb4e53c55ae7be628139321",
+    "mtime": 1789663871.0500576,
+    "seen": 1789730509.901176,
+    "ast_hash": "be0db00c26470fd34999b3d4106574b2",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/location.test.mjs": {
@@ -1620,15 +1620,15 @@
     "semantic_hash": ""
   },
   "CLI_MODE_IMPLEMENTATION_PLAN.md": {
-    "mtime": 1789637259.2050998,
-    "seen": 1789637722.414946,
-    "ast_hash": "1f25674fef0bf90c4e848fe71927c956",
+    "mtime": 1789730370.6632168,
+    "seen": 1789730509.9012015,
+    "ast_hash": "54db6736913938071a52c72ccb6c6e08",
     "semantic_hash": ""
   },
   "run-commands-for-me.md": {
-    "mtime": 1789637705.2079666,
-    "seen": 1789637722.41495,
-    "ast_hash": "7c7a0dfc30e559cefa49748d9a5a9cfa",
+    "mtime": 1789730484.8876102,
+    "seen": 1789730509.9012055,
+    "ast_hash": "ab2467ba4f54be7b0ba18beb70345c9f",
     "semantic_hash": ""
   },
   "frontend/components/terminal/themes/palette.ts": {
@@ -1644,9 +1644,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/fs-commands.ts": {
-    "mtime": 1789627286.377663,
-    "seen": 1789637722.4149303,
-    "ast_hash": "f48515300c9ada35cfdd94ccc9e59f11",
+    "mtime": 1789729825.4569566,
+    "seen": 1789730509.9011848,
+    "ast_hash": "348d5fe86f537ddd9688d572b5ad50e3",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/resolve-location.ts": {
