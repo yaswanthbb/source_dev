@@ -11,7 +11,12 @@
    ========================================================================== */
 
 import { api } from "./request";
-import { indexListing, resolveIndex, stuck } from "./output";
+import {
+  stuck,
+  currentConcept,
+  setCurrentConcept,
+  conceptFooter,
+} from "./output";
 import type {
   RoadmapProgressData,
   ConceptProgressInfo,
@@ -199,11 +204,10 @@ const conceptList = async () =>
   (await api.get<ConceptSummary[]>("/concepts")).data;
 
 /** Accept an id, a slug, an exact title, or an unambiguous fragment, so
- *  `read closures` works as well as the id a button passes. */
+ *  a lesson can be named however the reader has it at hand. Bare numbers
+ *  never resolve here: a digit is not a lesson, and guessing would aim a
+ *  quiz or a completion at the wrong one. */
 async function findConceptId(value: string): Promise<string> {
-  // A number refers to the lesson listing on screen; a UUID is already an id.
-  const byIndex = resolveIndex("concept", value);
-  if (byIndex) return byIndex;
   if (UUID.test(value)) return value;
   const all = await conceptList();
   const query = value.toLowerCase();
@@ -250,6 +254,7 @@ async function showConcept(ctx: CommandCtx, conceptId: string) {
   const { data: concept } = await api.get<ConceptDetail>(
     `/concepts/${encodeURIComponent(conceptId)}`,
   );
+  setCurrentConcept({ id: conceptId, title: concept.title });
   await api.post(`/concepts/${encodeURIComponent(conceptId)}/start`).catch(
     () => {
       /* Already started — the endpoint is idempotent from the caller's view. */
@@ -361,6 +366,12 @@ async function showConcept(ctx: CommandCtx, conceptId: string) {
       ? [{ label: "cat next", command: `cat ${following.conceptId}` }]
       : []),
   ]);
+
+  // The closing line names what follows the lesson in words, not just tokens:
+  // a quiz when there is one, the by-hand finish when there isn't. Skipped
+  // when the quiz state itself never arrived — unknown is not none.
+  if (quiz !== undefined)
+    stuck(ctx.io, "", conceptFooter(concept.id, questionCount));
 }
 
 // ─── Lesson sections ────────────────────────────────────────────────────────
@@ -443,33 +454,50 @@ const jump: CommandSpec = {
     ctx.io.print(`§ ${at + 1}. ${section.title}`, "head");
     ctx.io.print("", "rule");
     body(ctx, section.content);
+    stuck(
+      ctx.io,
+      "",
+      "Sections are numbered above · jump <n> opens another one.",
+    );
   },
 };
 
 const quiz: CommandSpec = {
   name: "quiz",
-  usage: "quiz <lesson>",
+  usage: "quiz [lesson]",
   completes: "path",
   help: {
-    usage: "quiz <lesson>",
+    usage: "quiz [lesson]",
     description: [
       "Answer a lesson's quiz here at the prompt: one question at a time,",
       "numbered options, and the result after each answer.",
       "Attempts are limited per question, and the count left is shown as you go.",
+      "With no lesson, quizzes the lesson on screen — the last one cat, less",
+      "or continue showed.",
     ],
     args: [
-      { name: "<lesson>", text: "Name, title, or an unambiguous fragment" },
+      {
+        name: "[lesson]",
+        text: "Name, title, or an unambiguous fragment; the lesson on screen when omitted",
+      },
     ],
-    examples: ["quiz what-is-voip", "quiz 3"],
+    examples: ["quiz", "quiz what-is-voip"],
   },
   summary: "answer a lesson's knowledge check",
   group: "learn",
   run: async (ctx) => {
+    let conceptId: string;
     if (!ctx.args.length) {
-      ctx.io.print("usage: quiz <lesson title or id>", "dim");
-      return;
+      const onScreen = currentConcept();
+      if (!onScreen) {
+        ctx.io.print("usage: quiz <lesson title or id>", "dim");
+        return;
+      }
+      conceptId = onScreen.id;
+    } else {
+      conceptId = await findConceptId(ctx.args.join(" "));
     }
-    const conceptId = await findConceptId(ctx.args.join(" "));
+    setCurrentConcept({ id: conceptId });
     const [questions, status] = await Promise.all([
       api
         .get<McqQuestion[]>(`/concepts/${encodeURIComponent(conceptId)}/questions`)
@@ -623,28 +651,40 @@ const quiz: CommandSpec = {
 
 const complete: CommandSpec = {
   name: "complete",
-  usage: "complete <lesson>",
+  usage: "complete [lesson]",
   completes: "path",
   help: {
-    usage: "complete <lesson>",
+    usage: "complete [lesson]",
     description: [
       "Mark a lesson finished and collect the XP for it. Refuses while the",
       "lesson still has an unresolved quiz, which is the same rule the old",
       "reading page enforced.",
+      "With no lesson, completes the lesson on screen — the last one cat,",
+      "less or continue showed.",
     ],
     args: [
-      { name: "<lesson>", text: "Name, title, or an unambiguous fragment" },
+      {
+        name: "[lesson]",
+        text: "Name, title, or an unambiguous fragment; the lesson on screen when omitted",
+      },
     ],
-    examples: ["complete what-is-voip", "complete 3"],
+    examples: ["complete", "complete what-is-voip"],
   },
   summary: "mark a lesson without a quiz as finished",
   group: "learn",
   run: async (ctx) => {
+    let conceptId: string;
     if (!ctx.args.length) {
-      ctx.io.print("usage: complete <lesson title or id>", "dim");
-      return;
+      const onScreen = currentConcept();
+      if (!onScreen) {
+        ctx.io.print("usage: complete <lesson title or id>", "dim");
+        return;
+      }
+      conceptId = onScreen.id;
+    } else {
+      conceptId = await findConceptId(ctx.args.join(" "));
     }
-    const conceptId = await findConceptId(ctx.args.join(" "));
+    setCurrentConcept({ id: conceptId });
     await api.post(`/concepts/${encodeURIComponent(conceptId)}/complete`);
     ctx.io.print("[OK] Lesson marked complete · streak and XP updated.", "ok");
     await ctx.refreshLearning?.();
@@ -870,6 +910,7 @@ const threadCache = new Map<string, QaThread>();
 export function clearLearningCache() {
   threadCache.clear();
   lessonSections = [];
+  setCurrentConcept(null);
 }
 
 function remember(threads: QaThread[]) {
@@ -907,17 +948,16 @@ async function allThreads(ctx: CommandCtx): Promise<QaThread[]> {
 
 /** One thread as two lines: the state marker plus who asked and where, then
  *  the question itself clipped to a readable excerpt. */
-function printThread(
-  ctx: CommandCtx,
-  thread: QaThread,
-  mine: boolean,
-  index?: number,
-) {
+function printThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
   const answers = thread.answers?.length ?? 0;
+  // Threads open by id, typed in full or by an unambiguous prefix — so the
+  // listing shows the id's head beside every thread, the way `git log`
+  // shows hashes. No indices: a number here must never read as a command.
+  const short = thread.id.slice(0, 8);
   entry(
     ctx,
     answers ? "[ANS]" : "[OPEN]",
-    `${index ? `[${index}] ` : ""}${thread.conceptTitle ?? "lesson"} — ${mine ? "you" : askerOf(thread)} · ${shortDate(thread.createdAt)} · ${plural(answers, "answer")}`,
+    `[${short}] ${thread.conceptTitle ?? "lesson"} — ${mine ? "you" : askerOf(thread)} · ${shortDate(thread.createdAt)} · ${plural(answers, "answer")}`,
     [
       { label: "qa open", command: `qa open ${thread.id}` },
       { label: "cat", command: `cat ${thread.conceptId}` },
@@ -934,14 +974,25 @@ function printThread(
 }
 
 async function locateThread(ctx: CommandCtx, value: string): Promise<QaThread> {
-  // `qa open 2` refers to the listing on screen; anything else is an id.
-  const id = resolveIndex("thread", value) ?? value;
-  const cached = threadCache.get(id);
+  const needle = value.trim();
+  const cached = threadCache.get(needle);
   if (cached) return cached;
-  const found = (await allThreads(ctx)).find((t) => t.id === id);
-  if (!found)
-    throw new Error("That discussion is no longer on the board. Run qa to list.");
-  return found;
+  const threads = await allThreads(ctx);
+  const exact = threads.find((t) => t.id === needle);
+  if (exact) return exact;
+  // An unambiguous head of the id opens it, the way a short hash does
+  // everywhere else — with the ambiguity said out loud instead of guessed.
+  // A bare number matches nothing here: digits are not addresses.
+  const lowered = needle.toLowerCase();
+  const hits = threads.filter((t) => t.id.toLowerCase().startsWith(lowered));
+  if (hits.length === 1) return hits[0];
+  if (hits.length > 1)
+    throw new Error(
+      `“${needle}” matches ${hits.length} discussions. Type a few more characters of the id.`,
+    );
+  throw new Error(
+    "That discussion is no longer on the board. Run qa to list.",
+  );
 }
 
 function renderThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
@@ -994,33 +1045,25 @@ function renderThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
 }
 
 async function askQuestion(ctx: CommandCtx, reference?: string) {
+  // Asking from inside a lesson asks about it — the picker below stays for
+  // when no lesson is on screen.
+  const onScreen = reference ? null : currentConcept();
   let conceptId: string;
   if (reference) {
     conceptId = await findConceptId(reference);
+    setCurrentConcept({ id: conceptId });
+  } else if (onScreen) {
+    conceptId = onScreen.id;
+    setCurrentConcept({ id: conceptId });
   } else {
-    const concepts = await conceptList();
-    if (!concepts.length) {
-      stuck(
-        ctx.io,
-        "No lessons are published yet.",
-        "There is nothing to ask about until an instructor publishes one — check {status}, or see what exists with {ls}.",
-      );
-      return;
-    }
-    // The picker is a listing too, so a number works here as well.
-    indexListing(
-      "concept",
-      concepts.slice(0, 40).map((c) => ({ id: c.id, title: c.title })),
+    // No picker: asking with no lesson in sight is refused outright, so a
+    // question can never be aimed somewhere the reader cannot see.
+    stuck(
+      ctx.io,
+      "No lesson on screen.",
+      "Open one with {cat}, page it with {less}, or resume with {continue} — or name it directly: qa ask <lesson>.",
     );
-    const picked = (
-      await ctx.io.ask("Which lesson is your question about?", {
-        choices: concepts.slice(0, 40).map((c, i) => ({
-          value: c.id,
-          label: `[${i + 1}] ${c.title}`,
-        })),
-      })
-    ).trim();
-    conceptId = UUID.test(picked) ? picked : await findConceptId(picked);
+    return;
   }
 
   // Only two answers mean anything here, so only two are accepted. Anything
@@ -1031,16 +1074,16 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
     const target = (
       await ctx.io.ask("Who should answer?", {
         choices: [
-          { value: "ai", label: "[1] ai · instant explanation" },
-          { value: "instructor", label: "[2] instructor · replies on the board" },
+          { value: "ai", label: "[ai] instant explanation" },
+          { value: "instructor", label: "[instructor] replies on the board" },
         ],
       })
     )
       .trim()
       .toLowerCase();
-    if (target === "ai" || target === "1") to = "ai";
-    else if (target === "instructor" || target === "2") to = "instructor";
-    else ctx.io.print('invalid: enter "ai" or "instructor" (or 1 / 2)', "err");
+    if (target === "ai") to = "ai";
+    else if (target === "instructor") to = "instructor";
+    else ctx.io.print('invalid: enter "ai" or "instructor"', "err");
   }
 
   // Checked here, before the request: an AI generation is metered, so a blank
@@ -1091,6 +1134,8 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
 const qa: CommandSpec = {
   name: "qa",
   usage: "qa [mine|unanswered|search]",
+  completes: "path",
+  completesAfter: ["ask", "concept"],
   help: {
     usage:
       "qa [ask|open <id>|mine|unanswered|concept <lesson>|edit <id>|delete <id>|search]",
@@ -1099,7 +1144,7 @@ const qa: CommandSpec = {
       "counts; the subcommands ask, read and manage them.",
     ],
     commands: [
-      { name: "ask", text: "Start a thread; prompts for the question" },
+      { name: "ask", text: "Start a thread about the lesson on screen, or name one" },
       { name: "open <id>", text: "Read one thread and its answers" },
       { name: "mine", text: "Only threads you started" },
       { name: "unanswered", text: "Only threads with no answer yet" },
@@ -1111,7 +1156,7 @@ const qa: CommandSpec = {
     examples: [
       "qa",
       "qa ask",
-      "qa open 2",
+      "qa open 9f2c4a1d",
       "qa mine",
       "qa unanswered",
       "qa concept what-is-voip",
@@ -1247,12 +1292,7 @@ const qa: CommandSpec = {
 
     const shown = threads.slice(0, 25);
     heading(ctx, `${heading_} · ${plural(threads.length, "thread")}`);
-    // Numbered so `qa open 3` reads the third thread listed here.
-    indexListing(
-      "thread",
-      shown.map((t) => ({ id: t.id, title: t.conceptTitle ?? "lesson" })),
-    );
-    shown.forEach((t, index) => printThread(ctx, t, isMine(t), index + 1));
+    shown.forEach((t) => printThread(ctx, t, isMine(t)));
     ctx.io.print("");
     if (threads.length > shown.length)
       ctx.io.print(

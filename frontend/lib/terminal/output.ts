@@ -9,8 +9,8 @@
       than as a row of buttons underneath.
    2. `stuck()` — the one way a command ends a dead end. No result, nothing
       due, an error: the reader never gets a bare prompt and has to guess.
-   3. The listing index — what `[1]` meant in the output still on screen, so
-      `open 1` works, plus the titles TAB completes against.
+   3. The current concept — the lesson on screen, so a bare `quiz` means
+      "this one" the way `cd` alone means home.
 
    Imports here are type-only, so this module sits under both `commands.ts`
    and `learning-commands.ts` without a cycle between them.
@@ -45,8 +45,9 @@ export type LineKind =
  *  embedded in it. */
 export type LineSegment = string | TerminalAction;
 
-/** `{roadmaps}` becomes the runnable word `roadmaps`; `{here:qa open 7}` runs
- *  `qa open 7` but reads as “here”. Everything outside the braces is prose. */
+/** `{continue}` becomes the runnable word `continue`; `{here:cat intro}`
+ *  runs `cat intro` but reads as “here”. Everything outside the braces is
+ *  prose. */
 const TOKEN = /\{([^}]+)\}/g;
 
 /** Split a sentence into prose and runnable words. The braces are the only
@@ -151,52 +152,42 @@ export interface CommandHelp {
   examples: string[];
 }
 
-// ─── The listing index ──────────────────────────────────────────────────────
-// A UUID is unreadable and unguessable, so a listing prints `[1] VOIP Basics`
-// and the next command may say `open 1`. The numbering belongs to whichever
-// listing is currently on screen: printing a new one replaces it, exactly as
-// the numbers on screen are replaced.
+// ─── The current concept ──────────────────────────────────────────────────
+// The lesson on screen: the last one `cat`, `less` or `continue` showed, or
+// the last one `quiz`, `complete` or `qa ask` named. Bare verbs resolve
+// against it, so `quiz` alone means "this lesson" the way `cd` alone means
+// home — while every named form keeps working exactly as before. Memory only,
+// cleared on sign-out beside the history below.
 
-export type IndexKind = "roadmap" | "concept" | "thread";
-
-export interface IndexItem {
+export interface CurrentConcept {
   id: string;
-  title: string;
+  title?: string;
 }
 
-let listing: { kind: IndexKind; items: IndexItem[] } | null = null;
+let current: CurrentConcept | null = null;
 
-/** Titles seen in any listing this session, per kind. TAB completes against
- *  these, so `read voip<TAB>` finishes a lesson the student has actually been
- *  shown rather than guessing at the catalogue. */
-const known = new Map<IndexKind, Map<string, string>>();
-
-/** Record what was just printed, in the order it was printed. Call this as the
- *  listing is built — the numbers handed back are the ones to print. */
-export function indexListing(kind: IndexKind, items: IndexItem[]) {
-  listing = { kind, items };
-  const seen = known.get(kind) ?? new Map<string, string>();
-  for (const item of items) seen.set(item.id, item.title);
-  known.set(kind, seen);
+/** Remember the lesson on screen. */
+export function setCurrentConcept(concept: CurrentConcept | null) {
+  current = concept;
 }
 
-/** Resolve `2` against the listing on screen. Anything that is not a plain
- *  number, or is out of range, resolves to nothing and falls through to the
- *  usual title/id lookup. */
-export function resolveIndex(kind: IndexKind, token: string): string | undefined {
-  if (!listing || listing.kind !== kind) return undefined;
-  if (!/^\d+$/.test(token.trim())) return undefined;
-  return listing.items[Number(token.trim()) - 1]?.id;
+/** The lesson on screen, if any has been shown this session. */
+export function currentConcept(): CurrentConcept | null {
+  return current;
 }
 
-/** Titles worth completing for a kind, longest-seen first. */
-export function knownTitles(kind: IndexKind): string[] {
-  return [...(known.get(kind)?.values() ?? [])];
+export function clearCurrentConcept() {
+  current = null;
 }
 
-export function clearListings() {
-  listing = null;
-  known.clear();
+/** The closing line under a lesson, as a `stuck`-style template whose verbs
+ *  carry the lesson's id — so a token runs the right lesson even when the
+ *  reader has since moved on, while a *typed* bare verb resolves through the
+ *  memory above. Pure composition, like `fetchText`: no glyph, no width. */
+export function conceptFooter(id: string, totalQuestions: number): string {
+  return totalQuestions > 0
+    ? `This lesson has a knowledge check — start it with {quiz:quiz ${id}}, or bring questions to {qa ask:qa ask ${id}}.`
+    : `No knowledge check on this lesson — mark it done with {complete:complete ${id}}, or move on with {continue}.`;
 }
 
 // ─── The command history ────────────────────────────────────────────────────

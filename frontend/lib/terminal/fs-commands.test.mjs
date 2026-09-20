@@ -160,6 +160,11 @@ const CONCEPTS = {
   },
 };
 
+const QUIZ_STATUS = {
+  c1: { totalQuestions: 2 },
+  c2: { totalQuestions: 0 },
+};
+
 /** URLs to fail exactly once, for the "a failure must not cache" test. */
 const failOnce = new Set();
 
@@ -197,6 +202,16 @@ function respond(url) {
     return found;
   }
 
+  // Quiz state is a separate read from the lesson body, which is why the
+  // footer can be skipped while the lesson still prints. c9 is deliberately
+  // absent: an unreachable quiz state must read as "unknown", never as "none".
+  const quizStatus = /^\/concepts\/([^/]+)\/quiz-status$/.exec(url);
+  if (quizStatus) {
+    const found = QUIZ_STATUS[quizStatus[1]];
+    if (!found) throw notFound(url);
+    return found;
+  }
+
   throw new Error(`unstubbed request: ${url}`);
 }
 
@@ -210,6 +225,9 @@ const L = loadFile(here("location.ts"));
 const R = loadFile(here("resolve-location.ts"));
 const T = loadFile(here("theme-contract.ts"));
 const FS = loadFile(here("fs-commands.ts"));
+// The shared session memory, reached through the same loader cache so these
+// are the exact stores the commands above read and write.
+const O = loadFile(here("output.ts"));
 
 /** Deliberately unlike any real theme's markers, so an assertion below can
  *  only pass if `ls` read them from here rather than knowing its own. */
@@ -302,11 +320,21 @@ const INTRO = `${VOIP}/introduction`;
 const WHAT = `${INTRO}/what-is-voip`;
 const SIP = `${INTRO}/sip-basics`;
 
+// The closing lines `cat` and `less` print under a lesson, in the harness's
+// plain-text reading (no `say`, so the verbs arrive as tokens after it).
+const FOOTER_QUIZ =
+  "This lesson has a knowledge check — start it with quiz, or bring questions to qa ask.";
+const FOOTER_NONE =
+  "No knowledge check on this lesson — mark it done with complete, or move on with continue.";
+
 beforeEach(() => {
   // Every test gets a cold cache: the fixtures never change, so a warm one
   // would quietly let a test pass on another test's requests.
   R.clearVfsCache();
   failOnce.clear();
+  // And no lesson on screen: the memory is session state, and one test's
+  // reading must never be the next test's bare verb.
+  O.clearCurrentConcept();
 });
 
 // ─── The theme seam ─────────────────────────────────────────────────────────
@@ -541,7 +569,7 @@ test("an absolute path from anywhere is the same operation as cd-then-act", asyn
   await stepped.run("cd", "voip-basics");
   await stepped.run("cd", "introduction");
   await stepped.run("cat", "what-is-voip");
-  assert.deepEqual(stepped.text(), [CONCEPTS.c1.content]);
+  assert.deepEqual(stepped.text(), [CONCEPTS.c1.content, FOOTER_QUIZ]);
 
   const direct = shell();
   await direct.run("cat", WHAT);
@@ -570,8 +598,25 @@ test("cat concatenates, which is the whole point of the name", async () => {
     "what-is-voip",
     "sip-basics",
   );
-  assert.deepEqual(sh.text(), [CONCEPTS.c1.content, CONCEPTS.c2.content]);
-  assert.deepEqual(sh.kinds(), ["doc", "doc"]);
+  assert.deepEqual(sh.text(), [
+    CONCEPTS.c1.content,
+    FOOTER_QUIZ,
+    CONCEPTS.c2.content,
+    FOOTER_NONE,
+  ]);
+  assert.deepEqual(sh.kinds(), ["doc", "dim", "doc", "dim"]);
+  // The verbs carry the lesson's id, so a token always runs the lesson it
+  // was printed under — even when the reader has since moved on. (Through
+  // `say`, so they arrive as segments rather than trailing actions.)
+  const verbs = (line) => line.segments.filter((s) => typeof s !== "string");
+  assert.deepEqual(verbs(sh.lines[1]), [
+    { label: "quiz", command: "quiz c1" },
+    { label: "qa ask", command: "qa ask c1" },
+  ]);
+  assert.deepEqual(verbs(sh.lines[3]), [
+    { label: "complete", command: "complete c2" },
+    { label: "continue", command: "continue" },
+  ]);
 });
 
 test("cat refuses a directory and says what to use instead", async () => {
@@ -592,13 +637,39 @@ test("less pages through the host's viewport when it has one", async () => {
   assert.deepEqual(sh.paged, [
     { text: CONCEPTS.c1.content, title: "What is VoIP" },
   ]);
-  assert.deepEqual(sh.text(), [], "the pager owns the screen, not print");
+  // The pager owns the lesson, but the footer still closes it once paging ends.
+  assert.deepEqual(sh.text(), [FOOTER_QUIZ]);
+  assert.deepEqual(sh.kinds(), ["dim"]);
 });
 
 test("less without a viewport still shows the lesson rather than refusing", async () => {
   const sh = await shell(L.parsePath(INTRO)).run("more", "what-is-voip");
-  assert.deepEqual(sh.text(), [CONCEPTS.c1.content]);
-  assert.deepEqual(sh.kinds(), ["doc"]);
+  assert.deepEqual(sh.text(), [CONCEPTS.c1.content, FOOTER_QUIZ]);
+  assert.deepEqual(sh.kinds(), ["doc", "dim"]);
+});
+
+// ─── The lesson on screen ─────────────────────────────────────────────────
+// `cat` and `less` remember what they showed, so a bare `quiz`, `complete`
+// or `qa ask` means "this one". The memory is session state like the history:
+// it survives a successful read whatever the quiz state did, and dies on
+// sign-out beside it.
+
+test("cat remembers the lesson it showed", async () => {
+  await shell(L.parsePath(INTRO)).run("cat", "what-is-voip");
+  assert.deepEqual(O.currentConcept(), { id: "c1", title: "What is VoIP" });
+});
+
+test("a failed cat remembers nothing new", async () => {
+  await shell(L.parsePath(INTRO)).run("cat", "voip-basics/nope");
+  assert.equal(O.currentConcept(), null);
+});
+
+test("an unreachable quiz state skips the footer but still remembers", async () => {
+  // c9 has no quiz-status fixture: the footer must read as "unknown", never
+  // as "no quiz", while the lesson itself is still the one on screen.
+  const sh = await shell().run("cat", `${NET}/basics/packets`);
+  assert.deepEqual(sh.text(), [CONCEPTS.c9.content]);
+  assert.deepEqual(O.currentConcept(), { id: "c9", title: "Packets" });
 });
 
 

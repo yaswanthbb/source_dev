@@ -23,7 +23,13 @@ import type { CommandCtx, CommandSpec } from "./commands";
 // `stuck` and the history store both live in `output.ts` because it imports
 // only types from the command modules, so this file can reach it from either
 // side of the registry without a cycle.
-import { stuck, readHistory, clearHistory } from "./output";
+import {
+  stuck,
+  readHistory,
+  clearHistory,
+  setCurrentConcept,
+  conceptFooter,
+} from "./output";
 import {
   childKindOf,
   basename,
@@ -36,6 +42,7 @@ import {
   listChildren,
   readConcept,
   resolveLocation,
+  conceptQuizTotal,
   vfsErrorText,
   VfsError,
   type VfsEntry,
@@ -360,7 +367,7 @@ async function contentOf(
   ctx: CommandCtx,
   command: string,
   arg?: string,
-): Promise<{ title: string; text: string } | null> {
+): Promise<{ id: string; title: string; text: string } | null> {
   if (!arg) {
     // Real `cat` with no operand reads stdin. There is no stdin here, and
     // hanging would be a worse imitation than saying so.
@@ -377,7 +384,11 @@ async function contentOf(
     try {
       ctx.io.status?.("reading");
       const concept = await readConcept(arg);
-      return { title: concept.title || arg, text: concept.content || "" };
+      return {
+        id: arg,
+        title: concept.title || arg,
+        text: concept.content || "",
+      };
     } catch (error) {
       ctx.io.print(vfsErrorText(command, error), "err");
       return null;
@@ -404,6 +415,7 @@ async function contentOf(
     ctx.io.status?.("reading");
     const concept = await readConcept(conceptId);
     return {
+      id: conceptId,
       title: concept.title || entry?.title || basename(loc),
       text: concept.content || "",
     };
@@ -411,6 +423,21 @@ async function contentOf(
     ctx.io.print(vfsErrorText(command, error), "err");
     return null;
   }
+}
+
+/** Remember the lesson on screen, then close it with the line that says what
+ *  follows it — whether it carries a knowledge check or is finished by hand.
+ *  The quiz state is best-effort: unreachable means the footer is skipped, and
+ *  the lesson is still remembered, because a lesson worth printing is a lesson
+ *  worth quizzing bare-handed. */
+async function closeConcept(
+  ctx: CommandCtx,
+  found: { id: string; title: string },
+): Promise<void> {
+  setCurrentConcept({ id: found.id, title: found.title });
+  const total = await conceptQuizTotal(found.id);
+  if (total === null) return;
+  stuck(ctx.io, "", conceptFooter(found.id, total));
 }
 
 const cat: CommandSpec = {
@@ -447,10 +474,12 @@ const cat: CommandSpec = {
       if (!found) continue;
       if (!found.text) {
         ctx.io.print(`${found.title}: no content published yet`, "dim");
+        await closeConcept(ctx, found);
         continue;
       }
       if (ctx.io.doc) ctx.io.doc(found.text);
       else ctx.io.print(found.text);
+      await closeConcept(ctx, found);
     }
   },
 };
@@ -485,8 +514,12 @@ const less: CommandSpec = {
     const { operands } = parseArgs(ctx.args);
     const found = await contentOf(ctx, "less", operands[0]);
     if (!found) return;
+    // Remembered before paging: quitting early still leaves the lesson on
+    // screen, while the footer waits until the reading is done.
+    setCurrentConcept({ id: found.id, title: found.title });
     if (!found.text) {
       ctx.io.print(`${found.title}: no content published yet`, "dim");
+      await closeConcept(ctx, found);
       return;
     }
 
@@ -496,10 +529,12 @@ const less: CommandSpec = {
     // lesson rather than refusing, which is the better failure.
     if (ctx.io.page) {
       await ctx.io.page(found.text, { title: found.title });
+      await closeConcept(ctx, found);
       return;
     }
     if (ctx.io.doc) ctx.io.doc(found.text);
     else ctx.io.print(found.text);
+    await closeConcept(ctx, found);
   },
 };
 

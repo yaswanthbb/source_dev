@@ -5,7 +5,7 @@ import type {
   TerminalAction,
 } from "./commands";
 import { clearLearningCache } from "./learning-commands";
-import { clearListings, clearHistory } from "./output";
+import { clearHistory } from "./output";
 import { clearVfsCache } from "./resolve-location";
 
 export interface ConsoleEntry {
@@ -71,12 +71,9 @@ export function takeTerminalCommand() {
 export function clearTerminalSessions() {
   queuedCommand = null;
   clearLearningCache();
-  // The `[2]` in the last listing means nothing to whoever signs in next, and
-  // the titles behind it were another student's.
-  clearListings();
-  // Same reasoning, twice over: the history is a transcript of what one person
-  // typed, and the filesystem cache holds their progress markers. Neither may
-  // survive into the next session on a shared machine.
+  // The history is a transcript of what one person typed, and the filesystem
+  // cache holds their progress markers. Neither may survive into the next
+  // session on a shared machine.
   clearHistory();
   clearVfsCache();
 }

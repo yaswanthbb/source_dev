@@ -283,3 +283,20 @@ export function readConcept(conceptId: string): Promise<ConceptContent> {
     return (await api.get<ConceptContent>(path)).data;
   });
 }
+
+/** How many quiz questions a lesson has, or null when that could not be read.
+ *
+ *  Best-effort only: a lesson footer consults this, and a lesson whose quiz
+ *  state is unreachable is still a lesson worth printing — so a failure reads
+ *  as "unknown" and the footer is skipped, never as "no quiz". */
+export async function conceptQuizTotal(
+  conceptId: string,
+): Promise<number | null> {
+  try {
+    const path = `/concepts/${encodeURIComponent(conceptId)}/quiz-status`;
+    const { data } = await api.get<{ totalQuestions: number }>(path);
+    return data.totalQuestions ?? 0;
+  } catch {
+    return null;
+  }
+}

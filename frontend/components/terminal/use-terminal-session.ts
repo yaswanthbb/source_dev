@@ -22,7 +22,7 @@ import {
   takeTerminalCommand,
   type ConsoleEntry,
 } from "@/lib/terminal/session";
-import { fetchText, readHistory } from "@/lib/terminal/output";
+import { fetchText, readHistory, clearCurrentConcept } from "@/lib/terminal/output";
 import { displayPath } from "@/lib/terminal/location";
 import { armRequests } from "@/lib/terminal/request";
 import { useTheme } from "@/providers/theme-provider";
@@ -276,9 +276,14 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     return () => input?.removeEventListener("cancel", cancel);
   }, [settleFile]);
 
-  /** `clear`. Empties the buffer and nothing else — it does not touch what ↑
-   *  remembers, which is what a real shell does too. */
-  const reset = useCallback(() => setLines([]), []);
+  /** `clear`. Empties the buffer and forgets the lesson on screen with it —
+   *  a bare verb afterwards must ask which lesson, not answer for one that
+   *  scrolled away. It does not touch what ↑ remembers, which is what a
+   *  real shell does too. */
+  const reset = useCallback(() => {
+    clearCurrentConcept();
+    setLines([]);
+  }, []);
 
   /** Reveal the next chunk. Resolves `less` once the last line is out and the
    *  reader acknowledges it, which is what `(END)` is waiting for.
@@ -408,10 +413,12 @@ export function useTerminalSession(user: User, initialCommand?: string) {
             setStatus(null);
             // The escapes a question offers are printed, not rendered as
             // controls: `[skip]` on the line above the prompt is something you
-            // type, exactly like every other verb in this shell.
+            // type, exactly like every other verb in this shell. Labels, not
+            // values — a value can be an unreadable id (the lesson picker's
+            // are UUIDs), while the label is always written for a reader.
             if (options?.choices?.length)
               append(
-                `  (${options.choices.map((c) => c.value).join(" · ")})`,
+                `  (${options.choices.map((c) => c.label ?? c.value).join(" · ")})`,
                 "dim",
               );
             const next = { prompt, options, resolve, reject };

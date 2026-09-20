@@ -13,7 +13,7 @@
 import { LEARNING_COMMANDS } from "./learning-commands";
 import { FS_COMMANDS } from "./fs-commands";
 import { isAbortError } from "./request";
-import { knownTitles, stuck, recordHistory, fetchText } from "./output";
+import { stuck, recordHistory, fetchText, clearCurrentConcept } from "./output";
 import type { Location } from "./location";
 import { childKindOf, resolvePath } from "./location";
 import { listChildren, type VfsEntry } from "./resolve-location";
@@ -38,26 +38,25 @@ import { detectTimezone, formatDate } from "@/lib/timezone";
 export {
   segmentsOf,
   stuck,
-  indexListing,
-  resolveIndex,
-  knownTitles,
-  clearListings,
+  currentConcept,
+  setCurrentConcept,
+  clearCurrentConcept,
+  conceptFooter,
   fetchText,
   type LineKind,
   type TerminalAction,
   type LineSegment,
-  type IndexKind,
   type FetchRow,
   type FetchReport,
   type CommandHelp,
   type HelpRow,
+  type CurrentConcept,
 } from "./output";
 import type {
   CommandHelp,
   FetchReport,
   FetchRow,
   HelpRow,
-  IndexKind,
   LineKind,
   LineSegment,
   TerminalAction,
@@ -174,6 +173,12 @@ export interface CommandSpec {
    *  complete them against what is actually there. Absent means the command
    *  takes no path — `theme`, `history`, `whoami`. */
   completes?: PathArity;
+  /** With `completes`, the first operands that are verbs rather than places —
+   *  `qa`'s subcommands. Paths complete only past them, and only when the
+   *  first one names a subcommand that takes a place (`ask`, `concept`):
+   *  `qa ask voi⇥` completes lessons, `qa open ⇥` completes nothing, because
+   *  a thread id is not a path. */
+  completesAfter?: string[];
   /** What `<command> help` and `<command> --help` print. Required — a command
    *  with no help is a command nobody can learn, and `commands.test.mjs`
    *  asserts every entry in `COMMAND_LIST` has one. */
@@ -382,6 +387,11 @@ const whoami: CommandSpec = {
       return;
     }
     io.print(`${user.name} <${user.email}> [${user.role.toUpperCase()}]`);
+    stuck(
+      io,
+      "",
+      "That is this session. {profile} shows the full record · {passwd} changes the secret.",
+    );
   },
 };
 
@@ -581,6 +591,11 @@ const timezone: CommandSpec = {
         io.print("");
         io.print("these differ — timezone auto adopts the browser zone", "dim");
       }
+      stuck(
+        io,
+        "",
+        "Change it with timezone <zone> · timezone auto follows this browser.",
+      );
       return;
     }
 
@@ -640,6 +655,7 @@ const passwd: CommandSpec = {
         newPassword: next,
       });
       io.print("[OK] password changed", "ok");
+      stuck(io, "", "Takes effect on next sign-in · nothing else changes.");
     } catch (e) {
       io.print(`passwd: ${errText(e)}`, "err");
     }
@@ -772,17 +788,20 @@ const theme: CommandSpec = {
   },
   run: ({ args, io, isDark, setTheme }) => {
     const [want] = args;
+    const apply = (mode: "dark" | "light") => {
+      setTheme(mode);
+      io.print(`[OK] theme → ${mode}`, "ok");
+      stuck(io, "", "Applies at once and is kept for this browser.");
+    };
     if (!want) {
-      setTheme(isDark ? "light" : "dark");
-      io.print(`[OK] theme → ${isDark ? "light" : "dark"}`, "ok");
+      apply(isDark ? "light" : "dark");
       return;
     }
     if (want !== "dark" && want !== "light") {
       io.print("theme: expected dark or light", "err");
       return;
     }
-    setTheme(want);
-    io.print(`[OK] theme → ${want}`, "ok");
+    apply(want);
   },
 };
 
@@ -899,12 +918,17 @@ const neofetch: CommandSpec = {
 
     if (io.fetch) {
       io.fetch(report);
-      return;
+    } else {
+      // A host with no room for the block still gets the facts — the same
+      // reasoning `less` follows when there is no pager.
+      io.print(`${report.user}@${report.host}`, "head");
+      for (const fact of report.rows) io.print(row(fact.label, fact.value));
     }
-    // A host with no room for the block still gets the facts — the same
-    // reasoning `less` follows when there is no pager.
-    io.print(`${report.user}@${report.host}`, "head");
-    for (const fact of report.rows) io.print(row(fact.label, fact.value));
+    stuck(
+      io,
+      "",
+      "Today in numbers: {status} · pick up learning with {continue}.",
+    );
   },
 };
 
@@ -937,6 +961,11 @@ const man: CommandSpec = {
       return;
     }
     printMan(io, spec);
+    stuck(
+      io,
+      "",
+      `Type {${spec.name}} to run it · {${spec.name} --help} prints the short version.`,
+    );
   },
 };
 
@@ -951,10 +980,18 @@ const clear: CommandSpec = {
     description: [
       "Empty the scrollback. What ↑ remembers is untouched, the same way a",
       "real shell behaves — clear hides the output, not the history.",
+      "The lesson on screen is forgotten with it, so a bare quiz afterwards",
+      "asks which lesson instead of answering for one you cannot see.",
     ],
     examples: ["clear", "cls"],
   },
-  run: ({ io }) => io.clear(),
+  run: ({ io }) => {
+    // The screen is the context: with the lesson that set it scrolled away,
+    // a bare `quiz` would aim somewhere the reader cannot see. History is
+    // untouched — clear hides the output, not what ↑ remembers.
+    clearCurrentConcept();
+    io.clear();
+  },
 };
 
 const exit: CommandSpec = {
@@ -1152,41 +1189,166 @@ export function completeCommand(input: string): string | null {
   return `${[...parts.slice(0, index), word].join(" ")}${ends ? "" : " "}`;
 }
 
-/** Which listing a command's argument names, so a free-typed lookup can TAB
- *  against the titles the reader has actually been shown. A command absent from
- *  this map takes no title argument — `theme`, `help` — and completes only from
- *  the command name and phrase table above. */
-const ARG_INDEX: Record<string, IndexKind> = {
-  quiz: "concept",
-  complete: "concept",
-};
+// ─── Value completion ───────────────────────────────────────────────────────
+// The data no static table can know: lessons and roadmaps from the catalogue,
+// timezones from the runtime, command names for `help` and `man`. Each source
+// answers only the verbs it belongs to, and every one fails soft —
+// completion is a convenience, and the command the reader goes on to run is
+// what reports a real problem.
 
-/** Inline argument completion. Given a line whose command takes a title, return
- *  the candidate *completed lines* — each the same command with one matching
- *  title filled in — so the host can complete a lone match, or cycle several
- *  right under the input. Empty when the command takes no title, or nothing a
- *  title, or nothing seen so far matches what has been typed.
- *
- *  This is the second half of tab-completion: `completeCommand` finishes verbs
- *  and subcommands from the static tables; this finishes the *data* — the
- *  lessons and paths already on screen — which the tables cannot know. */
-export function completions(input: string): string[] {
+/** A value with a space has to come back quoted, so it survives `tokenise`
+ *  as one argument the lookup can match whole. */
+function quoteValue(value: string): string {
+  return /\s/.test(value) ? `"${value}"` : value;
+}
+
+interface CatalogueEntry {
+  id: string;
+  title: string;
+  slug?: string;
+}
+
+async function catalogue(path: string): Promise<CatalogueEntry[]> {
+  try {
+    const { data } = await apiClient.get<CatalogueEntry[]>(path);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Lessons for `qa ask` / `qa concept`, matched the way `findConceptId`
+ *  reads them — slug or title, prefix first, then substring — so whatever TAB
+ *  fills in is something the command will accept. Slugs win over titles:
+ *  they never need quoting. */
+async function completeLessons(head: string, typed: string): Promise<string[]> {
+  const concepts = await catalogue("/concepts");
+  const needle = typed.toLowerCase();
+  const nameOf = (c: CatalogueEntry) => c.slug || c.title;
+  const starts = concepts.filter(
+    (c) =>
+      nameOf(c).toLowerCase().startsWith(needle) ||
+      c.title.toLowerCase().startsWith(needle),
+  );
+  const hits = (
+    starts.length
+      ? starts
+      : concepts.filter(
+          (c) =>
+            nameOf(c).toLowerCase().includes(needle) ||
+            c.title.toLowerCase().includes(needle),
+        )
+  ).slice(0, 12);
+  return hits.map((c) => `${head} ${quoteValue(nameOf(c))}`);
+}
+
+/** Roadmaps for `continue`, completed to the slug — the same name `ls`
+ *  prints and `cd` accepts. */
+async function completeRoadmaps(
+  verb: string,
+  typed: string,
+): Promise<string[]> {
+  const roadmaps = await catalogue("/roadmaps");
+  const needle = typed.toLowerCase();
+  const starts = roadmaps.filter((r) =>
+    (r.slug || r.title).toLowerCase().startsWith(needle),
+  );
+  const hits = (
+    starts.length
+      ? starts
+      : roadmaps.filter((r) =>
+          (r.slug || r.title).toLowerCase().includes(needle),
+        )
+  ).slice(0, 12);
+  return hits.map((r) => `${verb} ${quoteValue(r.slug || r.title)}`);
+}
+
+/** IANA zones for `timezone` and `profile set tz`, straight from the
+ *  runtime — the same list the command validates against, so a completion
+ *  can never propose a zone the command would refuse. */
+function completeZones(head: string, typed: string): string[] {
+  let zones: string[];
+  try {
+    const supported = (
+      Intl as unknown as {
+        supportedValuesOf?: (key: string) => string[];
+      }
+    ).supportedValuesOf;
+    zones = typeof supported === "function" ? supported("timeZone") : [];
+  } catch {
+    return [];
+  }
+  const needle = typed.toLowerCase();
+  return zones
+    .filter((zone) => zone.toLowerCase().startsWith(needle))
+    .slice(0, 24)
+    .map((zone) => `${head} ${zone}`);
+}
+
+/** Command names for `help` and `man`, aliases included — completing to the
+ *  canonical name, so `help f⇥` becomes `help neofetch`. One argument only:
+ *  past it there is nothing left to complete. */
+function completeCommandName(verb: string, typed: string): string[] {
+  const needle = typed.toLowerCase();
+  const hits = COMMAND_LIST.filter(
+    (s) =>
+      !s.hidden &&
+      (s.name.toLowerCase().startsWith(needle) ||
+        (s.aliases ?? []).some((a) => a.toLowerCase().startsWith(needle))),
+  ).slice(0, 12);
+  return hits.map((s) => `${verb} ${s.name}`);
+}
+
+/** Value completion for the argument being typed. The head is everything up
+ *  to that argument, so a multi-word fragment completes whole — `qa ask sip
+ *  ba⇥` becomes `qa ask "SIP Basics"`, not `qa ask sip sip-basics`. */
+export async function completeValues(input: string): Promise<string[]> {
   const trailingSpace = /\s$/.test(input);
   const parts = tokenise(input);
   if (parts.length < 1) return [];
-  const kind = ARG_INDEX[parts[0].toLowerCase()];
-  if (!kind) return [];
-  // The verb is there but no argument has been started yet: offer everything
-  // seen, so a bare `read ⇥` lists the lessons to pick from.
-  const typed = trailingSpace ? "" : parts.slice(1).join(" ");
-  const needle = typed.toLowerCase();
-  const titles = knownTitles(kind).filter((title) =>
-    title.toLowerCase().includes(needle),
-  );
-  // A title with a space has to come back quoted, so it survives `tokenise` as
-  // one argument the lookup can match whole.
-  const quote = (title: string) => (/\s/.test(title) ? `"${title}"` : title);
-  return titles.slice(0, 12).map((title) => `${parts[0]} ${quote(title)}`);
+  const verb = parts[0].toLowerCase();
+  const operands = parts.slice(1, trailingSpace ? undefined : -1);
+  const fragment = trailingSpace ? "" : (parts[parts.length - 1] ?? "");
+  if (fragment.startsWith("-")) return [];
+
+  // `qa`'s first operand is a subcommand; a lesson follows only `ask` and
+  // `concept`, and it names a lesson from anywhere — not a path from here.
+  // Every word past the subcommand counts, so a half-typed title completes
+  // whole rather than word by word.
+  if (verb === "qa") {
+    const after = parts.slice(1, trailingSpace ? undefined : -1);
+    const [sub, ...words] = after;
+    const spec = resolve("qa");
+    if (!sub || !spec?.completesAfter?.includes(sub.toLowerCase())) return [];
+    const typed = [...words, ...(trailingSpace ? [] : [fragment])].join(" ");
+    return completeLessons(parts.slice(0, 2).join(" "), typed);
+  }
+
+  if (verb === "help" || verb === "man" || verb === "?") {
+    if (operands.length !== 0) return [];
+    return completeCommandName(parts[0], fragment);
+  }
+
+  if (verb === "continue" || verb === "resume") {
+    if (operands.length !== 0) return [];
+    return completeRoadmaps(parts[0], fragment);
+  }
+
+  if (verb === "timezone" || verb === "tz") {
+    if (operands.length !== 0) return [];
+    return completeZones(parts[0], fragment);
+  }
+
+  if (
+    verb === "profile" &&
+    operands.length === 2 &&
+    operands[0].toLowerCase() === "set" &&
+    operands[1].toLowerCase() === "tz"
+  ) {
+    return completeZones(parts.slice(0, 3).join(" "), fragment);
+  }
+
+  return [];
 }
 
 // ─── Path completion ────────────────────────────────────────────────────────
@@ -1232,6 +1394,11 @@ export async function completePath(
 
   const operand = operandUnderCursor(parts, trailingSpace);
   if (!operand) return [];
+  // A command whose first operands are verbs (`qa`'s subcommands) never
+  // completes the tree here: its places come from the catalogue, one function
+  // down, where a lesson can be named from anywhere rather than only from
+  // where the reader is standing.
+  if (spec.completesAfter) return [];
 
   // Split what has been typed into the directory it names and the prefix still
   // being written — `voip-basics/intro` looks in `voip-basics` for `intro`.
@@ -1270,13 +1437,16 @@ export async function completePath(
 }
 
 /** Everything TAB can offer for the argument being typed: what is addressable
- *  from here first, then the titles already seen on screen. */
+ *  from here first, then the catalogue values behind the verb — lessons for
+ *  `qa ask`, roadmaps for `continue`, zones for `timezone`, names for `help`
+ *  and `man`. */
 export async function completeArgument(
   input: string,
   cwd: Location,
 ): Promise<string[]> {
   const paths = await completePath(input, cwd);
-  return paths.length ? paths : completions(input);
+  if (paths.length) return paths;
+  return completeValues(input);
 }
 
 /** Second-level suggestions for the hint strip, so `profile set tz` and

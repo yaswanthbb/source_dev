@@ -38,7 +38,9 @@ const loaded = new Map();
  *  explicit: a new one appearing here is a new dependency for the command
  *  layer, which is worth noticing rather than resolving silently. */
 const EXTERNAL = {
-  "@/lib/api-client": { default: { get: fail, post: fail, patch: fail } },
+  "@/lib/api-client": {
+    default: { get: catalogOrFail, post: fail, patch: fail },
+  },
   "@/lib/image": {
     AVATAR_ACCEPT: "image/*",
     dataUrlSizeKb: () => 0,
@@ -50,6 +52,38 @@ const EXTERNAL = {
   },
   "@/lib/auth": {},
 };
+
+/** Catalogue reads TAB completion is allowed to make — the lesson and roadmap
+ *  lists. Anything else still fails loudly, so a command that reaches past
+ *  its catalogue during `--help` (or at all, in these tests) is caught. */
+const CATALOGUE = {
+  "/concepts": [
+    { id: "c1", title: "What is VoIP", slug: "what-is-voip" },
+    { id: "c2", title: "SIP Basics", slug: "sip-basics" },
+  ],
+  "/roadmaps": [{ id: "r1", title: "VoIP Basics", slug: "voip-basics" }],
+  "/concepts/c1/qa-questions": [
+    {
+      id: "thread-1111aaaa",
+      conceptId: "c1",
+      body: "Does SIP run over TCP?",
+      createdAt: "2026-02-01T10:00:00Z",
+      answers: [],
+    },
+    {
+      id: "thread-2222bbbb",
+      conceptId: "c1",
+      body: "What port does RTP use?",
+      createdAt: "2026-02-02T10:00:00Z",
+      answers: [],
+    },
+  ],
+};
+
+function catalogOrFail(url) {
+  if (url in CATALOGUE) return { data: CATALOGUE[url] };
+  return fail();
+}
 
 function fail() {
   throw new Error("a --help must not reach the network");
@@ -333,6 +367,7 @@ test("a command that takes a path says so, and only those do", () => {
     "complete",
     "less",
     "ls",
+    "qa",
     "quiz",
   ]);
 });
@@ -387,4 +422,170 @@ test("no output template still invokes a removed command", () => {
     });
   }
   assert.deepEqual(offenders, []);
+});
+
+test("bare quiz and complete with no lesson on screen print usage", async () => {
+  // The old contract, kept: with nothing on screen a bare verb is a usage
+  // line, not a guess.
+  commands.clearCurrentConcept();
+  for (const verb of ["quiz", "complete"]) {
+    const host = recorder();
+    await runCommand(verb, ctx(host.io));
+    assert.match(text(host.lines), /^usage: /);
+  }
+});
+
+test("a bare verb reaches for the lesson on screen instead of usage", async () => {
+  commands.setCurrentConcept({ id: "c1", title: "What is VoIP" });
+  try {
+    for (const verb of ["quiz", "complete"]) {
+      const host = recorder();
+      await runCommand(verb, ctx(host.io));
+      const printed = text(host.lines);
+      // Past the usage line and into the command itself, which then fails
+      // here only because this harness refuses the network by design.
+      assert.doesNotMatch(printed, /^usage: /m);
+      assert.match(printed, new RegExp(`^${verb}: `, "m"));
+    }
+    // `qa ask` with no lesson skips the picker and asks who should answer —
+    // the recorder refuses `ask`, which proves it got past lesson-picking.
+    const qa = recorder();
+    await runCommand("qa ask", ctx(qa.io));
+    const asked = text(qa.lines);
+    assert.doesNotMatch(asked, /Which lesson is your question about\?/);
+    assert.match(asked, /^qa: /m);
+  } finally {
+    commands.clearCurrentConcept();
+  }
+});
+
+test("conceptFooter names the follow-ups for both cases", () => {
+  const quiz = commands.conceptFooter("c1", 2);
+  assert.match(quiz, /\{quiz:quiz c1\}/);
+  assert.match(quiz, /\{qa ask:qa ask c1\}/);
+  const none = commands.conceptFooter("c2", 0);
+  assert.match(none, /\{complete:complete c2\}/);
+  assert.match(none, /\{continue\}/);
+});
+
+test("TAB completes lessons for qa ask, and nothing for qa open", async () => {
+  assert.deepEqual(await commands.completeValues("qa ask sip"), [
+    "qa ask sip-basics",
+  ]);
+  assert.deepEqual(await commands.completeValues("qa concept voi"), [
+    "qa concept what-is-voip",
+  ]);
+  assert.deepEqual(await commands.completeValues("qa open x"), []);
+  // A catalogue the command cannot reach fails soft, like everywhere else.
+  assert.deepEqual(await commands.completeValues("qa ask zzz"), []);
+});
+
+test("TAB completes command names, roadmaps and zones", async () => {
+  assert.deepEqual(await commands.completeValues("help q"), [
+    "help quiz",
+    "help qa",
+    "help exit",
+  ]);
+  assert.deepEqual(await commands.completeValues("man "), COMMAND_LIST.filter(
+    (s) => !s.hidden,
+  ).slice(0, 12).map((s) => `man ${s.name}`));
+  assert.deepEqual(await commands.completeValues("continue voi"), [
+    "continue voip-basics",
+  ]);
+  // Zones come from the runtime's ICU data, which varies by build (this one
+  // knows Asia/Calcutta but not Asia/Kolkata), so assert the shape — real
+  // zones sharing the typed prefix — rather than one exact zone.
+  const calc = await commands.completeValues("profile set tz Asia/Calc");
+  assert.ok(calc.length >= 1);
+  assert.ok(calc.every((s) => s.startsWith("profile set tz Asia/Calc")));
+  const americas = await commands.completeValues("tz Amer");
+  assert.ok(americas.length > 1);
+  assert.ok(americas.every((s) => s.startsWith("tz America/")));
+});
+
+test("TAB on a bare help still reaches the verb table first", async () => {
+  // completeCommand answers the verb itself; completeValues only sees full
+  // verbs with an argument started.
+  assert.deepEqual(
+    await commands.completeArgument("help ls", { kind: "root" }),
+    ["help ls"],
+  );
+});
+
+test("no listing-index machinery survives", () => {
+  // Numbers must not address output anywhere: the index, its resolver, the
+  // title memory behind it and the map that pointed commands at it are all
+  // gone, so a digit can only ever be content (a quiz answer, a section).
+  const offenders = [];
+  const names = [
+    "commands.ts",
+    "learning-commands.ts",
+    "fs-commands.ts",
+    "output.ts",
+    "session.ts",
+  ];
+  for (const name of names) {
+    const text = fs.readFileSync(path.join(__dirname, name), "utf8");
+    text.split("\n").forEach((line, index) => {
+      if (
+        /resolveIndex\s*\(/.test(line) ||
+        /indexListing\s*\(/.test(line) ||
+        /knownTitles\s*\(/.test(line) ||
+        /\bARG_INDEX\b/.test(line) ||
+        /\bIndexKind\b/.test(line)
+      )
+        offenders.push(`${name}:${index + 1}  ${line.trim().slice(0, 90)}`);
+    });
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test("the qa board lists short ids, and threads open by id or prefix", async () => {
+  const board = recorder();
+  await runCommand("qa", ctx(board.io));
+  const listed = text(board.lines);
+  assert.match(listed, /\[thread-1\] What is VoIP/);
+  assert.match(listed, /\[thread-2\] What is VoIP/);
+  // Display numbering is gone: nothing here reads as a selector.
+  assert.doesNotMatch(listed, /\[1\] What is VoIP/);
+
+  const exact = recorder();
+  await runCommand("qa open thread-1111aaaa", ctx(exact.io));
+  assert.match(text(exact.lines), /Does SIP run over TCP\?/);
+
+  const prefix = recorder();
+  await runCommand("qa open thread-2222", ctx(prefix.io));
+  assert.match(text(prefix.lines), /What port does RTP use\?/);
+
+  const vague = recorder();
+  await runCommand("qa open thread", ctx(vague.io));
+  assert.match(text(vague.lines), /matches 2 discussions/);
+});
+
+test("qa ask with no lesson on screen refuses instead of picking", async () => {
+  commands.clearCurrentConcept();
+  const host = recorder();
+  await runCommand("qa ask", ctx(host.io));
+  const printed = text(host.lines);
+  assert.match(printed, /No lesson on screen\./);
+  assert.match(printed, /qa ask <lesson>/);
+});
+
+test("clear forgets the lesson on screen", async () => {
+  commands.setCurrentConcept({ id: "c1", title: "What is VoIP" });
+  const host = recorder();
+  // The recorder refuses `clear` itself, which is convenient here: the memory
+  // is wiped before the refusal, so this proves ordering, not just outcome.
+  await runCommand("clear", ctx(host.io));
+  assert.equal(commands.currentConcept(), null);
+});
+
+test("cold commands close with a brief", async () => {
+  const man = recorder();
+  await runCommand("man ls", ctx(man.io));
+  assert.match(text(man.lines), /to run it/);
+
+  const tz = recorder();
+  await runCommand("timezone", ctx(tz.io));
+  assert.match(text(tz.lines), /Change it with timezone/);
 });
