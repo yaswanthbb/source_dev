@@ -23,7 +23,7 @@ How to maintain this file:
   prompts, CLI references). Storage keys moved to the `sd_` prefix
   (`sd_token`, `sd_user`, `sd_theme`, …) and `kip-*` CSS classes to `sd-*`.
   Existing browser sessions are logged out once by the key rotation.
-- Database rename `knowledge_is_power` → `source_dev` **deferred**: the live
+- Database rename `knowledge_is_power` → `source-dev` **deferred**: the live
   database keeps its current name, so the `DB_DATABASE` default in
   `typeorm.config.ts` is intentionally unchanged and nothing breaks.
 

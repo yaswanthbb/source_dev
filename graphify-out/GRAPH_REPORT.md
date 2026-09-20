@@ -1,47 +1,47 @@
-# Graph Report - knowledge_is_power  (2026-09-18)
+# Graph Report - knowledge_is_power  (2026-09-20)
 
 ## Corpus Check
-- 268 files · ~247,748 words
+- 265 files · ~238,566 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2045 nodes · 4937 edges · 149 communities (86 shown, 63 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 120 edges (avg confidence: 0.81)
+- 2009 nodes · 4815 edges · 168 communities (85 shown, 83 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 118 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4eef0fda`
+- Built from commit: `6a9f08a2`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - UsersService
-- Concept
-- auth.ts
+- ai-generate.service.ts
+- useTheme
 - ReviewService
-- ConceptsService
-- gamification.controller.ts
-- User
-- Roles
+- ConceptsController
+- GetActivityQueryDto
+- RoadmapsService
+- ApiBearerAuth
 - AttachConceptDto
 - RegisterDto
 - assignments.module.ts
 - commands.ts
 - Added
-- McqQuestion
+- Concept
 - terminal-workspace.tsx
-- source:dev — Full CLI Mode + Rebrand — Implementation Plan
+- CurrentUser
 - compilerOptions
 - AuthController
-- qa.controller.ts
-- AiGenerationJob
+- User
+- AiGenerateController
 - learning-commands.ts
 - class-transformer
 - api-client.ts
 - compilerOptions
-- analytics.controller.ts
+- AnalyticsController
 - commands.test.mjs
-- instructor/layout.tsx
+- auth.ts
 - dependencies
 - output.ts
 - AdminContentReviewController
@@ -51,20 +51,20 @@
 - app/layout.tsx
 - fs-commands.ts
 - dependencies
-- Content Authoring Flow
+- AiGenerationJob
 - jest
 - auth.controller.ts
-- AppController
+- Public
 - UserConceptProgress
-- CurrentUser
+- RoadmapsController
 - Next.js Frontend Application
 - frontend/package.json
-- auth.module.ts
+- PasswordResetOtp
 - QuizService
 - student/dashboard/page.tsx
 - exclude
 - resolve-location.ts
-- roadmaps.controller.ts
+- UpdateModuleDto
 - nest-cli.json
 - location.ts
 - fs-commands.test.mjs
@@ -85,33 +85,33 @@
 - UpdateInstructorBioDto
 - minimal-terminal-loader.tsx
 - InstructorAnalyticsController
-- Module
-- CreateQuestionDto
-- ai-jobs-provider.tsx
-- typeorm.config.ts
+- GenerateConceptContentDto
+- ConceptsService
+- [roadmapId]/page.tsx
+- CreateQaQuestionDto
 - ProgressController
 - backend/package.json
 - next.config.ts
-- QuizController
+- LinkOAuthDto
 - devDependencies
 - AddOAuthColumns1787300000000
 - tailwind.config.ts
-- useTheme
+- forgot-password/page.tsx
 - collectCoverageFrom
 - check-theme-separation.mjs
-- users.controller.ts
+- roadmaps.controller.ts
 - AuthService
 - @nestjs/passport
-- passport
+- CreateRoadmapDto
 - ChangePasswordDto
 - CreateModuleDto
 - location.test.mjs
 - AddUserPreferences1787800000000
-- ForgotPasswordDto
+- UpdateRoadmapDto
 - axios
 - GetUsersQueryDto
 - RequestDeletionDto
-- @nestjs/platform-express
+- hasSignificantContentChange
 - @nestjs/swagger
 - JwtAuthGuard
 - passport-github2
@@ -127,7 +127,7 @@
 - postcss.config.mjs
 - Five Hundred XP Badge
 - Seven Day Streak Badge
-- jwt.strategy.ts
+- GitHubStrategy
 - @nestjs/cli
 - @nestjs/schematics
 - Application Logo
@@ -157,77 +157,86 @@
 - AddQaAnswerAiSupport1787500000000
 - eslint-config-prettier
 - user.entity.ts
+- UpdateModuleConceptDto
 - VerifyOtpDto
-- ai-generate.service.ts
+- AiGenerateService
+- @nestjs/typeorm
+- nodemailer
+- ApiPropertyOptional
+- IsOptional
 - AGENTS.md
 - AddAiGenerationJobs1787600000000
+- IsString
+- ApiOperation
+- ApiResponse
+- ApiTags
+- Body
+- Controller
+- Delete
+- Get
+- Param
+- Patch
+- Post
+- Query
+- UseGuards
+- InjectRepository
 - AddAiJobRetryAndAck1787700000000
 
 ## God Nodes (most connected - your core abstractions)
-1. `User` - 218 edges
-2. `CurrentUser` - 80 edges
+1. `User` - 195 edges
+2. `CurrentUser` - 69 edges
 3. `Concept` - 63 edges
 4. `BaseEntity` - 46 edges
 5. `McqQuestion` - 45 edges
 6. `Module` - 40 edges
-7. `UsersService` - 38 edges
-8. `AiGenerateService` - 38 edges
+7. `AiGenerateService` - 38 edges
+8. `UsersService` - 37 edges
 9. `Roadmap` - 35 edges
 10. `ModuleConcept` - 33 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `NestJS Backend Application` --conceptually_related_to--> `Next.js Frontend Application`  [INFERRED]
   README.md → frontend/README.md
-- `Token()` --calls--> `getTheme()`  [EXTRACTED]
-  frontend/components/terminal/terminal-workspace.tsx → frontend/components/terminal/themes/index.ts
-- `FetchBlock()` --calls--> `getTheme()`  [EXTRACTED]
-  frontend/components/terminal/terminal-workspace.tsx → frontend/components/terminal/themes/index.ts
-- `Console()` --calls--> `getTheme()`  [EXTRACTED]
-  frontend/components/terminal/terminal-workspace.tsx → frontend/components/terminal/themes/index.ts
-- `useTerminalSession()` --calls--> `useTerminalLogout()`  [EXTRACTED]
-  frontend/components/terminal/use-terminal-session.ts → frontend/components/terminal/logout-dialog.tsx
+- `ForgotPasswordPage()` --calls--> `useTheme()`  [EXTRACTED]
+  frontend/app/(auth)/forgot-password/page.tsx → frontend/providers/theme-provider.tsx
+- `RegisterPage()` --calls--> `detectTimezone()`  [EXTRACTED]
+  frontend/app/(auth)/register/page.tsx → frontend/lib/timezone.ts
+- `CallbackHandler()` --calls--> `syncTimezoneForNewAccount()`  [EXTRACTED]
+  frontend/app/auth/callback/page.tsx → frontend/lib/timezone.ts
+- `FullUser` --inherits--> `User`  [EXTRACTED]
+  frontend/app/instructor/layout.tsx → frontend/lib/auth.ts
 
 ## Import Cycles
 - None detected.
 
 ## Hyperedges (group relationships)
-- **Curriculum Hierarchy 4-Tier Flow** — instructor_guide_roadmap, instructor_guide_module, instructor_guide_concept, instructor_guide_mcq_quiz [EXTRACTED 1.00]
-- **Gamification Engine Core Components** — instructor_guide_experience_points, instructor_guide_learning_streaks, instructor_guide_achievement_badges [EXTRACTED 1.00]
 - **Frontend Next.js Ecosystem and Rules** — frontend_readme_nextjs_app, frontend_agents_nextjs_rules, frontend_claude_config [INFERRED 0.85]
 
-## Communities (149 total, 63 thin omitted)
+## Communities (168 total, 83 thin omitted)
 
 ### Community 0 - "UsersService"
-Cohesion: 0.14
-Nodes (3): Injectable, InjectRepository, UsersService
+Cohesion: 0.08
+Nodes (21): ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, JwtStrategy, Injectable, UsersController, Injectable (+13 more)
 
-### Community 1 - "Concept"
-Cohesion: 0.09
-Nodes (33): slugify(), InjectRepository, InjectRepository, InjectRepository, Concept, Column, Entity, JoinColumn (+25 more)
+### Community 1 - "ai-generate.service.ts"
+Cohesion: 0.06
+Nodes (58): AppModule, BaseEntity, CreateDateColumn, UpdateDateColumn, AiGenerationJobStatus, AiGenerationType, dataSourceOptions, entities (+50 more)
 
-### Community 2 - "auth.ts"
-Cohesion: 0.09
-Nodes (33): CallbackHandler(), LoginPage(), LoginStage, RegisterPage(), RegisterStage, RootPage(), BasicInfoFormData, basicInfoSchema (+25 more)
+### Community 2 - "useTheme"
+Cohesion: 0.10
+Nodes (28): CallbackHandler(), LoginPage(), LoginStage, RegisterPage(), RegisterStage, BasicInfoFormData, basicInfoSchema, ChangePasswordFormData (+20 more)
 
 ### Community 3 - "ReviewService"
+Cohesion: 0.10
+Nodes (21): addCivilDays(), civilDateIn(), relativeDayIn(), resolveZone(), todayIn(), AnswerReviewItemDto, ApiProperty, IsNotEmpty (+13 more)
+
+### Community 4 - "ConceptsController"
+Cohesion: 0.07
+Nodes (28): ApiQuery, ConceptsController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller (+20 more)
+
+### Community 5 - "GetActivityQueryDto"
 Cohesion: 0.12
-Nodes (16): AnswerReviewItemDto, ApiProperty, IsNotEmpty, IsUUID, ReviewController, ApiBearerAuth, ApiOperation, ApiResponse (+8 more)
-
-### Community 4 - "ConceptsService"
-Cohesion: 0.06
-Nodes (32): ApiQuery, boundedLevenshtein(), hasSignificantContentChange(), ConceptsController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags (+24 more)
-
-### Community 5 - "gamification.controller.ts"
-Cohesion: 0.13
 Nodes (15): GetActivityQueryDto, ApiPropertyOptional, IsInt, IsOptional, Min, Type, GamificationController, ApiBearerAuth (+7 more)
-
-### Community 6 - "User"
-Cohesion: 0.17
-Nodes (6): RoadmapsService, Injectable, Column, Entity, OneToOne, User
-
-### Community 7 - "Roles"
-Cohesion: 0.22
-Nodes (12): Roles(), ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Controller, Delete, Get (+4 more)
 
 ### Community 8 - "AttachConceptDto"
 Cohesion: 0.25
@@ -238,76 +247,76 @@ Cohesion: 0.09
 Nodes (23): IsIanaTimezone(), RegisterDto, ApiProperty, ApiPropertyOptional, IsEmail, IsNotEmpty, IsOptional, IsString (+15 more)
 
 ### Community 10 - "assignments.module.ts"
-Cohesion: 0.10
-Nodes (22): AiConfidence, SubmissionStatus, AssignmentsController, Controller, AssignmentsService, Injectable, InjectRepository, Assignment (+14 more)
+Cohesion: 0.09
+Nodes (23): AiConfidence, SubmissionStatus, AssignmentsController, Controller, AssignmentsModule, AssignmentsService, Injectable, InjectRepository (+15 more)
 
 ### Community 11 - "commands.ts"
 Cohesion: 0.06
-Nodes (56): AVATAR_ACCEPT, AVATAR_MIME, dataUrlSizeKb(), resizeImageToDataUrl(), applyInstructor, ARG_INDEX, avatar(), BootLine (+48 more)
+Nodes (54): AVATAR_ACCEPT, AVATAR_MIME, dataUrlSizeKb(), resizeImageToDataUrl(), ARG_INDEX, avatar(), BootLine, bootLines() (+46 more)
 
 ### Community 12 - "Added"
-Cohesion: 0.14
-Nodes (13): [1.0.0] - 2026-08-27, Accounts & authentication, Added, AI-assisted authoring, Analytics, Changelog, Developer experience, Learning content (+5 more)
+Cohesion: 0.13
+Nodes (14): [1.0.0] - 2026-08-27, Accounts & authentication, Added, AI-assisted authoring, Analytics, Changed, Changelog, Developer experience (+6 more)
 
-### Community 13 - "McqQuestion"
-Cohesion: 0.16
-Nodes (19): ConceptReviewStatus, InjectRepository, McqAttempt, Column, Entity, JoinColumn, ManyToOne, McqOption (+11 more)
+### Community 13 - "Concept"
+Cohesion: 0.12
+Nodes (27): ConceptReviewStatus, InjectRepository, Concept, Column, Entity, JoinColumn, ManyToOne, InjectRepository (+19 more)
 
 ### Community 14 - "terminal-workspace.tsx"
-Cohesion: 0.11
-Nodes (18): openingCommand(), StudentTerminalPage(), DOC_HEADINGS, FetchBlock(), RunIndicator(), SWATCHES, TerminalWorkspace(), Token() (+10 more)
+Cohesion: 0.08
+Nodes (23): openingCommand(), StudentTerminalPage(), TerminalHeader(), TerminalSurface(), DOC_HEADINGS, FetchBlock(), RunIndicator(), SWATCHES (+15 more)
 
-### Community 15 - "source:dev — Full CLI Mode + Rebrand — Implementation Plan"
-Cohesion: 0.07
-Nodes (29): 0. What already exists (verified against HEAD `a95a40b`), 1.1 The single source of truth, 1.1a Deep content is CLI-only — location is total, GUI rendering is partial, 1.2 Resolution: slugs vs ids, 1.3 The theming seam, 1. Architecture: one location, two renderers, 2.1 Backend (migration required — hand over, do not run), 2.2 Frontend (+21 more)
+### Community 15 - "CurrentUser"
+Cohesion: 0.22
+Nodes (13): CurrentUser, QaController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller (+5 more)
 
 ### Community 16 - "compilerOptions"
 Cohesion: 0.07
 Nodes (28): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+20 more)
 
 ### Community 17 - "AuthController"
-Cohesion: 0.22
-Nodes (14): AuthController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller, Get (+6 more)
+Cohesion: 0.18
+Nodes (13): AuthController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller, Get (+5 more)
 
-### Community 18 - "qa.controller.ts"
-Cohesion: 0.07
-Nodes (31): CreateAnswerDto, ApiProperty, IsNotEmpty, IsString, CreateQaQuestionDto, ApiProperty, ApiPropertyOptional, IsIn (+23 more)
+### Community 18 - "User"
+Cohesion: 0.09
+Nodes (28): CreateAnswerDto, ApiProperty, IsNotEmpty, IsString, IsNotEmpty, IsString, UpdateAnswerDto, IsNotEmpty (+20 more)
 
-### Community 19 - "AiGenerationJob"
-Cohesion: 0.14
-Nodes (18): AiGenerateController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller, Get (+10 more)
+### Community 19 - "AiGenerateController"
+Cohesion: 0.26
+Nodes (10): AiGenerateController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller, Post (+2 more)
 
 ### Community 20 - "learning-commands.ts"
 Cohesion: 0.05
 Nodes (55): ConceptProgressInfo, ModuleConceptItem, RoadmapDetailData, RoadmapModuleItem, RoadmapProgressData, allThreads(), askerIdOf(), askerOf() (+47 more)
 
 ### Community 22 - "api-client.ts"
-Cohesion: 0.07
-Nodes (41): AdminContentReviewPage(), McqOption, McqQuestion, PendingConcept, Placement, AdminInstructorsApprovalPage(), InstructorUser, AdminUsersDirectoryPage() (+33 more)
+Cohesion: 0.08
+Nodes (36): AdminContentReviewPage(), McqOption, McqQuestion, PendingConcept, Placement, AdminInstructorsApprovalPage(), InstructorUser, AdminUsersDirectoryPage() (+28 more)
 
 ### Community 23 - "compilerOptions"
 Cohesion: 0.08
 Nodes (23): compilerOptions, allowSyntheticDefaultImports, baseUrl, declaration, emitDecoratorMetadata, esModuleInterop, experimentalDecorators, forceConsistentCasingInFileNames (+15 more)
 
-### Community 24 - "analytics.controller.ts"
-Cohesion: 0.15
-Nodes (14): AnalyticsController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Controller, Get, UseGuards (+6 more)
+### Community 24 - "AnalyticsController"
+Cohesion: 0.14
+Nodes (12): AnalyticsController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Controller, Get, UseGuards (+4 more)
 
 ### Community 25 - "commands.test.mjs"
 Cohesion: 0.18
 Nodes (5): commands, __dirname, EXTERNAL, { installGlyphs }, loaded
 
-### Community 26 - "instructor/layout.tsx"
-Cohesion: 0.14
-Nodes (19): ADMIN_NAV_ITEMS, AdminAppShellLayout(), InstructorConceptMetric, InstructorDashboardPage(), InstructorOverview, InstructorQuizQuestionMetric, FullUser, INSTRUCTOR_NAV_ITEMS (+11 more)
+### Community 26 - "auth.ts"
+Cohesion: 0.12
+Nodes (27): ADMIN_NAV_ITEMS, AdminAppShellLayout(), InstructorConceptMetric, InstructorDashboardPage(), InstructorOverview, InstructorQuizQuestionMetric, FullUser, INSTRUCTOR_NAV_ITEMS (+19 more)
 
 ### Community 27 - "dependencies"
 Cohesion: 0.08
 Nodes (25): dependencies, bcrypt, class-validator, dotenv, @nestjs/common, @nestjs/config, @nestjs/core, @nestjs/jwt (+17 more)
 
 ### Community 28 - "output.ts"
-Cohesion: 0.15
-Nodes (21): useTerminalLogout(), TerminalIO, TerminalLine, clearLearningCache(), clearHistory(), clearListings(), FetchReport, FetchRow (+13 more)
+Cohesion: 0.17
+Nodes (20): TerminalIO, TerminalLine, clearLearningCache(), clearHistory(), clearListings(), FetchReport, FetchRow, HelpRow (+12 more)
 
 ### Community 29 - "AdminContentReviewController"
 Cohesion: 0.14
@@ -331,35 +340,35 @@ Nodes (8): inter, metadata, outfit, rubik, spaceGrotesk, ScrollProgressBar(), Qu
 
 ### Community 34 - "fs-commands.ts"
 Cohesion: 0.10
-Nodes (22): CommandCtx, cat, cd, childOf(), contentOf(), find, Found, FS_COMMANDS (+14 more)
+Nodes (20): CommandCtx, cat, cd, contentOf(), FS_COMMANDS, history, isDirectory(), less (+12 more)
 
 ### Community 35 - "dependencies"
 Cohesion: 0.13
 Nodes (15): dependencies, @hookform/resolvers, next, react, react-dom, @tanstack/react-query, @tanstack/react-query-devtools, zod (+7 more)
 
-### Community 36 - "Content Authoring Flow"
-Cohesion: 0.19
-Nodes (14): Automated Achievement Badges, Concept (Lesson), Concept Prerequisites Engine, Content Authoring Flow, Curriculum Architecture & Hierarchy, Experience Points (XP) System, Gamification Engine, Instructor Studio & Analytics (+6 more)
+### Community 36 - "AiGenerationJob"
+Cohesion: 0.20
+Nodes (8): Get, Param, AiGenerationJob, Column, Entity, Index, JoinColumn, ManyToOne
 
 ### Community 37 - "jest"
 Cohesion: 0.18
-Nodes (11): jest, coverageDirectory, moduleFileExtensions, rootDir, testEnvironment, testRegex, transform, ts (+3 more)
+Nodes (11): jest, coverageDirectory, moduleFileExtensions, rootDir, testEnvironment, testRegex, transform, ^.+\\.(t|j)s$ (+3 more)
 
 ### Community 38 - "auth.controller.ts"
-Cohesion: 0.13
-Nodes (13): LinkOAuthDto, ApiProperty, IsIn, IsNotEmpty, IsString, LoginDto, ApiProperty, IsEmail (+5 more)
+Cohesion: 0.09
+Nodes (20): ForgotPasswordDto, ApiProperty, IsEmail, IsNotEmpty, LoginDto, ApiProperty, IsEmail, IsString (+12 more)
 
-### Community 39 - "AppController"
+### Community 39 - "Public"
 Cohesion: 0.23
-Nodes (7): AppController, ApiOperation, ApiTags, Controller, Get, AppService, Injectable
+Nodes (8): AppController, ApiOperation, ApiTags, Controller, Get, AppService, Injectable, Public()
 
 ### Community 40 - "UserConceptProgress"
-Cohesion: 0.22
-Nodes (8): ProgressStatus, InjectRepository, Column, Entity, JoinColumn, ManyToOne, Unique, UserConceptProgress
+Cohesion: 0.18
+Nodes (10): ProgressStatus, AnalyticsService, Injectable, InjectRepository, Column, Entity, JoinColumn, ManyToOne (+2 more)
 
-### Community 41 - "CurrentUser"
-Cohesion: 0.25
-Nodes (14): CurrentUser, RoadmapsController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller (+6 more)
+### Community 41 - "RoadmapsController"
+Cohesion: 0.21
+Nodes (13): RoadmapsController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller, Delete (+5 more)
 
 ### Community 42 - "Next.js Frontend Application"
 Cohesion: 0.22
@@ -369,29 +378,29 @@ Nodes (9): Generate Agent Files Script, Next.js Agent Rules & Breaking Changes, 
 Cohesion: 0.22
 Nodes (8): name, private, scripts, build, dev, lint, start, version
 
-### Community 44 - "auth.module.ts"
-Cohesion: 0.11
-Nodes (15): InjectRepository, PasswordResetOtp, Column, Entity, Index, JoinColumn, ManyToOne, OAuthProfile (+7 more)
+### Community 44 - "PasswordResetOtp"
+Cohesion: 0.25
+Nodes (7): InjectRepository, PasswordResetOtp, Column, Entity, Index, JoinColumn, ManyToOne
 
 ### Community 45 - "QuizService"
-Cohesion: 0.10
-Nodes (16): SubmitAttemptDto, ApiProperty, IsUUID, IsBoolean, IsNotEmpty, IsOptional, IsString, UpdateOptionDto (+8 more)
+Cohesion: 0.05
+Nodes (45): ArrayMinSize, CreateOptionDto, ApiProperty, IsBoolean, IsInt, IsNotEmpty, IsString, Min (+37 more)
 
 ### Community 46 - "student/dashboard/page.tsx"
-Cohesion: 0.12
-Nodes (24): ACTIVITY_SCALE, ActivityDay, BadgeDef, badgeTag(), EarnedBadgeItem, GamificationData, MONTHS, MONTHS_LONG (+16 more)
+Cohesion: 0.11
+Nodes (26): ACTIVITY_SCALE, ActivityDay, BadgeDef, badgeTag(), EarnedBadgeItem, GamificationData, MONTHS, MONTHS_LONG (+18 more)
 
 ### Community 47 - "exclude"
 Cohesion: 0.25
 Nodes (7): exclude, extends, node_modules, **/*spec.ts, dist, test, ./tsconfig.json
 
 ### Community 48 - "resolve-location.ts"
-Cohesion: 0.17
-Nodes (19): api, isAbortError(), cache, cached(), ConceptContent, conceptEntries(), ConceptStatus, detailOf() (+11 more)
+Cohesion: 0.20
+Nodes (18): api, isAbortError(), cache, cached(), ConceptContent, conceptEntries(), ConceptStatus, detailOf() (+10 more)
 
-### Community 49 - "roadmaps.controller.ts"
-Cohesion: 0.09
-Nodes (20): AddModulePrerequisiteDto, ApiProperty, IsUUID, CreateRoadmapDto, IsNotEmpty, IsOptional, IsString, IsInt (+12 more)
+### Community 49 - "UpdateModuleDto"
+Cohesion: 0.29
+Nodes (6): IsInt, IsNotEmpty, IsOptional, IsString, Min, UpdateModuleDto
 
 ### Community 50 - "nest-cli.json"
 Cohesion: 0.33
@@ -406,15 +415,15 @@ Cohesion: 0.10
 Nodes (18): BY_NAME, CONCEPTS, DETAIL, __dirname, failOnce, FS, GLYPHS, L (+10 more)
 
 ### Community 53 - "use-terminal-session.ts"
-Cohesion: 0.14
-Nodes (22): Console(), candidateOf(), chunkEnd(), pageRows(), PagerState, PendingQuestion, sleep(), useTerminalSession() (+14 more)
+Cohesion: 0.16
+Nodes (21): useTerminalLogout(), Console(), candidateOf(), chunkEnd(), pageRows(), PagerState, PendingQuestion, sleep() (+13 more)
 
 ### Community 66 - "Five Concepts Completed Badge"
 Cohesion: 0.67
 Nodes (3): First Concept Completed Badge, Five Concepts Completed Badge, Twenty Concepts Completed Badge
 
 ### Community 67 - "UpdateInstructorBioDto"
-Cohesion: 0.29
+Cohesion: 0.33
 Nodes (5): ApiPropertyOptional, IsOptional, IsString, MaxLength, UpdateInstructorBioDto
 
 ### Community 68 - "minimal-terminal-loader.tsx"
@@ -425,60 +434,64 @@ Nodes (5): MinimalTerminalLoader(), MinimalTerminalLoaderProps, preserveMinimalL
 Cohesion: 0.15
 Nodes (13): InstructorAnalyticsController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Controller, Get, UseGuards (+5 more)
 
-### Community 70 - "Module"
-Cohesion: 0.15
-Nodes (19): AppModule, AiGenerateModule, AnalyticsModule, AssignmentsModule, AuthModule, ContentModule, Module, Column (+11 more)
+### Community 70 - "GenerateConceptContentDto"
+Cohesion: 0.33
+Nodes (13): AcknowledgeJobsDto, GenerateConceptContentDto, GenerateConceptMcqsDto, GenerateModuleConceptsDto, GenerateModuleMcqsDto, GenerateRoadmapModulesDto, ApiProperty, ApiPropertyOptional (+5 more)
 
-### Community 71 - "CreateQuestionDto"
-Cohesion: 0.12
-Nodes (17): ArrayMinSize, CreateOptionDto, ApiProperty, IsBoolean, IsInt, IsNotEmpty, IsString, Min (+9 more)
+### Community 71 - "ConceptsService"
+Cohesion: 0.29
+Nodes (3): ConceptsService, Injectable, InjectRepository
 
-### Community 72 - "ai-jobs-provider.tsx"
-Cohesion: 0.13
-Nodes (21): RoadmapManagementPage(), AiJobResultModal(), AiJobResultModalProps, JOB_TYPE_NOUN, AiJobResultsBanner(), jobSummaryLine(), jobVisual(), AiJobsIndicator() (+13 more)
+### Community 72 - "[roadmapId]/page.tsx"
+Cohesion: 0.10
+Nodes (26): ConceptSummary, ModuleConcept, PageProps, RoadmapDetail, RoadmapManagementPage(), RoadmapModule, AiJobResultModal(), AiJobResultModalProps (+18 more)
 
-### Community 73 - "typeorm.config.ts"
-Cohesion: 0.12
-Nodes (19): BaseEntity, CreateDateColumn, UpdateDateColumn, dataSourceOptions, entities, typeOrmAsyncConfig, Answer, Column (+11 more)
+### Community 73 - "CreateQaQuestionDto"
+Cohesion: 0.29
+Nodes (7): CreateQaQuestionDto, ApiProperty, ApiPropertyOptional, IsIn, IsNotEmpty, IsOptional, IsString
 
 ### Community 74 - "ProgressController"
-Cohesion: 0.23
+Cohesion: 0.19
 Nodes (9): ProgressController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Controller, Get, Param (+1 more)
 
 ### Community 75 - "backend/package.json"
 Cohesion: 0.33
 Nodes (5): author, description, name, private, version
 
-### Community 77 - "QuizController"
-Cohesion: 0.25
-Nodes (12): QuizController, ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, Body, Controller, Delete (+4 more)
+### Community 77 - "LinkOAuthDto"
+Cohesion: 0.33
+Nodes (5): LinkOAuthDto, ApiProperty, IsIn, IsNotEmpty, IsString
 
 ### Community 78 - "devDependencies"
 Cohesion: 0.22
 Nodes (9): devDependencies, @eslint/js, jest, @types/supertest, typescript, typescript, @eslint/js, jest (+1 more)
 
-### Community 81 - "useTheme"
-Cohesion: 0.15
-Nodes (12): emailStepSchema, ForgotPasswordPage(), otpStepSchema, passwordStepSchema, ResetStep, TerminalHeader(), TerminalSurface(), Theme (+4 more)
+### Community 81 - "forgot-password/page.tsx"
+Cohesion: 0.29
+Nodes (5): emailStepSchema, ForgotPasswordPage(), otpStepSchema, passwordStepSchema, ResetStep
 
 ### Community 82 - "collectCoverageFrom"
 Cohesion: 0.25
-Nodes (8): collectCoverageFrom, !**/*.spec.ts, !common/testing/**, !config/**, !main.ts, !migrations/**, !**/*.module.ts, **/*.(t|j)s
+Nodes (8): collectCoverageFrom, !common/testing/**, !config/**, !main.ts, !migrations/**, !**/*.module.ts, !**/*.spec.ts, **/*.(t|j)s
 
 ### Community 83 - "check-theme-separation.mjs"
 Cohesion: 0.25
 Nodes (5): __dirname, GUARDED, ROOT, RULES, violations
 
-### Community 84 - "users.controller.ts"
-Cohesion: 0.21
-Nodes (7): ROLES_KEY, RolesGuard, Injectable, ApplyInstructorDto, ApiPropertyOptional, IsOptional, IsString
+### Community 84 - "roadmaps.controller.ts"
+Cohesion: 0.25
+Nodes (7): Roles(), ROLES_KEY, RolesGuard, Injectable, AddModulePrerequisiteDto, ApiProperty, IsUUID
 
 ### Community 85 - "AuthService"
-Cohesion: 0.18
-Nodes (7): AuthService, Injectable, ResetPasswordDto, ApiProperty, IsNotEmpty, IsString, MinLength
+Cohesion: 0.16
+Nodes (5): AuthService, Injectable, EmailModule, EmailService, Injectable
+
+### Community 87 - "CreateRoadmapDto"
+Cohesion: 0.40
+Nodes (4): CreateRoadmapDto, IsNotEmpty, IsOptional, IsString
 
 ### Community 88 - "ChangePasswordDto"
-Cohesion: 0.29
+Cohesion: 0.33
 Nodes (5): ChangePasswordDto, ApiProperty, IsNotEmpty, IsString, MinLength
 
 ### Community 89 - "CreateModuleDto"
@@ -489,28 +502,24 @@ Nodes (5): CreateModuleDto, IsInt, IsNotEmpty, IsString, Min
 Cohesion: 0.40
 Nodes (3): ALL, __dirname, L
 
-### Community 92 - "ForgotPasswordDto"
-Cohesion: 0.29
-Nodes (4): ForgotPasswordDto, ApiProperty, IsEmail, IsNotEmpty
+### Community 92 - "UpdateRoadmapDto"
+Cohesion: 0.40
+Nodes (4): IsNotEmpty, IsOptional, IsString, UpdateRoadmapDto
 
 ### Community 94 - "GetUsersQueryDto"
-Cohesion: 0.29
-Nodes (6): GetUsersQueryDto, ApiPropertyOptional, IsEnum, IsOptional, IsString, Query
+Cohesion: 0.40
+Nodes (5): GetUsersQueryDto, ApiPropertyOptional, IsEnum, IsOptional, IsString
 
 ### Community 95 - "RequestDeletionDto"
-Cohesion: 0.22
-Nodes (7): RequestDeletionDto, ApiPropertyOptional, IsOptional, IsString, MaxLength, Body, Post
+Cohesion: 0.33
+Nodes (5): RequestDeletionDto, ApiPropertyOptional, IsOptional, IsString, MaxLength
 
 ### Community 98 - "JwtAuthGuard"
 Cohesion: 0.33
 Nodes (3): IS_PUBLIC_KEY, JwtAuthGuard, Injectable
 
-### Community 112 - "jwt.strategy.ts"
-Cohesion: 0.33
-Nodes (3): JwtPayload, JwtStrategy, Injectable
-
 ### Community 117 - "factories.ts"
-Cohesion: 0.06
+Cohesion: 0.07
 Nodes (46): ConceptDifficulty, XpSource, FIXED_DATE, makeAttempt(), makeBadge(), makeConcept(), makeOption(), makeProgress() (+38 more)
 
 ### Community 127 - "dependencies"
@@ -522,36 +531,40 @@ Cohesion: 0.33
 Nodes (4): ConceptAnalytics, InstructorAnalytics, OverviewAnalytics, RoadmapAnalytics
 
 ### Community 143 - "user.entity.ts"
-Cohesion: 0.18
-Nodes (21): InstructorStatus, UserRole, makeUser(), createMockQueryBuilder(), createMockRepository(), MockRepository, NOW, MostMissedOption (+13 more)
+Cohesion: 0.15
+Nodes (23): InstructorStatus, UserRole, makeUser(), createMockQueryBuilder(), createMockRepository(), MockRepository, slugify(), NOW (+15 more)
+
+### Community 144 - "UpdateModuleConceptDto"
+Cohesion: 0.50
+Nodes (3): IsInt, Min, UpdateModuleConceptDto
 
 ### Community 145 - "VerifyOtpDto"
 Cohesion: 0.33
 Nodes (5): ApiProperty, IsEmail, IsNotEmpty, Matches, VerifyOtpDto
 
-### Community 146 - "ai-generate.service.ts"
-Cohesion: 0.08
-Nodes (42): AiGenerationJobStatus, AiGenerationJobType, AiGenerationType, addCivilDays(), civilDateIn(), relativeDayIn(), resolveZone(), todayIn() (+34 more)
+### Community 146 - "AiGenerateService"
+Cohesion: 0.15
+Nodes (14): AiGenerationJobType, AiGenerateService, Injectable, buildConceptContentUserPrompt(), buildConceptMcqUserPrompt(), buildModuleConceptsUserPrompt(), buildQaAnswerUserPrompt(), buildRoadmapModulesUserPrompt() (+6 more)
 
 ## Knowledge Gaps
-- **434 isolated node(s):** `Gaps against the brief`, `1.1 The single source of truth`, `1.1a Deep content is CLI-only — location is total, GUI rendering is partial`, `1.2 Resolution: slugs vs ids`, `1.3 The theming seam` (+429 more)
+- **406 isolated node(s):** `User preferences`, `Changed`, `Accounts & authentication`, `Learning content`, `Progress & gamification` (+401 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **63 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **83 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `User` connect `User` to `UsersService`, `Concept`, `ReviewService`, `ConceptsService`, `gamification.controller.ts`, `Roles`, `assignments.module.ts`, `McqQuestion`, `user.entity.ts`, `AuthController`, `ai-generate.service.ts`, `AiGenerationJob`, `qa.controller.ts`, `AdminContentReviewController`, `auth.controller.ts`, `UserConceptProgress`, `CurrentUser`, `auth.module.ts`, `QuizService`, `roadmaps.controller.ts`, `UpdateInstructorBioDto`, `InstructorAnalyticsController`, `Module`, `typeorm.config.ts`, `ProgressController`, `QuizController`, `users.controller.ts`, `ChangePasswordDto`, `GetUsersQueryDto`, `RequestDeletionDto`, `jwt.strategy.ts`, `factories.ts`?**
-  _High betweenness centrality (0.117) - this node is a cross-community bridge._
-- **Why does `CurrentUser` connect `CurrentUser` to `Concept`, `ReviewService`, `ConceptsService`, `gamification.controller.ts`, `Roles`, `McqQuestion`, `AuthController`, `ai-generate.service.ts`, `AiGenerationJob`, `qa.controller.ts`, `AdminContentReviewController`, `auth.controller.ts`, `QuizService`, `roadmaps.controller.ts`, `UpdateInstructorBioDto`, `InstructorAnalyticsController`, `ProgressController`, `QuizController`, `users.controller.ts`, `ChangePasswordDto`, `RequestDeletionDto`, `factories.ts`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **Why does `UserConceptProgress` connect `UserConceptProgress` to `Concept`, `Module`, `User`, `typeorm.config.ts`, `McqQuestion`, `user.entity.ts`, `factories.ts`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **What connects `Gaps against the brief`, `1.1 The single source of truth`, `1.1a Deep content is CLI-only — location is total, GUI rendering is partial` to the rest of the system?**
-  _434 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `User` connect `User` to `UsersService`, `ai-generate.service.ts`, `ReviewService`, `ConceptsController`, `GetActivityQueryDto`, `RoadmapsService`, `assignments.module.ts`, `Concept`, `user.entity.ts`, `CurrentUser`, `AuthController`, `AiGenerateService`, `AiGenerateController`, `AdminContentReviewController`, `AiGenerationJob`, `auth.controller.ts`, `UserConceptProgress`, `RoadmapsController`, `PasswordResetOtp`, `QuizService`, `InstructorAnalyticsController`, `ConceptsService`, `ProgressController`, `roadmaps.controller.ts`, `factories.ts`?**
+  _High betweenness centrality (0.108) - this node is a cross-community bridge._
+- **Why does `UsersController` connect `UsersService` to `roadmaps.controller.ts`, `user.entity.ts`?**
+  _High betweenness centrality (0.024) - this node is a cross-community bridge._
+- **Why does `UsersService` connect `UsersService` to `auth.controller.ts`, `PasswordResetOtp`, `user.entity.ts`, `roadmaps.controller.ts`, `AuthService`?**
+  _High betweenness centrality (0.024) - this node is a cross-community bridge._
+- **What connects `User preferences`, `Changed`, `Accounts & authentication` to the rest of the system?**
+  _406 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `UsersService` be split into smaller, more focused modules?**
-  _Cohesion score 0.13666666666666666 - nodes in this community are weakly interconnected._
-- **Should `Concept` be split into smaller, more focused modules?**
-  _Cohesion score 0.08941176470588236 - nodes in this community are weakly interconnected._
-- **Should `auth.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.0919661733615222 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08221153846153846 - nodes in this community are weakly interconnected._
+- **Should `ai-generate.service.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.05714285714285714 - nodes in this community are weakly interconnected._
+- **Should `useTheme` be split into smaller, more focused modules?**
+  _Cohesion score 0.10158730158730159 - nodes in this community are weakly interconnected._
