@@ -43,16 +43,88 @@ export interface ThemeDefinition {
   /** The mark printed at boot. Owned by the theme because it is pure
    *  presentation — and because it has to fit a 360px viewport, which is a
    *  rendering constraint, not something a command should be reasoning about. */
-  banner: string;
+  banner: BannerLine[];
 }
 
-/** The product mark at a width that survives a narrow phone. Ten characters
- *  across, so a 360px viewport at the console's type size still shows it
- *  without wrapping — the previous six-line slant logo did not, and a banner
- *  that breaks apart mid-letter reads as corruption rather than as a logo. */
-const BANNER = `┌─┐┌─┐┬ ┬┬─┐┌─┐┌─┐ ┌┬┐┌─┐┬  ┬
-└─┐│ ││ │├┬┘│  ├┤   ││├┤ └┐┌┘
-└─┘└─┘└─┘┴└─└─┘└─┘ ─┴┘└─┘ └┘`;
+export type BannerTone = "dim" | "bright" | "accent";
+
+/** One row of the product mark, and which of the three mark tones it is drawn
+ *  in. The tones glow toward the core — dim tips, bright frame, accent heart —
+ *  the distro-logo idiom, where the emblem carries hues instead of one flat
+ *  colour. */
+export interface BannerLine {
+  text: string;
+  tone: BannerTone;
+}
+
+/** The product mark: a diamond core with a `>_` at its heart — the shell at
+ *  the centre of the learning — hung with node dots at the four vertices for
+ *  the graph around it. Fifteen rows by twenty-five columns, so it stands
+ *  beside the facts from 560px up and stacks above them on a phone, with no
+ *  sideways scroll either way. Every row but the middle mirrors left-for-right;
+ *  the middle carries the asymmetric `>_` and is exempt. */
+const BANNER: BannerLine[] = [
+  {
+    text: "            o            ",
+    tone: "dim"
+  },
+  {
+    text: "           / \\           ",
+    tone: "dim"
+  },
+  {
+    text: "          /   \\          ",
+    tone: "bright"
+  },
+  {
+    text: "         /     \\         ",
+    tone: "bright"
+  },
+  {
+    text: "        /   _   \\        ",
+    tone: "bright"
+  },
+  {
+    text: "       /   / \\   \\       ",
+    tone: "accent"
+  },
+  {
+    text: "      /   /   \\   \\      ",
+    tone: "accent"
+  },
+  {
+    text: "     o   <  >_  >   o    ",
+    tone: "accent"
+  },
+  {
+    text: "      \\   \\   /   /      ",
+    tone: "accent"
+  },
+  {
+    text: "       \\   \\ /   /       ",
+    tone: "accent"
+  },
+  {
+    text: "        \\   V   /        ",
+    tone: "bright"
+  },
+  {
+    text: "         \\     /         ",
+    tone: "bright"
+  },
+  {
+    text: "          \\   /          ",
+    tone: "bright"
+  },
+  {
+    text: "           \\ /           ",
+    tone: "dim"
+  },
+  {
+    text: "            o            ",
+    tone: "dim"
+  }
+];
 
 /** Twenty cells, so the bar still fits beside a label at 360px. */
 const METER_CELLS = 20;
@@ -77,7 +149,7 @@ const TERMINAL: ThemeDefinition = {
      *  printed, since nothing inside the terminal window is clickable. */
     more: (percent) =>
       `--More--(${percent}%)  space: next page · enter: next line · G: end · q: quit`,
-    banner: BANNER,
+    banner: BANNER.map((line) => line.text).join("\n"),
     meter: (percent) => {
       const filled = Math.max(
         0,

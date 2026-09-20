@@ -21,7 +21,6 @@ import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateInstructorBioDto } from './dto/update-instructor-bio.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
-import { ApplyInstructorDto } from './dto/apply-instructor.dto';
 import { RequestDeletionDto } from './dto/request-deletion.dto';
 
 @Injectable()
@@ -326,55 +325,6 @@ export class UsersService {
     return users.map((user) => this.sanitizeUser(user));
   }
 
-  // 1. Student initiates request to become an instructor
-  async applyForInstructor(userId: string, dto: ApplyInstructorDto) {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['instructorProfile'],
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.role === UserRole.INSTRUCTOR || user.role === UserRole.ADMIN) {
-      throw new BadRequestException('User is already an instructor or admin');
-    }
-
-    let profile = await this.instructorProfileRepository.findOne({
-      where: { userId },
-    });
-
-    if (profile) {
-      if (profile.status === InstructorStatus.PENDING) {
-        throw new BadRequestException(
-          'You already have a pending instructor application under review',
-        );
-      }
-      if (profile.status === InstructorStatus.APPROVED) {
-        throw new BadRequestException('You are already an approved instructor');
-      }
-
-      // Re-apply if previously rejected
-      profile.status = InstructorStatus.PENDING;
-      if (dto.bio !== undefined) {
-        profile.bio = dto.bio;
-      }
-      profile.approvedAt = null;
-      profile = await this.instructorProfileRepository.save(profile);
-    } else {
-      profile = this.instructorProfileRepository.create({
-        userId: user.id,
-        status: InstructorStatus.PENDING,
-        bio: dto.bio || null,
-      });
-      profile = await this.instructorProfileRepository.save(profile);
-    }
-
-    return {
-      user: this.sanitizeUser(user),
-      instructorProfile: profile,
-    };
-  }
 
   // 2. Admin approves a pending instructor application -> role becomes INSTRUCTOR
   async approveInstructor(userId: string) {

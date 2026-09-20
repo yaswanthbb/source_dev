@@ -62,7 +62,7 @@ function usePrefersReducedMotion() {
 function Token({ label }: { label: string }) {
   const { tokenOpen, tokenClose } = getTheme(DEFAULT_THEME_ID).glyphs;
   return (
-    <span className="kip-word">
+    <span className="sd-word">
       {tokenOpen}
       {label}
       {tokenClose}
@@ -133,35 +133,43 @@ function FetchBlock({ report }: { report: FetchReport }) {
   const theme = getTheme(DEFAULT_THEME_ID);
   const id = `${report.user}@${report.host}`;
   return (
-    <div className="kip-fetch">
-      <pre className="kip-fetch-art" aria-hidden="true">
-        {theme.banner}
+    <div className="sd-fetch">
+      {/* The emblem, one tone per row: dim tips, bright frame, accent heart.
+          A pre of block spans rather than raw text, so each row carries its
+          own hue the way a distro logo does — still no wider than 25 cells,
+          still scrolling-proof on a phone. */}
+      <pre className="sd-fetch-art" aria-hidden="true">
+        {theme.banner.map((line, index) => (
+          <span key={index} data-tone={line.tone}>
+            {line.text}
+          </span>
+        ))}
       </pre>
-      <div className="kip-fetch-facts">
+      <div className="sd-fetch-facts">
         {/* One line, two halves, coloured apart — the only place in the shell
             where the prompt's own identity is restated, so it is worth
             reading as `user@host` and not as one grey run. */}
-        <p className="kip-fetch-id">
-          <span className="kip-fetch-user">{report.user}</span>
-          <span className="kip-fetch-sep">@</span>
-          <span className="kip-fetch-host">{report.host}</span>
+        <p className="sd-fetch-id">
+          <span className="sd-fetch-user">{report.user}</span>
+          <span className="sd-fetch-sep">@</span>
+          <span className="sd-fetch-host">{report.host}</span>
         </p>
-        <p className="kip-fetch-underline" aria-hidden="true">
+        <p className="sd-fetch-underline" aria-hidden="true">
           {theme.glyphs.rule.repeat(id.length)}
         </p>
-        <dl className="kip-fetch-rows">
+        <dl className="sd-fetch-rows">
           {report.rows.map((fact) => (
-            <div className="kip-fetch-row" key={fact.label}>
+            <div className="sd-fetch-row" key={fact.label}>
               <dt>{fact.label}</dt>
               <dd>{fact.value}</dd>
             </div>
           ))}
         </dl>
-        <p className="kip-fetch-palette" aria-hidden="true">
+        <p className="sd-fetch-palette" aria-hidden="true">
           {SWATCHES.map((name) => (
             <span
               key={name}
-              className="kip-swatch"
+              className="sd-swatch"
               style={{ background: `var(--term-${name})` }}
             />
           ))}
@@ -183,7 +191,7 @@ function Line({
   entry: ConsoleEntry;
 }) {
   if (entry.kind === "rule")
-    return <div className="kip-rule" role="separator" />;
+    return <div className="sd-rule" role="separator" />;
 
   if (entry.report) return <FetchBlock report={entry.report} />;
 
@@ -193,14 +201,14 @@ function Line({
   // that needs that answer should not have to reinvent it.
   if (entry.kind === "banner")
     return (
-      <pre className="kip-banner" aria-label="source:dev">
+      <pre className="sd-banner" aria-label="source:dev">
         {entry.text}
       </pre>
     );
 
   if (entry.markdown)
     return (
-      <div className="kip-flow">
+      <div className="sd-flow">
         {/* Markdown only — `rehype-raw` is deliberately absent, so authored
             HTML inside a lesson or an answer is escaped, never executed. */}
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOC_HEADINGS}>
@@ -211,23 +219,23 @@ function Line({
 
   if (entry.kind === "cmd")
     return (
-      <div className="kip-line" data-kind="cmd">
-        <span className="kip-prompt-user">student@source-dev</span>
-        <span className="kip-prompt-path">:{entry.path ?? "~"}$</span>{" "}
+      <div className="sd-line" data-kind="cmd">
+        <span className="sd-prompt-user">student@source-dev</span>
+        <span className="sd-prompt-path">:{entry.path ?? "~"}$</span>{" "}
         {entry.text}
-        {entry.typing && <span className="kip-caret" aria-hidden="true" />}
+        {entry.typing && <span className="sd-caret" aria-hidden="true" />}
       </div>
     );
 
   if (entry.segments)
     return (
-      <div className="kip-line" data-kind={entry.kind}>
+      <div className="sd-line" data-kind={entry.kind}>
         <Sentence segments={entry.segments} />
       </div>
     );
 
   return (
-    <div className="kip-line" data-kind={entry.kind}>
+    <div className="sd-line" data-kind={entry.kind}>
       {entry.text || " "}
       {Boolean(entry.actions?.length) && (
         <>
@@ -272,14 +280,14 @@ function RunIndicator({ label }: { label: string | null }) {
     : SPINNER[Math.floor(seconds * 12.5) % SPINNER.length];
   const said = label ?? "working";
   return (
-    <div className="kip-line kip-run" data-kind="dim" role="status">
+    <div className="sd-line sd-run" data-kind="dim" role="status">
       {/* The count changes ten times a second: announcing it would be noise,
           so the spoken version says what is happening, once. */}
       <span className="sr-only">
         {said}, in progress. Press control C to stop.
       </span>
       <span aria-hidden="true">
-        {said}… <span className="kip-spin">{frame}</span> {seconds.toFixed(1)}s
+        {said}… <span className="sd-spin">{frame}</span> {seconds.toFixed(1)}s
         {"  ^C stops it"}
       </span>
     </div>
@@ -382,7 +390,7 @@ function Console({
     el.scrollTop = el.scrollHeight;
   }, [lines, booting]);
   return (
-    <TerminalSurface className="kip-console">
+    <TerminalSurface className="sd-console">
       {/* The only chrome left. It sits outside the terminal window, which is
           why it is allowed to have controls at all — everything inside the
           window below is text. */}
@@ -391,13 +399,13 @@ function Console({
         active="terminal"
         onLogout={account.requestLogout}
       />
-      <main className="kip-console-main" aria-label="Terminal">
+      <main className="sd-console-main" aria-label="Terminal">
         <h1 className="sr-only">source:dev learning shell</h1>
         {/* The whole screen is one click target: clicking anywhere in the
             output focuses the prompt, the way a terminal emulator does. */}
         <div
           ref={view}
-          className="kip-screen"
+          className="sd-screen"
           onScroll={onScroll}
           onMouseUp={() => {
             if (!window.getSelection()?.toString())
@@ -405,7 +413,7 @@ function Console({
           }}
         >
           <div
-            className="kip-screen-lines"
+            className="sd-screen-lines"
             role="log"
             aria-label="Terminal output"
             aria-live="polite"
@@ -414,9 +422,9 @@ function Console({
             {lines.map((entry) => (
               <div
                 key={entry.id}
-                className="kip-reveal"
+                className="sd-reveal"
                 style={
-                  { "--kip-delay": `${entry.delay ?? 0}ms` } as CSSProperties
+                  { "--sd-delay": `${entry.delay ?? 0}ms` } as CSSProperties
                 }
               >
                 <Line entry={entry} />
@@ -431,7 +439,7 @@ function Console({
               `--More--(45%)` is this theme's idiom, and another theme is free to
               say it differently. */}
           {pagerAt && (
-            <div className="kip-line" data-kind="head" aria-live="polite">
+            <div className="sd-line" data-kind="head" aria-live="polite">
               {getTheme(DEFAULT_THEME_ID).glyphs.more(
                 Math.round((pagerAt.shown / pagerAt.total) * 100),
               )}
@@ -449,7 +457,7 @@ function Console({
               than no prompt, so the spinner takes its place. */}
           {!booting && !running && !pagerAt && (
             <form
-              className="kip-prompt"
+              className="sd-prompt"
               data-focused={focused ? "" : undefined}
               data-caret={atEnd ? "block" : "line"}
               onSubmit={(event) => {
@@ -458,17 +466,17 @@ function Console({
                 else void execute(cmd);
               }}
             >
-              <label htmlFor="terminal-input" className="kip-prompt-label">
+              <label htmlFor="terminal-input" className="sd-prompt-label">
                 {pending ? (
-                  <span className="kip-prompt-ask">{pending.prompt}:</span>
+                  <span className="sd-prompt-ask">{pending.prompt}:</span>
                 ) : (
                   <>
-                    <span className="kip-prompt-user">student@source-dev</span>
-                    <span className="kip-prompt-path">:{promptPath}$</span>
+                    <span className="sd-prompt-user">student@source-dev</span>
+                    <span className="sd-prompt-path">:{promptPath}$</span>
                   </>
                 )}
               </label>
-              <span className="kip-prompt-entry">
+              <span className="sd-prompt-entry">
                 <input
                   ref={inputRef}
                   id="terminal-input"
@@ -492,7 +500,7 @@ function Console({
                   autoCapitalize="off"
                   autoCorrect="off"
                 />
-                {showCaret && <span className="kip-caret" aria-hidden="true" />}
+                {showCaret && <span className="sd-caret" aria-hidden="true" />}
               </span>
             </form>
           )}
@@ -533,18 +541,18 @@ export function TerminalWorkspace({
   });
   if (!user)
     return (
-      <TerminalSurface className="kip-console">
-        <div className="kip-boot" role="status">
+      <TerminalSurface className="sd-console">
+        <div className="sd-boot" role="status">
           {isError ? (
             <>
-              <p className="kip-line" data-kind="err">
+              <p className="sd-line" data-kind="err">
                 [ERR] Could not resolve session.
               </p>
-              <p className="kip-line" data-kind="dim">
+              <p className="sd-line" data-kind="dim">
                 retry{" "}
                 <button
                   type="button"
-                  className="kip-token"
+                  className="sd-token"
                   onClick={() => void refetch()}
                 >
                   [reconnect]
@@ -552,9 +560,9 @@ export function TerminalWorkspace({
               </p>
             </>
           ) : (
-            <p className="kip-line" data-kind="dim">
+            <p className="sd-line" data-kind="dim">
               resolving session
-              <span className="kip-caret" aria-hidden="true" />
+              <span className="sd-caret" aria-hidden="true" />
             </p>
           )}
         </div>

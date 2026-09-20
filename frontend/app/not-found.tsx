@@ -11,7 +11,7 @@ export default function NotFoundPage() {
         <Link href="/student/dashboard" className="flex items-center">
           <Image
             src="/logo.png"
-            alt="KIP Logo"
+            alt="source:dev logo"
             width={105}
             height={33}
             className="h-[30px] w-auto object-contain"
@@ -56,7 +56,7 @@ export default function NotFoundPage() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-text-secondary">
-        &copy; {new Date().getFullYear()} KIP. All rights reserved.
+        &copy; {new Date().getFullYear()} source:dev. All rights reserved.
       </footer>
     </div>
   );

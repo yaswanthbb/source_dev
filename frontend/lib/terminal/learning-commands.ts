@@ -1,5 +1,5 @@
 /* ==========================================================================
-   KIP Terminal — learning commands
+   source:dev terminal — learning commands
    --------------------------------------------------------------------------
    Everything a student does lives here: browsing roadmaps, reading a lesson,
    answering its quiz, and running the Q&A board. Nothing routes away to a

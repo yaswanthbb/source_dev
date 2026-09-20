@@ -140,7 +140,7 @@ export function CenteredTerminalLoader({
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      const existing = document.getElementById('kip-centered-terminal-overlay');
+      const existing = document.getElementById('sd-centered-terminal-overlay');
       if (existing) existing.remove();
     }
     startTimeRef.current = Date.now();
@@ -242,7 +242,7 @@ export function CenteredTerminalLoader({
           isDark ? 'text-[#525866]' : 'text-[#8a8d94]'
         }`}
       >
-        SYS_ID: KIP_DAEMON_0x9A // STANDBY
+        SYS_ID: SD_DAEMON_0x9A // STANDBY
       </div>
 
       <div
@@ -292,7 +292,7 @@ export function CenteredTerminalLoader({
         >
           <div className="flex items-center gap-2">
             <span className={`font-bold tracking-tight ${isDark ? 'text-white' : 'text-white'}`}>
-              KIP // SYS_BOOT
+              source-dev // SYS_BOOT
             </span>
             <span className={isDark ? 'text-[#525866]' : 'text-[#a0a5af]'}>
               [PID: 0x4A1F]
@@ -330,7 +330,7 @@ export function CenteredTerminalLoader({
               </span>
               <span
                 ref={percentTextRef}
-                className={`kip-centered-pct font-bold tabular-nums ${
+                className={`sd-centered-pct font-bold tabular-nums ${
                   isDark ? 'text-white' : 'text-[#111418]'
                 }`}
               >
@@ -348,7 +348,7 @@ export function CenteredTerminalLoader({
             >
               <div
                 ref={progressBarRef}
-                className={`kip-centered-bar h-4 relative overflow-hidden ${
+                className={`sd-centered-bar h-4 relative overflow-hidden ${
                   isDark ? 'bg-white/90' : 'bg-[#111418]'
                 }`}
                 style={{ width: '0%', transition: 'none' }}
@@ -370,7 +370,7 @@ export function CenteredTerminalLoader({
               <span className="uppercase">
                 TASK: LINKING DAG PREREQUISITE EDGES...
               </span>
-              <span ref={bufferTextRef} className="kip-centered-buffer tabular-nums">
+              <span ref={bufferTextRef} className="sd-centered-buffer tabular-nums">
                 BUFFER: 0.0KB / 128KB
               </span>
             </div>
@@ -541,10 +541,10 @@ function preserveCenteredLoader(
   isDark: boolean
 ) {
   if (typeof document === 'undefined') return;
-  if (document.getElementById('kip-centered-terminal-overlay')) return;
+  if (document.getElementById('sd-centered-terminal-overlay')) return;
 
   const overlay = sourceEl.cloneNode(true) as HTMLElement;
-  overlay.id = 'kip-centered-terminal-overlay';
+  overlay.id = 'sd-centered-terminal-overlay';
   overlay.style.position = 'fixed';
   overlay.style.inset = '0';
   overlay.style.zIndex = '99999';
@@ -554,9 +554,9 @@ function preserveCenteredLoader(
 
   document.body.appendChild(overlay);
 
-  const pctEl = overlay.querySelector('.kip-centered-pct');
-  const barEl = overlay.querySelector('.kip-centered-bar') as HTMLElement | null;
-  const bufferEl = overlay.querySelector('.kip-centered-buffer');
+  const pctEl = overlay.querySelector('.sd-centered-pct');
+  const barEl = overlay.querySelector('.sd-centered-bar') as HTMLElement | null;
+  const bufferEl = overlay.querySelector('.sd-centered-buffer');
 
   let rafId: number;
 

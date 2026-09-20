@@ -25,7 +25,6 @@ import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateInstructorBioDto } from './dto/update-instructor-bio.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
-import { ApplyInstructorDto } from './dto/apply-instructor.dto';
 import { RequestDeletionDto } from './dto/request-deletion.dto';
 
 @ApiTags('Users')
@@ -87,24 +86,6 @@ export class UsersController {
     return this.usersService.updateInstructorBio(user.id, dto);
   }
 
-  @Post('apply-instructor')
-  @ApiOperation({
-    summary: 'Student requests/applies to be promoted to instructor',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Instructor application submitted for admin review.',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Already instructor/admin or application already pending.',
-  })
-  async applyForInstructor(
-    @CurrentUser() user: User,
-    @Body() dto: ApplyInstructorDto,
-  ) {
-    return this.usersService.applyForInstructor(user.id, dto);
-  }
 
   @Get('instructor-applications')
   @Roles(UserRole.ADMIN)

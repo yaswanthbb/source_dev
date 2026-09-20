@@ -1,4 +1,4 @@
-.kip-terminal-theme {
+.sd-terminal-theme {
   color: var(--term-text);
   background: var(--term-base);
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
@@ -22,19 +22,19 @@
   --font-sans: "JetBrains Mono", ui-monospace, monospace;
   --font-display: "Space Grotesk", ui-sans-serif, sans-serif;
 }
-.kip-terminal-theme :is(button, a, input, select, textarea):focus-visible,
-.kip-topbar :is(button, a):focus-visible {
+.sd-terminal-theme :is(button, a, input, select, textarea):focus-visible,
+.sd-topbar :is(button, a):focus-visible {
   outline: 2px solid var(--term-accent, currentColor);
   outline-offset: 3px;
 }
-.kip-terminal-theme button {
+.sd-terminal-theme button {
   cursor: pointer;
 }
-.kip-terminal-theme button:disabled {
+.sd-terminal-theme button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
-.kip-topbar {
+.sd-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -45,34 +45,34 @@
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 13px;
 }
-.kip-topbar-brand {
+.sd-topbar-brand {
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
   flex: 1;
 }
-.kip-view-tabs,
-.kip-account-actions {
+.sd-view-tabs,
+.sd-account-actions {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
-.kip-account-actions {
+.sd-account-actions {
   flex: 1;
   justify-content: flex-end;
   min-width: 0;
 }
-.kip-view-tabs a {
+.sd-view-tabs a {
   padding: 5px 8px;
   font-size: 12px;
   white-space: nowrap;
 }
-.kip-view-tabs a[aria-current] {
+.sd-view-tabs a[aria-current] {
   font-weight: 700;
 }
-.kip-account-control {
+.sd-account-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -83,19 +83,19 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.kip-topbar :is(button, a):hover {
+.sd-topbar :is(button, a):hover {
   filter: brightness(0.88);
 }
 /* The `RUN:` command strip that used to sit here is gone. Nothing inside the
    terminal window is clickable, so there is no strip to style. */
-.kip-console {
+.sd-console {
   height: 100dvh;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.kip-console-main {
+.sd-console-main {
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -105,7 +105,7 @@
 /* ─── The screen ────────────────────────────────────────────────────────────
    One scrolling region holding output and the prompt, with no frame of its
    own: the terminal IS the page, not a widget sitting on one. */
-.kip-screen {
+.sd-screen {
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -115,41 +115,41 @@
   scrollbar-width: thin;
   scrollbar-color: var(--term-line) transparent;
 }
-.kip-screen-lines {
+.sd-screen-lines {
   font-size: 13px;
   line-height: 1.7;
 }
-.kip-line {
+.sd-line {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.kip-line[data-kind="cmd"] {
+.sd-line[data-kind="cmd"] {
   margin-top: 14px;
   color: var(--term-ink);
 }
 /* The first line of a screen opens at the top of it, not 14px down. Each line
    sits inside its own reveal wrapper, so the first wrapper's line is the one
    that matters here. */
-.kip-screen-lines > .kip-line[data-kind="cmd"]:first-child,
-.kip-screen-lines > .kip-reveal:first-child > .kip-line[data-kind="cmd"] {
+.sd-screen-lines > .sd-line[data-kind="cmd"]:first-child,
+.sd-screen-lines > .sd-reveal:first-child > .sd-line[data-kind="cmd"] {
   margin-top: 0;
 }
-.kip-line[data-kind="dim"] {
+.sd-line[data-kind="dim"] {
   color: var(--term-dim);
 }
-.kip-line[data-kind="ok"] {
+.sd-line[data-kind="ok"] {
   color: var(--term-accent);
 }
-.kip-line[data-kind="head"] {
+.sd-line[data-kind="head"] {
   color: var(--term-accent);
   font-weight: 700;
 }
-.kip-line[data-kind="err"] {
+.sd-line[data-kind="err"] {
   color: var(--term-error);
 }
 /* ASCII art must not wrap or the letterforms come apart, so the banner
    scrolls sideways on a narrow screen instead of reflowing. */
-.kip-banner {
+.sd-banner {
   margin: 2px 0 10px;
   color: var(--term-accent);
   font-weight: 700;
@@ -159,11 +159,11 @@
   scrollbar-width: none;
   user-select: none;
 }
-.kip-banner::-webkit-scrollbar {
+.sd-banner::-webkit-scrollbar {
   display: none;
 }
 /* A divider the width of the screen, not a run of dashes that would wrap. */
-.kip-rule {
+.sd-rule {
   height: 0;
   margin: 10px 0;
   border-top: 1px solid var(--term-line);
@@ -177,47 +177,63 @@
    for the mark or for a column of facts beside it, not both. So the default is
    one column with the mark above, and the two-column grid starts only where
    the art can keep its own width without squeezing the labels. */
-.kip-fetch {
+.sd-fetch {
   display: grid;
   gap: 4px 20px;
   align-items: center;
   margin: 6px 0 12px;
 }
-.kip-fetch-art {
+.sd-fetch-art {
   margin: 0 0 8px;
   color: var(--term-accent);
   font-weight: 700;
-  font-size: clamp(9px, 2.6vw, 13px);
-  line-height: 1.05;
+  font-size: clamp(10px, 2.8vw, 14px);
+  line-height: 1.1;
   overflow-x: auto;
   scrollbar-width: none;
   user-select: none;
 }
-.kip-fetch-art::-webkit-scrollbar {
+/* One tone per emblem row — the distro-logo glow. Spans stack as blocks so
+   no stray newline text node can add a sixteenth row. */
+.sd-fetch-art span {
+  display: block;
+  white-space: pre;
+}
+.sd-fetch-art span[data-tone="dim"] {
+  color: var(--term-faint);
+}
+.sd-fetch-art span[data-tone="bright"] {
+  color: var(--term-ink);
+}
+.sd-fetch-art span[data-tone="accent"] {
+  color: var(--term-accent);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--term-accent) 45%, transparent);
+}
+.sd-fetch-art::-webkit-scrollbar {
   display: none;
 }
-.kip-fetch-facts {
+.sd-fetch-facts {
   min-width: 0;
 }
-.kip-fetch-id,
-.kip-fetch-underline,
-.kip-fetch-palette {
+.sd-fetch-id,
+.sd-fetch-underline,
+.sd-fetch-palette {
   margin: 0;
 }
-.kip-fetch-id {
+.sd-fetch-id {
   font-weight: 700;
 }
-.kip-fetch-user {
+.sd-fetch-user {
   color: var(--term-accent);
 }
-.kip-fetch-sep,
-.kip-fetch-host {
+.sd-fetch-sep,
+.sd-fetch-host {
   color: var(--term-ink);
 }
 /* As wide as the identity above it and no wider — the rule is built from the
    theme's glyph repeated to that string's length, so it clips rather than
    wraps when the name is long. */
-.kip-fetch-underline {
+.sd-fetch-underline {
   color: var(--term-line);
   line-height: 1.1;
   overflow: hidden;
@@ -226,43 +242,50 @@
 /* Labels in one column, values in the next, so the block scans down the way a
    real fetch does. The label column is sized in characters rather than pixels
    because the type is monospace and the longest label is what has to fit. */
-.kip-fetch-rows {
+.sd-fetch-rows {
   display: grid;
   margin: 6px 0 0;
   row-gap: 1px;
 }
-.kip-fetch-row {
+.sd-fetch-row {
   display: grid;
   grid-template-columns: 9ch 1fr;
   gap: 8px;
 }
-.kip-fetch-row dt {
+.sd-fetch-row dt {
   color: var(--term-accent);
   font-weight: 700;
 }
-.kip-fetch-row dd {
+/* The `Field: value` idiom, distro-fetch style. The colon is chrome, not data,
+   so it lives here rather than in the strings the command handed over. */
+.sd-fetch-row dt::after {
+  content: ":";
+  color: var(--term-dim);
+  font-weight: 400;
+}
+.sd-fetch-row dd {
   margin: 0;
   color: var(--term-text);
   overflow-wrap: anywhere;
 }
-.kip-fetch-palette {
+.sd-fetch-palette {
   display: flex;
   flex-wrap: wrap;
   margin-top: 10px;
 }
-.kip-swatch {
-  width: 1.4em;
-  height: 0.9em;
+.sd-swatch {
+  width: 2em;
+  height: 1em;
   border: 1px solid var(--term-line);
   /* One shared edge between neighbours, so the strip reads as a palette
      rather than as a row of separate chips. */
   margin-right: -1px;
 }
 @media (min-width: 560px) {
-  .kip-fetch {
+  .sd-fetch {
     grid-template-columns: auto minmax(0, 1fr);
   }
-  .kip-fetch-art {
+  .sd-fetch-art {
     margin-bottom: 0;
   }
 }
@@ -270,7 +293,7 @@
    Output prints on rather than landing whole: each line of one burst starts a
    step after the line above it. The delay is set per line by the host; the
    `backwards` fill is what holds a line invisible until its own turn comes. */
-@keyframes kip-reveal {
+@keyframes sd-reveal {
   from {
     opacity: 0;
     transform: translateY(2px);
@@ -280,13 +303,13 @@
     transform: none;
   }
 }
-.kip-reveal {
-  animation: kip-reveal 120ms ease-out backwards;
-  animation-delay: var(--kip-delay, 0ms);
+.sd-reveal {
+  animation: sd-reveal 120ms ease-out backwards;
+  animation-delay: var(--sd-delay, 0ms);
 }
 /* An inline `[command]` token: text that runs something. Bracket colour comes
    from the accent so it reads like login's [1] / [ENTER] tokens. */
-.kip-token {
+.sd-token {
   color: var(--term-accent);
   background: none;
   border: 0;
@@ -294,25 +317,25 @@
   font: inherit;
   white-space: nowrap;
 }
-.kip-token + .kip-token {
+.sd-token + .sd-token {
   margin-left: 6px;
 }
-.kip-token:hover:not(:disabled) {
+.sd-token:hover:not(:disabled) {
   background: var(--term-accent);
   color: var(--term-base);
 }
 /* A runnable word printed inside output — `[read]`, or a verb inside a
    sentence. Text, not a control: no button shape, no hover state, nothing to
    click. The accent alone marks it as something you can type. */
-.kip-word {
+.sd-word {
   color: var(--term-accent);
 }
 /* ─── The running line ──────────────────────────────────────────────────────
    Stands where the prompt would be while a command is in flight. */
-.kip-run {
+.sd-run {
   margin-top: 14px;
 }
-.kip-spin {
+.sd-spin {
   color: var(--term-accent);
 }
 /* ─── The prompt ────────────────────────────────────────────────────────────
@@ -320,11 +343,11 @@
    where the next line prints. The input carries no frame and is only as wide
    as what has been typed: a shell has no field, it has a caret.
 
-   Scoped to `.kip-console`: the dashboard's footer prompt wears the same
-   `.kip-prompt` class and loads this file through `TerminalHeader`, but it is a
+   Scoped to `.sd-console`: the dashboard's footer prompt wears the same
+   `.sd-prompt` class and loads this file through `TerminalHeader`, but it is a
    bar with its own alignment — layout rules here must not reach it. The
-   `.kip-prompt-*` parts below are colour only, so they stay shared. */
-.kip-console .kip-prompt {
+   `.sd-prompt-*` parts below are colour only, so they stay shared. */
+.sd-console .sd-prompt {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -332,18 +355,18 @@
   font-size: 13px;
   line-height: 1.7;
 }
-.kip-prompt-label {
+.sd-prompt-label {
   white-space: nowrap;
   font-weight: 700;
   cursor: text;
 }
-.kip-prompt-user {
+.sd-prompt-user {
   color: var(--term-accent);
 }
-.kip-prompt-path {
+.sd-prompt-path {
   color: var(--term-dim);
 }
-.kip-prompt-ask {
+.sd-prompt-ask {
   color: var(--term-accent);
   font-weight: 400;
 }
@@ -356,25 +379,25 @@
    wraps: the label keeps its full width and the entry drops to the line below
    once under 12ch is left for it — what a real shell does with a long PS1. If
    the label alone still overflows it breaks mid-path rather than pushing the
-   page sideways. Layout only, so scoped to `.kip-console`: the dashboard's
+   page sideways. Layout only, so scoped to `.sd-console`: the dashboard's
    footer prompt is a bar with its own alignment. */
-.kip-console .kip-prompt {
+.sd-console .sd-prompt {
   flex-wrap: wrap;
 }
-.kip-console .kip-prompt-label {
+.sd-console .sd-prompt-label {
   flex-shrink: 0;
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 /* Text and caret sit together and share the rest of the line. */
-.kip-console .kip-prompt-entry {
+.sd-console .sd-prompt-entry {
   display: inline-flex;
   align-items: baseline;
   min-width: 0;
   flex: 1 1 12ch;
 }
-.kip-console .kip-prompt input {
+.sd-console .sd-prompt input {
   min-width: 1ch;
   max-width: 100%;
   background: transparent;
@@ -388,17 +411,17 @@
 /* The block caret stands in for the native one, so hide that while it does —
    and never draw a focus ring here: a box around the line is exactly what
    makes a terminal look like a web form. The caret is the focus indicator. */
-.kip-console .kip-prompt[data-caret="block"] input {
+.sd-console .sd-prompt[data-caret="block"] input {
   caret-color: transparent;
 }
-.kip-terminal-theme .kip-prompt input:focus-visible {
+.sd-terminal-theme .sd-prompt input:focus-visible {
   outline: 0;
 }
 /* ─── The caret ─────────────────────────────────────────────────────────────
    One cell wide, filled, blinking — the shell's own, not a text glyph. It
    holds still when the prompt is not focused, the way an unfocused terminal
    window does. */
-@keyframes kip-caret-blink {
+@keyframes sd-caret-blink {
   0%,
   49% {
     opacity: 1;
@@ -408,16 +431,16 @@
     opacity: 0;
   }
 }
-.kip-caret {
+.sd-caret {
   display: inline-block;
   width: 1ch;
   height: 1.05em;
   vertical-align: -0.18em;
   flex-shrink: 0;
   background: var(--term-accent);
-  animation: kip-caret-blink 1.05s steps(1, end) infinite;
+  animation: sd-caret-blink 1.05s steps(1, end) infinite;
 }
-.kip-prompt:not([data-focused]) .kip-caret {
+.sd-prompt:not([data-focused]) .sd-caret {
   animation: none;
   opacity: 0.4;
 }
@@ -426,7 +449,7 @@
    the foot — `[back]` `[next]`, the position counter, the TAB chips — was
    pagination for a screen stack this shell no longer has. One scrollback, one
    prompt, nothing else. */
-.kip-boot {
+.sd-boot {
   padding: 20px clamp(12px, 2vw, 22px);
   font-size: 13px;
   line-height: 1.7;
@@ -435,69 +458,69 @@
    A lesson body or an answer. Styled to look typeset by the terminal itself:
    headings get a `##` marker, lists a `-`, code a faint ground. No frame, no
    header bar — the caller prints those as ordinary lines around it. */
-.kip-flow {
+.sd-flow {
   font-size: 13px;
   line-height: 1.75;
   overflow-wrap: anywhere;
 }
-.kip-flow > :first-child {
+.sd-flow > :first-child {
   margin-top: 0;
 }
-.kip-flow > :last-child {
+.sd-flow > :last-child {
   margin-bottom: 0;
 }
-.kip-flow :is(h3, h4, h5, h6) {
+.sd-flow :is(h3, h4, h5, h6) {
   color: var(--term-accent);
   font-weight: 700;
   font-size: 13px;
   line-height: 1.5;
   margin: 18px 0 6px;
 }
-.kip-flow h3::before {
+.sd-flow h3::before {
   content: "## ";
   color: var(--term-dim);
 }
-.kip-flow h4::before {
+.sd-flow h4::before {
   content: "### ";
   color: var(--term-dim);
 }
-.kip-flow p {
+.sd-flow p {
   margin: 0 0 12px;
 }
-.kip-flow :is(ul, ol) {
+.sd-flow :is(ul, ol) {
   margin: 0 0 12px;
   padding-left: 20px;
 }
-.kip-flow li {
+.sd-flow li {
   margin-bottom: 3px;
 }
-.kip-flow ul {
+.sd-flow ul {
   list-style: none;
   padding-left: 14px;
 }
-.kip-flow ul > li::before {
+.sd-flow ul > li::before {
   content: "- ";
   color: var(--term-accent);
 }
-.kip-flow a {
+.sd-flow a {
   color: var(--term-accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.kip-flow strong {
+.sd-flow strong {
   color: var(--term-ink);
   font-weight: 700;
 }
-.kip-flow em {
+.sd-flow em {
   color: var(--term-dim);
   font-style: italic;
 }
-.kip-flow code {
+.sd-flow code {
   padding: 0 3px;
   background: var(--term-head);
   color: var(--term-accent);
 }
-.kip-flow pre {
+.sd-flow pre {
   margin: 0 0 12px;
   padding: 10px 12px;
   background: var(--term-head);
@@ -505,32 +528,32 @@
   overflow-x: auto;
   scrollbar-width: thin;
 }
-.kip-flow pre code {
+.sd-flow pre code {
   padding: 0;
   background: none;
   color: var(--term-text);
   line-height: 1.65;
 }
-.kip-flow blockquote {
+.sd-flow blockquote {
   margin: 0 0 12px;
   padding-left: 12px;
   border-left: 2px solid var(--term-accent);
   color: var(--term-dim);
 }
-.kip-flow blockquote p:last-child {
+.sd-flow blockquote p:last-child {
   margin-bottom: 0;
 }
-.kip-flow hr {
+.sd-flow hr {
   margin: 16px 0;
   border: 0;
   border-top: 1px solid var(--term-line);
 }
-.kip-flow img {
+.sd-flow img {
   max-width: 100%;
   height: auto;
 }
 /* Tables scroll on their own rather than widening the screen. */
-.kip-flow table {
+.sd-flow table {
   display: block;
   max-width: 100%;
   overflow-x: auto;
@@ -539,17 +562,17 @@
   font-size: 12px;
   scrollbar-width: thin;
 }
-.kip-flow :is(th, td) {
+.sd-flow :is(th, td) {
   border: 1px solid var(--term-line);
   padding: 5px 9px;
   text-align: left;
 }
-.kip-flow th {
+.sd-flow th {
   color: var(--term-accent);
   font-weight: 700;
   white-space: nowrap;
 }
-.kip-logout-dialog {
+.sd-logout-dialog {
   margin: auto;
   padding: 0;
   width: min(440px, calc(100vw - 32px));
@@ -561,10 +584,10 @@
   box-shadow: 6px 6px 0 var(--term-shadow);
   font: inherit;
 }
-.kip-logout-dialog::backdrop {
+.sd-logout-dialog::backdrop {
   background: rgb(0 0 0 / 0.65);
 }
-.kip-dialog-heading {
+.sd-dialog-heading {
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -575,21 +598,21 @@
   padding: 10px 16px;
   font-size: 11px;
 }
-.kip-dialog-heading button {
+.sd-dialog-heading button {
   padding: 4px;
 }
-.kip-dialog-body {
+.sd-dialog-body {
   padding: 20px;
   font-size: 13px;
   line-height: 1.7;
 }
-.kip-dialog-body .kip-line + .kip-line {
+.sd-dialog-body .sd-line + .sd-line {
   margin-top: 10px;
 }
-.kip-dialog-body .kip-line[data-kind="cmd"] {
+.sd-dialog-body .sd-line[data-kind="cmd"] {
   margin-top: 0;
 }
-.kip-dialog-actions {
+.sd-dialog-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
@@ -598,93 +621,93 @@
   border-top: 1px solid var(--term-line);
   font-size: 13px;
 }
-.kip-dialog-body .kip-dialog-hint {
+.sd-dialog-body .sd-dialog-hint {
   color: var(--term-dim);
   font-size: 10px;
   margin-top: 12px;
 }
 /* The route error boundary, which has no chrome above it to sit inside. */
-.kip-error-frame {
+.sd-error-frame {
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
 }
-.kip-error-panel {
+.sd-error-panel {
   width: min(520px, 100%);
   border: 1px solid var(--term-line);
   background: var(--term-panel);
   box-shadow: 3px 3px 0 var(--term-shadow);
 }
-.kip-error-panel .kip-dialog-actions {
+.sd-error-panel .sd-dialog-actions {
   flex-wrap: wrap;
 }
-.kip-error-digest {
+.sd-error-digest {
   margin-top: 14px;
   font-size: 10px;
   color: var(--term-dim);
   overflow-wrap: anywhere;
 }
-.kip-error-digest span {
+.sd-error-digest span {
   color: var(--term-accent);
 }
 @media (max-width: 767px) {
-  .kip-topbar {
+  .sd-topbar {
     padding: 5px 8px;
     gap: 6px;
   }
-  .kip-topbar-brand {
+  .sd-topbar-brand {
     flex: 0;
   }
-  .kip-view-tabs {
+  .sd-view-tabs {
     margin-right: auto;
     gap: 3px;
   }
-  .kip-view-tabs a {
+  .sd-view-tabs a {
     padding: 5px;
     font-size: 10px;
   }
-  .kip-account-actions {
+  .sd-account-actions {
     flex: 0;
     gap: 4px;
   }
-  .kip-account-control {
+  .sd-account-control {
     padding: 3px 5px;
     min-height: 32px;
   }
   /* 16px stops iOS zooming the page when the prompt takes focus. The whole row
      moves up together — label, input and caret share one grid, so sizing only
      the input would leave `student@source-dev:~$` a size smaller beside it. */
-  .kip-console .kip-prompt {
+  .sd-console .sd-prompt {
     font-size: 16px;
   }
-  .kip-dialog-body {
+  .sd-dialog-body {
     padding: 16px;
   }
 }
 @media (max-width: 380px) {
-  .kip-topbar {
+  .sd-topbar {
     gap: 4px;
   }
-  .kip-view-tabs a {
+  .sd-view-tabs a {
     padding: 4px 3px;
   }
-  .kip-account-control {
+  .sd-account-control {
     padding: 3px 4px;
   }
-  .kip-screen-lines,
-  .kip-flow {
+  .sd-screen-lines,
+  .sd-flow {
     font-size: 12px;
   }
-  .kip-flow :is(ul, ol) {
+  .sd-flow :is(ul, ol) {
     padding-left: 12px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .kip-terminal-theme *,
-  .kip-terminal-theme *::before,
-  .kip-terminal-theme *::after {
+  .sd-terminal-theme *,
+  .sd-terminal-theme *::before,
+  .sd-terminal-theme *::after {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;

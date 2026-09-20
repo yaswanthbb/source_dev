@@ -1,5 +1,5 @@
 /* ==========================================================================
-   KIP Terminal — output vocabulary
+   source:dev terminal — output vocabulary
    --------------------------------------------------------------------------
    Three things every command shares, kept here so none of them is re-invented
    per command:

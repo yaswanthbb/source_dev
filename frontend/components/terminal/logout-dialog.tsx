@@ -29,7 +29,7 @@ function LogoutDialog({
     <TerminalSurface>
       <dialog
         ref={ref}
-        className="kip-logout-dialog"
+        className="sd-logout-dialog"
         aria-labelledby="logout-title"
         aria-describedby="logout-description"
         onCancel={(event) => {
@@ -49,7 +49,7 @@ function LogoutDialog({
           }
         }}
       >
-        <div className="kip-dialog-heading">
+        <div className="sd-dialog-heading">
           <span>┌─[ session :: logout ]</span>
           <button
             type="button"
@@ -59,22 +59,22 @@ function LogoutDialog({
             [×]
           </button>
         </div>
-        <div className="kip-dialog-body">
-          <p className="kip-line" data-kind="cmd">
-            <span className="kip-prompt-user">student@kip</span>
-            <span className="kip-prompt-path">:~$</span> logout
+        <div className="sd-dialog-body">
+          <p className="sd-line" data-kind="cmd">
+            <span className="sd-prompt-user">student@source-dev</span>
+            <span className="sd-prompt-path">:~$</span> logout
           </p>
-          <p className="kip-line" data-kind="out" id="logout-description">
+          <p className="sd-line" data-kind="out" id="logout-description">
             This closes the session and returns to the login screen. Progress is
             stored on the server, not in this tab.
           </p>
-          <p className="kip-line" data-kind="head" id="logout-title">
+          <p className="sd-line" data-kind="head" id="logout-title">
             Confirm? [y/N]
           </p>
-          <div className="kip-dialog-actions">
+          <div className="sd-dialog-actions">
             <button
               type="button"
-              className="kip-token"
+              className="sd-token"
               autoFocus
               onClick={() => onDecision(false)}
             >
@@ -82,13 +82,13 @@ function LogoutDialog({
             </button>
             <button
               type="button"
-              className="kip-token"
+              className="sd-token"
               onClick={() => onDecision(true)}
             >
               [y: log out]
             </button>
           </div>
-          <p className="kip-dialog-hint">ESC to cancel</p>
+          <p className="sd-dialog-hint">ESC to cancel</p>
         </div>
       </dialog>
     </TerminalSurface>

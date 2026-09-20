@@ -1,5 +1,5 @@
 /* ==========================================================================
-   KIP Terminal — cancellable requests
+   source:dev terminal — cancellable requests
    --------------------------------------------------------------------------
    ^C has to stop the work, not just hide it. Every request a command makes
    goes through here, so the host can arm one AbortSignal for the command it

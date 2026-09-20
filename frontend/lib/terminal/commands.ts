@@ -1,5 +1,5 @@
 /* ==========================================================================
-   KIP Terminal — shared command registry
+   source:dev terminal — shared command registry
    --------------------------------------------------------------------------
    One source of truth for the interactive shell. The dashboard footer prompt
    and the full-screen CLI tab both dispatch through `runCommand`, so a command
@@ -252,9 +252,8 @@ export function printMan(io: TerminalIO, spec: CommandSpec) {
  *  command's own work.
  *
  *  `help`, `--help` and `-h` all mean the same thing, and they only count as
- *  the *first* argument: `grep --help` is a request for documentation, while
- *  `grep --help notes` is a search for the string `--help`, which is the
- *  distinction GNU tools draw too. */
+ *  the first argument.
+ */
 function wantsHelp(args: string[]): boolean {
   const first = args[0]?.toLowerCase();
   return args.length === 1 && (first === "help" || first === "--help" || first === "-h");
@@ -445,9 +444,6 @@ async function showProfile({ io }: CommandCtx): Promise<void> {
     io.print(row("avatar", data.profilePicture ? "set" : "none"));
     io.print(row("auth", data.authProvider || "password"));
     io.print(row("member_since", fmtDate(data.createdAt, data.timezone)));
-    if (data.instructorProfile?.status) {
-      io.print(row("instructor", data.instructorProfile.status.toUpperCase()));
-    }
     io.print("");
     io.print("  profile set name <new name>   rename the account", "dim");
     io.print("  timezone auto                 adopt the browser zone", "dim");
@@ -650,71 +646,6 @@ const passwd: CommandSpec = {
   },
 };
 
-const applyInstructor: CommandSpec = {
-  name: "apply-instructor",
-  usage: "apply-instructor",
-  summary: "submit an instructor application",
-  group: "profile",
-  help: {
-    usage: "apply-instructor",
-    description: [
-      "Submit an application to teach on the platform. Prompts for the",
-      "expertise and the motivation an admin will read.",
-      "One application at a time — check on it with instructor-status.",
-    ],
-    examples: ["apply-instructor", "instructor-status"],
-  },
-  run: async ({ io, user, refreshUser }) => {
-    if (user && (user.role === "instructor" || user.role === "admin")) {
-      io.print(`apply-instructor: you are already ${user.role}`, "err");
-      return;
-    }
-    io.print("Describe your background and teaching experience.", "dim");
-    io.print("Leave blank to apply without a bio.", "dim");
-    const bio = (await io.ask("bio")).trim();
-    try {
-      await apiClient.post("/users/apply-instructor", bio ? { bio } : {});
-      await refreshUser();
-      io.print("[OK] application submitted — status PENDING", "ok");
-      io.print("  an admin reviews it; check with instructor-status", "dim");
-    } catch (e) {
-      io.print(`apply-instructor: ${errText(e)}`, "err");
-    }
-  },
-};
-
-const instructorStatus: CommandSpec = {
-  name: "instructor-status",
-  usage: "instructor-status",
-  summary: "check your instructor application",
-  group: "profile",
-  help: {
-    usage: "instructor-status",
-    description: [
-      "Print the state of your instructor application: PENDING, APPROVED or",
-      "REJECTED, with the date it was decided and any note left on it.",
-    ],
-    examples: ["instructor-status", "apply-instructor"],
-  },
-  run: async ({ io }) => {
-    try {
-      const { data } = await apiClient.get<User>("/users/me");
-      const p = data.instructorProfile;
-      if (!p || !p.status) {
-        io.print("no instructor application on file", "dim");
-        io.print("  apply-instructor   start one", "dim");
-        return;
-      }
-      io.print("INSTRUCTOR APPLICATION", "head");
-      io.print(row("status", p.status.toUpperCase()));
-      io.print(row("submitted", fmtDate(p.createdAt, data.timezone)));
-      io.print(row("approved", fmtDate(p.approvedAt, data.timezone)));
-      if (p.bio) io.print(row("bio", p.bio));
-    } catch (e) {
-      io.print(`instructor-status: ${errText(e)}`, "err");
-    }
-  },
-};
 
 interface DeletionRequest {
   id: string;
@@ -990,7 +921,7 @@ const man: CommandSpec = {
       "Same content as <command> --help, under the headings a man page uses.",
     ],
     args: [{ name: "<command>", text: "The command to document" }],
-    examples: ["man ls", "man grep", "man quiz", "man qa"],
+    examples: ["man ls", "man quiz", "man qa"],
   },
   run: ({ args, io }) => {
     const [target] = args;
@@ -1050,15 +981,13 @@ export const COMMAND_LIST: CommandSpec[] = [
   help,
   man,
   // Navigation comes first because it is how everything else is reached: you
-  // find a lesson with `ls` and `cd` before you `read` or `quiz` it.
+  // locate a lesson with `ls` and `cd` before you `read` or `quiz` it.
   ...FS_COMMANDS,
   ...LEARNING_COMMANDS,
   whoami,
   profile,
   timezone,
   passwd,
-  applyInstructor,
-  instructorStatus,
   deletionStatus,
   deleteAccount,
   theme,
@@ -1112,44 +1041,14 @@ function bootFetch(user?: User): BootLine {
   return { text: fetchText(report), kind: "out", report };
 }
 
-/** The start-up script, in the shape a real shell's would take: probe the
- *  environment, print the mark, then say what to type. Exported so any host
- *  boots with identical output. */
+/** The start-up script: print the mark, then say what to type. Exported so any
+ *  host boots with identical output. */
 export function bootSequence(user?: User): BootStep[] {
-  const name = user?.name ?? "student";
   return [
     {
-      command: "./source-dev --boot",
-      lines: [
-        { text: "[OK] learning-shell v1.0 · tty1", kind: "ok" },
-        { text: "[OK] curriculum mounted at /roadmaps", kind: "ok" },
-        {
-          text: `[OK] session opened for ${name} <${user?.email ?? "—"}>`,
-          kind: "ok",
-        },
-        {
-          text: `[OK] role ${(user?.role ?? "student").toUpperCase()} · tz ${user?.timezone || "UTC"}`,
-          kind: "ok",
-        },
-      ],
-    },
-    {
       command: "neofetch",
-      lines: [bootFetch(user)],
-    },
-    {
-      command: "source-dev --hints",
       lines: [
-        {
-          text: "Resume where you stopped:",
-          kind: "out",
-          actions: [{ label: "continue", command: "continue" }],
-        },
-        {
-          text: "Or browse the catalogue:",
-          kind: "out",
-          actions: [{ label: "ls", command: "ls" }],
-        },
+        bootFetch(user),
         { text: "", kind: "out" },
         // The one line every shell opens with. It is the last thing printed
         // before the prompt arrives, because it is the answer to the question
@@ -1299,17 +1198,10 @@ export function completions(input: string): string[] {
 // in a directory costs one request and every TAB after it costs nothing.
 
 /** Where in a command's operands a path may appear. */
-export type PathArity =
-  /** Every operand names a place: `ls`, `cd`, `cat`, `less`, `find`, `open`. */
-  | "path"
-  /** The first operand is something else — `grep`'s pattern — and the rest
-   *  name places. */
-  | "path-after-first";
-
+export type PathArity = "path";
 /** The operand being typed, and which operand it is.
  *
- *  Options are skipped rather than counted: in `grep -i sip ⇥` the path is
- *  still the second operand, because `-i` is not one. */
+ * Options are skipped rather than counted. */
 function operandUnderCursor(
   parts: string[],
   trailingSpace: boolean,
@@ -1340,7 +1232,6 @@ export async function completePath(
 
   const operand = operandUnderCursor(parts, trailingSpace);
   if (!operand) return [];
-  if (spec.completes === "path-after-first" && operand.position < 1) return [];
 
   // Split what has been typed into the directory it names and the prefix still
   // being written — `voip-basics/intro` looks in `voip-basics` for `intro`.

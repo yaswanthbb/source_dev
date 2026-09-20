@@ -32,12 +32,12 @@ export interface User {
 }
 
 
-const TOKEN_KEY = 'kip_token';
-const USER_KEY = 'kip_user';
+const TOKEN_KEY = 'sd_token';
+const USER_KEY = 'sd_user';
 
 /** Dispatched on this tab whenever the auth token is set or cleared, so
  *  listeners (e.g. SessionSync) can react to login/logout without a reload. */
-export const AUTH_CHANGED_EVENT = 'kip-auth-changed';
+export const AUTH_CHANGED_EVENT = 'sd-auth-changed';
 
 const notifyAuthChanged = (): void => {
   if (typeof window === 'undefined') return;

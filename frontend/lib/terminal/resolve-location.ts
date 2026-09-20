@@ -35,7 +35,7 @@ export interface VfsEntry {
   name: string;
   /** The API id behind the entry. */
   id: string;
-  /** The human title, for headings and `find` output. */
+  /** The human title, for headings and listing output. */
   title: string;
   /** Concepts only — a directory has no completion state of its own. */
   status?: ConceptStatus;

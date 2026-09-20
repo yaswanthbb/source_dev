@@ -19,7 +19,7 @@ export function TerminalSurface({
   const c = isDark ? DARK : LIGHT;
   return (
     <div
-      className={`kip-terminal-theme ${className}`}
+      className={`sd-terminal-theme ${className}`}
       style={
         {
           "--term-base": c.base,
@@ -87,14 +87,14 @@ export function TerminalHeader({
   );
   return (
     <header
-      className="kip-topbar"
+      className="sd-topbar"
       style={{
         backgroundColor: c.panel,
         borderBottom: `1px solid ${c.line}`,
         color: c.text,
       }}
     >
-      <div className="kip-topbar-brand">
+      <div className="sd-topbar-brand">
         <Link
           href="/student/dashboard"
           className="font-bold tracking-tight whitespace-nowrap"
@@ -103,8 +103,7 @@ export function TerminalHeader({
           <span style={{ color: c.primary }} aria-hidden="true">
             ■{" "}
           </span>
-          KIP
-          <span className="hidden md:inline">{" // KNOWLEDGE IS POWER"}</span>
+          source:dev
         </Link>
         <span
           className="hidden xl:inline text-[11px] whitespace-nowrap"
@@ -121,7 +120,7 @@ export function TerminalHeader({
           </span>
         )}
       </div>
-      <nav className="kip-view-tabs" aria-label="Workspace views">
+      <nav className="sd-view-tabs" aria-label="Workspace views">
         <Link
           href="/student/dashboard"
           aria-current={active === "dashboard" ? "page" : undefined}
@@ -146,7 +145,7 @@ export function TerminalHeader({
           [2: <span className="hidden sm:inline">TERMINAL </span>CLI]
         </Link>
       </nav>
-      <div className="kip-account-actions">
+      <div className="sd-account-actions">
         <span
           className="hidden 2xl:inline text-[11px] truncate max-w-40"
           style={{ color: c.dim }}
@@ -156,7 +155,7 @@ export function TerminalHeader({
         <button
           type="button"
           onClick={toggleTheme}
-          className="kip-account-control"
+          className="sd-account-control"
           style={controlStyle}
           aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
         >
@@ -166,7 +165,7 @@ export function TerminalHeader({
           <button
             type="button"
             onClick={onProfile}
-            className="kip-account-control"
+            className="sd-account-control"
             style={controlStyle}
             aria-label="Open profile"
           >
@@ -175,7 +174,7 @@ export function TerminalHeader({
         ) : (
           <Link
             href="/student/terminal?view=profile"
-            className="kip-account-control"
+            className="sd-account-control"
             style={controlStyle}
             aria-label="Open profile"
           >
@@ -185,7 +184,7 @@ export function TerminalHeader({
         <button
           type="button"
           onClick={onLogout}
-          className="kip-account-control"
+          className="sd-account-control"
           style={controlStyle}
           aria-label="Log out"
           title="Log out"

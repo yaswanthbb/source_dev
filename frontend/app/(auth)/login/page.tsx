@@ -37,7 +37,7 @@ export default function LoginPage() {
   const bootTimerRef = useRef<NodeJS.Timeout[]>([]);
 
   // Dynamic Shell Boot States
-  const FULL_COMMAND = "kip-auth --login";
+  const FULL_COMMAND = "source-dev-auth --login";
   const [bootPhase, setBootPhase] = useState<"PROMPT" | "TYPING" | "READY">("PROMPT");
   const [typedCommand, setTypedCommand] = useState("");
 
@@ -65,7 +65,7 @@ export default function LoginPage() {
     }
   }, [bootPhase, FULL_COMMAND]);
 
-  // Boot Sequence: 0.5s pause with prompt, then types "kip-auth --login", then reveals interactive username prompt
+  // Boot Sequence: 0.5s pause with prompt, then types "source-dev-auth --login", then reveals interactive username prompt
   useEffect(() => {
     const tStart = setTimeout(() => {
       setBootPhase("TYPING");
@@ -102,9 +102,9 @@ export default function LoginPage() {
     const handleCheckInFlight = (isFromPageShow = false) => {
       let inFlight: string | null = null;
       try {
-        inFlight = sessionStorage.getItem("kip_oauth_in_flight");
+        inFlight = sessionStorage.getItem("sd_oauth_in_flight");
         if (inFlight) {
-          sessionStorage.removeItem("kip_oauth_in_flight");
+          sessionStorage.removeItem("sd_oauth_in_flight");
         }
       } catch {}
 
@@ -113,7 +113,7 @@ export default function LoginPage() {
         oauthTimerRef.current = [];
         setOauthState(null);
         setBootPhase("READY");
-        setTypedCommand("kip-auth --login");
+        setTypedCommand("source-dev-auth --login");
         setStage("EMAIL");
         setStepIdentityOk(false);
         setStepSecurityOk(false);
@@ -198,7 +198,7 @@ export default function LoginPage() {
       oauthTimerRef.current.forEach(clearTimeout);
       oauthTimerRef.current = [];
       try {
-        sessionStorage.removeItem("kip_oauth_in_flight");
+        sessionStorage.removeItem("sd_oauth_in_flight");
       } catch {}
       const cancelledProvider =
         oauthState.provider === "google" ? "Google" : "GitHub";
@@ -246,7 +246,7 @@ export default function LoginPage() {
     }
   }, [FULL_COMMAND, bootPhase, handleClearEmail, oauthState, skipBootAnimation]);
 
-  // Trigger Dynamic OAuth Flow (kip auth -google / kip auth -github)
+  // Trigger Dynamic OAuth Flow (source-dev auth -google / source-dev auth -github)
   const handleTriggerOAuth = useCallback(
     (provider: "google" | "github") => {
       if (oauthState || isSubmitting) return;
@@ -267,7 +267,7 @@ export default function LoginPage() {
       });
 
       const commandStr =
-        provider === "google" ? "kip auth -google" : "kip auth -github";
+        provider === "google" ? "source-dev auth -google" : "source-dev auth -github";
       const chars = commandStr.split("");
 
       const tStart = setTimeout(() => {
@@ -299,7 +299,7 @@ export default function LoginPage() {
                     // Execute browser navigation to backend OAuth endpoint
                     const tRedirect = setTimeout(() => {
                       try {
-                        sessionStorage.setItem("kip_oauth_in_flight", provider);
+                        sessionStorage.setItem("sd_oauth_in_flight", provider);
                       } catch {}
                       const apiUrl =
                         process.env.NEXT_PUBLIC_API_URL ||
@@ -458,7 +458,7 @@ export default function LoginPage() {
       // Mark that user just logged in so subsequent dashboard loader is bypassed
       if (typeof window !== "undefined") {
         try {
-          sessionStorage.setItem("kip_just_logged_in", String(Date.now()));
+          sessionStorage.setItem("sd_just_logged_in", String(Date.now()));
         } catch {}
       }
 
@@ -512,7 +512,7 @@ export default function LoginPage() {
         onComplete={() => {
           if (typeof window !== "undefined") {
             try {
-              sessionStorage.setItem("kip_just_logged_in", String(Date.now()));
+              sessionStorage.setItem("sd_just_logged_in", String(Date.now()));
             } catch {}
           }
           const targetRoute = getDashboardRoute(bootingUser.role);
@@ -522,7 +522,7 @@ export default function LoginPage() {
     );
   }
 
-  const derivedUid = getDeterministicUid(email || "user@kip.dev");
+  const derivedUid = getDeterministicUid(email || "user@source-dev.dev");
   const displayName = formatDisplayName(email || "user");
 
   return (
@@ -562,10 +562,7 @@ export default function LoginPage() {
                   isDark ? "text-[#e6e8eb]" : "text-black"
                 }`}
               >
-                KIP
-                <span className="hidden sm:inline">
-                  {" // KNOWLEDGE IS POWER"}
-                </span>
+                source:dev
               </span>
             </Link>
 
@@ -644,7 +641,7 @@ export default function LoginPage() {
                     }`}
                   />
                   <span className="text-[13px] font-bold tracking-wide truncate">
-                    KIP // TTY_LOGIN_v2.4
+                    source-dev // TTY_LOGIN_v2.4
                   </span>
                 </div>
 
@@ -742,7 +739,7 @@ export default function LoginPage() {
                         isDark ? "text-white" : "text-[#1b1c19]"
                       }`}
                     >
-                      KNOWLEDGE IS POWER // CORE ARCHITECTURE DAEMON
+                      source:dev // CORE ARCHITECTURE DAEMON
                     </p>
                     <p
                       className={`text-[11px] ${
@@ -754,7 +751,7 @@ export default function LoginPage() {
                     </p>
                   </div>
 
-                  {/* Shell Command Line (Dynamic boot typing: sys@daemon:/opt/kip$ kip-auth --login) */}
+                  {/* Shell Command Line (Dynamic boot typing: sys@daemon:/opt/source-dev$ source-dev-auth --login) */}
                   <div
                     className="flex items-center text-xs sm:text-[13px] font-mono select-none flex-wrap pt-0.5 cursor-pointer"
                     onClick={skipBootAnimation}
@@ -769,7 +766,7 @@ export default function LoginPage() {
                     <span
                       className={isDark ? "text-[#8b939e]" : "text-[#45474a]"}
                     >
-                      {isDark ? ":/opt/kip$" : ":/opt/kip"}
+                      {isDark ? ":/opt/source-dev$" : ":/opt/source-dev"}
                     </span>
                     {!isDark && (
                       <span className="text-[#1b1c19] font-bold">$</span>
@@ -824,7 +821,7 @@ export default function LoginPage() {
                               >
                                 &gt;
                               </span>
-                              <span>kip-auth username:</span>
+                              <span>source-dev-auth username:</span>
                             </label>
 
                             {stage === "EMAIL" ? (
@@ -1030,7 +1027,7 @@ export default function LoginPage() {
                             >
                               &gt;
                             </span>
-                            <span>kip-auth password:</span>
+                            <span>source-dev-auth password:</span>
                           </label>
 
                           <div
@@ -1204,7 +1201,7 @@ export default function LoginPage() {
                             isDark ? "text-[#8b939e]" : "text-[#45474a]"
                           }
                         >
-                          {isDark ? ":/opt/kip$" : ":/opt/kip"}
+                          {isDark ? ":/opt/source-dev$" : ":/opt/source-dev"}
                         </span>
                         {!isDark && (
                           <span className="text-[#1b1c19] font-bold">$</span>
@@ -1373,7 +1370,7 @@ export default function LoginPage() {
                             isDark ? "text-[#8e9194]" : "text-[#75777b]"
                           }
                         >
-                          (kip auth -google)
+                          (source-dev auth -google)
                         </span>
                       </button>
 
@@ -1406,7 +1403,7 @@ export default function LoginPage() {
                             isDark ? "text-[#8e9194]" : "text-[#75777b]"
                           }
                         >
-                          (kip auth -github)
+                          (source-dev auth -github)
                         </span>
                       </button>
                     </div>
@@ -1537,7 +1534,7 @@ export default function LoginPage() {
                 isDark ? "text-[#8b939e]" : "text-[#45474a]"
               }`}
             >
-              KIP © 2026 • ZERO COOKIES<span className="hidden sm:inline"> • ZERO TRACKERS</span>
+              source:dev © 2026 • ZERO COOKIES<span className="hidden sm:inline"> • ZERO TRACKERS</span>
             </div>
 
             <div

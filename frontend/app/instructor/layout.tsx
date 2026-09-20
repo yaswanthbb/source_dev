@@ -81,7 +81,7 @@ export default function InstructorAppShellLayout({
   const [isLoaderDone, setIsLoaderDone] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        const val = sessionStorage.getItem('kip_just_logged_in');
+        const val = sessionStorage.getItem('sd_just_logged_in');
         if (val && Date.now() - parseInt(val, 10) < 30000) {
           return true;
         }
@@ -97,7 +97,7 @@ export default function InstructorAppShellLayout({
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        sessionStorage.removeItem('kip_just_logged_in');
+        sessionStorage.removeItem('sd_just_logged_in');
       } catch {}
     }, 5000);
     return () => clearTimeout(timer);
@@ -216,7 +216,7 @@ export default function InstructorAppShellLayout({
           <Link href="/student/dashboard" className="flex items-center">
             <Image
               src="/logo.png"
-              alt="KIP Logo"
+              alt="source:dev logo"
               width={105}
               height={33}
               className="h-[28px] sm:h-[30px] w-auto object-contain"
@@ -261,7 +261,7 @@ export default function InstructorAppShellLayout({
         </main>
 
         <footer className="text-center text-xs text-text-secondary py-4">
-          &copy; {new Date().getFullYear()} KIP. All rights reserved.
+          &copy; {new Date().getFullYear()} source:dev. All rights reserved.
         </footer>
       </div>
     );
@@ -282,7 +282,7 @@ export default function InstructorAppShellLayout({
         <Link href="/instructor/dashboard" className="flex items-center">
           <Image
             src="/logo.png"
-            alt="KIP Logo"
+            alt="source:dev logo"
             width={110}
             height={34}
             className="h-7 w-auto object-contain"
@@ -325,7 +325,7 @@ export default function InstructorAppShellLayout({
                 >
                   <Image
                     src="/logo.png"
-                    alt="KIP Logo"
+                    alt="source:dev logo"
                     width={110}
                     height={34}
                     className="h-7 w-auto object-contain"
@@ -406,7 +406,7 @@ export default function InstructorAppShellLayout({
             <Link href="/instructor/dashboard" className="flex items-center">
               <Image
                 src="/logo.png"
-                alt="KIP Logo"
+                alt="source:dev logo"
                 width={120}
                 height={39}
                 className="h-[33px] w-auto object-contain"

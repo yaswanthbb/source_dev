@@ -70,7 +70,7 @@ function CallbackHandler() {
 
         if (typeof window !== 'undefined') {
           try {
-            sessionStorage.setItem('kip_just_logged_in', String(Date.now()));
+            sessionStorage.setItem('sd_just_logged_in', String(Date.now()));
           } catch {}
         }
       } catch (err: unknown) {
@@ -97,7 +97,7 @@ function CallbackHandler() {
           <Link href="/" className="flex items-center py-1">
             <Image
               src="/logo.png"
-              alt="KIP Logo"
+              alt="source:dev logo"
               width={130}
               height={40}
               className="h-8 sm:h-10 w-auto object-contain"
@@ -133,7 +133,7 @@ function CallbackHandler() {
         </main>
 
         <footer className="py-4 text-center text-xs text-text-secondary">
-          &copy; {new Date().getFullYear()} KIP. All rights reserved.
+          &copy; {new Date().getFullYear()} source:dev. All rights reserved.
         </footer>
       </div>
     );
@@ -147,7 +147,7 @@ function CallbackHandler() {
       onComplete={() => {
         if (typeof window !== 'undefined') {
           try {
-            sessionStorage.setItem('kip_just_logged_in', String(Date.now()));
+            sessionStorage.setItem('sd_just_logged_in', String(Date.now()));
           } catch {}
         }
         const targetRoute = getDashboardRoute(bootingUser?.role || 'student');

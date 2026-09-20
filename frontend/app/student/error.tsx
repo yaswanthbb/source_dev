@@ -19,34 +19,34 @@ export default function StudentErrorBoundary({
   }, [error]);
 
   return (
-    <TerminalSurface className="kip-error-frame">
-      <div className="kip-error-panel" role="alert">
-        <div className="kip-dialog-heading">
-          <span>kip://student — process halted</span>
+    <TerminalSurface className="sd-error-frame">
+      <div className="sd-error-panel" role="alert">
+        <div className="sd-dialog-heading">
+          <span>source-dev://student — process halted</span>
           <span aria-hidden="true">[!]</span>
         </div>
-        <div className="kip-dialog-body">
-          <p className="kip-line" data-kind="err">
+        <div className="sd-dialog-body">
+          <p className="sd-line" data-kind="err">
             [ERR] SIGNAL_TRAP — the session hit an error
           </p>
-          <p className="kip-line" data-kind="out">
+          <p className="sd-line" data-kind="out">
             Something failed while loading this view. Retrying re-runs it from
             the last good state — your progress is saved on the server, not in
             this tab.
           </p>
           {error.digest && (
-            <p className="kip-error-digest">
+            <p className="sd-error-digest">
               <span>digest</span> {error.digest}
             </p>
           )}
-          <div className="kip-dialog-actions">
-            <Link href="/student/dashboard" className="kip-token">
+          <div className="sd-dialog-actions">
+            <Link href="/student/dashboard" className="sd-token">
               [dashboard]
             </Link>
             <button
               type="button"
               onClick={() => reset()}
-              className="kip-token"
+              className="sd-token"
             >
               [retry]
             </button>

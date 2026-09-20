@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **KIP (Knowledge Is Power)** are documented in this file.
+All notable changes to **source:dev** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -15,7 +15,19 @@ How to maintain this file:
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- Rebranded the platform from KIP (Knowledge Is Power) to **source:dev**: all
+  user-visible copy, the terminal header, auth pages, loaders, email templates
+  and Swagger title now use `source:dev` (display) / `source-dev` (hostnames,
+  prompts, CLI references). Storage keys moved to the `sd_` prefix
+  (`sd_token`, `sd_user`, `sd_theme`, …) and `kip-*` CSS classes to `sd-*`.
+  Existing browser sessions are logged out once by the key rotation.
+- Database rename `knowledge_is_power` → `source_dev` **deferred**: the live
+  database keeps its current name, so the `DB_DATABASE` default in
+  `typeorm.config.ts` is intentionally unchanged and nothing breaks.
+
+_Nothing else yet._
 
 ## [1.0.0] - 2026-08-27
 

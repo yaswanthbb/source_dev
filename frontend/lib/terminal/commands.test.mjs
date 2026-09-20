@@ -279,16 +279,6 @@ test("an alias answers --help the same way its command does", async () => {
   }
 });
 
-test("--help only counts as the first and only argument", async () => {
-  // `grep --help notes` is a search for the string `--help`, not a request for
-  // documentation, which is the distinction GNU tools draw too.
-  const host = recorder();
-  await runCommand("grep --help somewhere", ctx(host.io));
-  assert.ok(
-    !/^Usage: grep/.test(text(host.lines)),
-    "grep --help <path> printed documentation instead of searching",
-  );
-});
 
 test("man prints the same facts under man's headings", async () => {
   const host = recorder();
@@ -341,8 +331,6 @@ test("a command that takes a path says so, and only those do", () => {
     "cat",
     "cd",
     "complete",
-    "find",
-    "grep",
     "less",
     "ls",
     "quiz",
@@ -350,10 +338,8 @@ test("a command that takes a path says so, and only those do", () => {
 });
 
 test("the removed commands are gone, not hidden", () => {
-  // `roadmaps`, `open` and `read` were redundant with `ls`, `cd` and
-  // `cat`/`less`. They must not resolve at all — a hidden alias would be the
-  // second path to the same action that removing them was meant to close.
-  for (const word of ["roadmaps", "open", "read", "lesson"]) {
+  // Removed commands must not resolve at all; a hidden entry would leave a second path to the old action.
+  for (const word of ["roadmaps", "open", "read", "lesson", "find", "grep", "apply-instructor", "instructor-status"]) {
     assert.equal(
       COMMANDS[word],
       undefined,

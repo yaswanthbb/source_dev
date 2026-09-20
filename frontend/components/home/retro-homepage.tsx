@@ -86,7 +86,7 @@ export function RetroHomepage() {
               <span className={`font-code-md text-code-md font-bold tracking-tight uppercase truncate ${
                 isDark ? 'text-[#e6e8eb]' : 'text-black'
               }`}>
-                KIP<span className="hidden sm:inline">{' // KNOWLEDGE IS POWER'}</span>
+                source:dev
               </span>
             </Link>
 
@@ -1499,7 +1499,7 @@ export function RetroHomepage() {
                   <button
                     type="button"
                     onClick={() => {
-                      alert('Progress schema: KIP_V3. Ready for export/import.');
+                      alert('Progress schema: SD_V3. Ready for export/import.');
                     }}
                     className={`font-label-md text-label-md retro-cta-btn px-unit-5 py-unit-3 font-bold border uppercase transition-none cursor-pointer active:translate-x-[2px] active:translate-y-[2px] ${
                       isDark
@@ -1514,7 +1514,7 @@ export function RetroHomepage() {
                 <div className={`mt-unit-5 font-code-md text-[11px] flex items-center gap-unit-2 font-mono ${
                   isDark ? 'text-[#8b939e]' : 'text-[#45474a]'
                 }`}>
-                  <span>SCHEMA: KIP_V3.JSON</span>
+                  <span>SCHEMA: SD_V3.JSON</span>
                   <span>•</span>
                   <span>ENCRYPTED LOCAL STORAGE</span>
                   <span>•</span>
@@ -1539,7 +1539,7 @@ export function RetroHomepage() {
             <div className={`font-label-sm text-label-sm uppercase tracking-wider font-mono text-center md:text-left ${
               isDark ? 'text-[#8b939e]' : 'text-[#45474a]'
             }`}>
-              KIP © 2026 • ZERO COOKIES<span className="hidden sm:inline"> • ZERO TRACKERS</span>
+              source:dev © 2026 • ZERO COOKIES<span className="hidden sm:inline"> • ZERO TRACKERS</span>
             </div>
 
             <div className={`flex items-center gap-1 font-label-sm text-label-sm uppercase font-mono ${

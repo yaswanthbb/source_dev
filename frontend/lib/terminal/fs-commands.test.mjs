@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
    `location.test.mjs` proves the path *rules*. This proves the *commands*:
    that `ls file` prints the file while `cd file` refuses it, that `..` clamps
-   at the root, that grep needs `-r` for a directory, and — the claim the whole
+   at the root, that path traversal and lesson reading share one resolver, and — the claim the whole
    architecture rests on — that an absolute path and a sequence of `cd`s are
    literally the same operation rather than two code paths that agree today.
 
@@ -601,149 +601,6 @@ test("less without a viewport still shows the lesson rather than refusing", asyn
   assert.deepEqual(sh.kinds(), ["doc"]);
 });
 
-// ─── find ───────────────────────────────────────────────────────────────────
-
-test("find walks the whole tree by default, breadth-first", async () => {
-  const sh = await shell().run("find");
-  assert.deepEqual(sh.only("out"), [
-    VOIP,
-    NET,
-    INTRO,
-    `${VOIP}/deep-dive`,
-    `${VOIP}/deep-dive-2`,
-    `${NET}/basics`,
-    WHAT,
-    SIP,
-    `${NET}/basics/packets`,
-  ]);
-  assert.deepEqual(sh.only("dim"), ["9 matches"]);
-});
-
-test("find -name is a glob, matched against the name and the title", async () => {
-  const byName = await shell().run("find", "-name", "*voip*");
-  assert.deepEqual(byName.only("out"), [VOIP, WHAT]);
-
-  // `?` is one character, and the match is case-insensitive — which is what
-  // makes it usable against a curriculum full of prose titles.
-  const one = await shell().run("find", "-name", "packet?");
-  assert.deepEqual(one.only("out"), [`${NET}/basics/packets`]);
-});
-
-test("find -type separates directories from lessons", async () => {
-  const dirs = await shell().run("find", "-type", "d", "-name", "deep*");
-  assert.deepEqual(dirs.only("out"), [
-    `${VOIP}/deep-dive`,
-    `${VOIP}/deep-dive-2`,
-  ]);
-
-  const files = await shell(L.parsePath(VOIP)).run("find", ".", "-type", "f");
-  assert.deepEqual(files.only("out"), [WHAT, SIP]);
-});
-
-test("find -maxdepth limits the walk, and is capped at the depth of the tree", async () => {
-  const shallow = await shell().run("find", "-maxdepth", "1");
-  assert.deepEqual(shallow.only("out"), [VOIP, NET]);
-
-  const deep = await shell().run("find", "-maxdepth", "99");
-  assert.deepEqual(deep.only("dim"), ["9 matches"]);
-
-  const none = await shell().run("find", "-maxdepth", "0");
-  assert.match(none.text().join("\n"), /No match under/);
-});
-
-test("find file prints the file, the same rule ls follows", async () => {
-  const sh = await shell(L.parsePath(INTRO)).run("find", "what-is-voip");
-  assert.deepEqual(sh.text(), [WHAT]);
-});
-
-test("find reports a bad expression rather than guessing at it", async () => {
-  assert.deepEqual((await shell().run("find", "-name")).text(), [
-    "find: missing argument to `-name'",
-  ]);
-  assert.deepEqual((await shell().run("find", "-type", "x")).text(), [
-    "find: -type must be 'f' or 'd'",
-  ]);
-  assert.equal(
-    (await shell().run("find", "-bogus")).text()[0],
-    "find: unknown predicate `-bogus'",
-  );
-  assert.equal(
-    (await shell().run("find", ".", "extra")).text()[0],
-    "find: paths must precede expression: `extra'",
-  );
-  assert.equal(
-    (await shell().run("find", "-maxdepth", "two")).text()[0],
-    "find: -maxdepth expects a whole number",
-  );
-});
-
-test("no match is said out loud, since silence reads as a broken command", async () => {
-  const sh = await shell().run("find", "-name", "nothing-like-this");
-  assert.match(sh.text().join("\n"), /No match under \/roadmaps/);
-  assert.match(sh.text().join("\n"), /ls/);
-});
-
-// ─── grep ───────────────────────────────────────────────────────────────────
-
-test("grep refuses a directory without -r, exactly as GNU grep does", async () => {
-  const sh = await shell().run("grep", "SIP", VOIP);
-  assert.equal(sh.text()[0], `grep: ${VOIP}: Is a directory`);
-  assert.match(sh.text().join("\n"), /grep -r SIP \./);
-});
-
-test("grep on one file prints the bare line, with no path in front of it", async () => {
-  const sh = await shell(L.parsePath(INTRO)).run("grep", "SIP", "what-is-voip");
-  assert.deepEqual(sh.text(), ["SIP sets up the call."]);
-});
-
-test("grep -r prefixes the path, because more than one file is in play", async () => {
-  const sh = await shell().run("grep", "-r", "SIP", ".");
-  assert.deepEqual(sh.only("out"), [
-    `${WHAT}:SIP sets up the call.`,
-    `${SIP}:# SIP Basics`,
-    `${SIP}:SIP is a signalling protocol.`,
-  ]);
-});
-
-test("bundled short flags are separate flags: -in is -i -n", async () => {
-  const sh = await shell(L.parsePath(INTRO)).run(
-    "grep",
-    "-in",
-    "sip",
-    "what-is-voip",
-  );
-  // Lowercase `sip` only matches with -i, and the number only appears with -n,
-  // so this one line proves both halves of the bundle were read.
-  assert.deepEqual(sh.text(), ["4:SIP sets up the call."]);
-});
-
-test("grep -l names the files and stops at the first hit in each", async () => {
-  const sh = await shell().run("grep", "-rl", "SIP", ".");
-  assert.deepEqual(sh.only("out"), [WHAT, SIP]);
-});
-
-test("grep reports a broken pattern instead of throwing", async () => {
-  const sh = await shell(L.parsePath(INTRO)).run(
-    "grep",
-    "[unclosed",
-    "what-is-voip",
-  );
-  assert.deepEqual(sh.text(), ["grep: [unclosed: invalid regular expression"]);
-});
-
-test("grep with no pattern says what it wanted", async () => {
-  const sh = await shell().run("grep");
-  assert.deepEqual(sh.text(), [
-    "grep: missing pattern",
-    "usage: grep [-i] [-n] [-r] <pattern> [path]",
-  ]);
-});
-
-test("grep says when nothing matched, and offers the wider search", async () => {
-  const sh = await shell(L.parsePath(INTRO)).run("grep", "zzz", "what-is-voip");
-  assert.match(sh.text().join("\n"), /No match for zzz/);
-  assert.match(sh.text().join("\n"), /grep -i/);
-});
 
 // ─── history ────────────────────────────────────────────────────────────────
 
@@ -818,7 +675,7 @@ test("a failed request does not cache as a permanently empty directory", async (
 test("every filesystem command is registered once, with a usage line", () => {
   assert.deepEqual(
     FS.FS_COMMANDS.map((spec) => spec.name),
-    ["pwd", "ls", "cd", "cat", "less", "find", "grep", "history"],
+    ["pwd", "ls", "cd", "cat", "less", "history"],
   );
   for (const spec of FS.FS_COMMANDS) {
     assert.ok(spec.usage?.startsWith(spec.name), `${spec.name} usage`);

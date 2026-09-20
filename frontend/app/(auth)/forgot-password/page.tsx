@@ -41,7 +41,7 @@ const passwordStepSchema = z
 
 type ResetStep = "email" | "otp" | "password";
 
-const FULL_COMMAND = "kip-auth --recover";
+const FULL_COMMAND = "source-dev-auth --recover";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -85,7 +85,7 @@ export default function ForgotPasswordPage() {
   const bootTimerRef = useRef<NodeJS.Timeout[]>([]);
 
   // ------------------------------------------------------------------
-  // Boot sequence: pause, type "kip-auth --recover", reveal stage 01
+  // Boot sequence: pause, type "source-dev-auth --recover", reveal stage 01
   // ------------------------------------------------------------------
   const skipBootAnimation = useCallback(() => {
     if (bootPhase !== "READY") {
@@ -487,8 +487,8 @@ export default function ForgotPasswordPage() {
   const entropyColor = accent;
 
   const displayName = formatDisplayName(targetEmail || email || "user");
-  const derivedUid = getDeterministicUid(targetEmail || email || "user@kip.dev");
-  const hashKey = getHashKey(targetEmail || email || "user@kip.dev");
+  const derivedUid = getDeterministicUid(targetEmail || email || "user@source-dev.dev");
+  const hashKey = getHashKey(targetEmail || email || "user@source-dev.dev");
 
   const stage1Done = currentStep !== "email";
   const stage2Done = currentStep === "password";
@@ -536,10 +536,7 @@ export default function ForgotPasswordPage() {
                   isDark ? "text-[#e6e8eb]" : "text-black"
                 }`}
               >
-                KIP
-                <span className="hidden sm:inline">
-                  {" // KNOWLEDGE IS POWER"}
-                </span>
+                source:dev
               </span>
             </Link>
 
@@ -616,7 +613,7 @@ export default function ForgotPasswordPage() {
                     style={{ backgroundColor: accent }}
                   />
                   <span className="text-[13px] font-bold tracking-wide truncate">
-                    {"KIP // TTY_RECOVERY_v2.4"}
+                    {"source-dev // TTY_RECOVERY_v2.4"}
                   </span>
                 </div>
 
@@ -713,7 +710,7 @@ export default function ForgotPasswordPage() {
                       className="font-bold tracking-wide uppercase"
                       style={{ color: ink }}
                     >
-                      {"KNOWLEDGE IS POWER // CORE ARCHITECTURE DAEMON"}
+                      {"source:dev // CORE ARCHITECTURE DAEMON"}
                     </p>
                     <p className="text-[11px]" style={{ color: dim }}>
                       Session: tty1 :: Connected: 127.0.0.1
@@ -730,7 +727,7 @@ export default function ForgotPasswordPage() {
                       sys@daemon
                     </span>
                     <span style={{ color: dim }}>
-                      {isDark ? ":/opt/kip$" : ":/opt/kip"}
+                      {isDark ? ":/opt/source-dev$" : ":/opt/source-dev"}
                     </span>
                     {!isDark && (
                       <span className="font-bold" style={{ color: ink }}>
@@ -798,7 +795,7 @@ export default function ForgotPasswordPage() {
                                 >
                                   &gt;
                                 </span>
-                                <span>kip-auth email:</span>
+                                <span>source-dev-auth email:</span>
                               </label>
 
                               <div
@@ -870,7 +867,7 @@ export default function ForgotPasswordPage() {
                                 >
                                   &gt;
                                 </span>{" "}
-                                kip-auth email:{" "}
+                                source-dev-auth email:{" "}
                                 <span
                                   className="font-bold"
                                   style={{ color: ink }}
@@ -960,7 +957,7 @@ export default function ForgotPasswordPage() {
                                   >
                                     &gt;
                                   </span>
-                                  <span>kip-auth otp_code:</span>
+                                  <span>source-dev-auth otp_code:</span>
                                 </span>
 
                                 <div className="flex items-center gap-1 sm:gap-1.5">
@@ -1081,7 +1078,7 @@ export default function ForgotPasswordPage() {
                                   >
                                     &gt;
                                   </span>{" "}
-                                  kip-auth otp_code:{" "}
+                                  source-dev-auth otp_code:{" "}
                                   <span
                                     className="font-bold tracking-widest"
                                     style={{ color: ink }}
@@ -1163,7 +1160,7 @@ export default function ForgotPasswordPage() {
                                 >
                                   &gt;
                                 </span>
-                                <span>kip-auth new_password:</span>
+                                <span>source-dev-auth new_password:</span>
                               </label>
 
                               <div
@@ -1215,7 +1212,7 @@ export default function ForgotPasswordPage() {
                                 >
                                   &gt;
                                 </span>
-                                <span>kip-auth confirm_password:</span>
+                                <span>source-dev-auth confirm_password:</span>
                               </label>
 
                               <div
@@ -1569,7 +1566,7 @@ export default function ForgotPasswordPage() {
                 isDark ? "text-[#8b939e]" : "text-[#45474a]"
               }`}
             >
-              KIP © 2026 • ZERO COOKIES
+              source:dev © 2026 • ZERO COOKIES
               <span className="hidden sm:inline"> • ZERO TRACKERS</span>
             </div>
 

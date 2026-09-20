@@ -1,7 +1,7 @@
 /* ==========================================================================
    source:dev — filesystem commands
    --------------------------------------------------------------------------
-   pwd, ls, cd, cat, less, find, grep, history.
+   pwd, ls, cd, cat, less, history.
 
    These behave like their Unix namesakes rather than merely borrowing the
    names, which is a claim worth being precise about, because the differences
@@ -10,7 +10,6 @@
      - `ls file` prints the file, it does not error. `cd file` is the one that
        says `Not a directory`.
      - `..` at the root stays at the root. It is not an error.
-     - `grep pattern dir` refuses without `-r`, exactly as GNU grep does.
      - Every path argument resolves through one function, so
        `cat /roadmaps/a/b/c` from anywhere and `cd a; cd b; cat c` are the
        same operation — not two code paths that happen to agree today.
@@ -26,13 +25,11 @@ import type { CommandCtx, CommandSpec } from "./commands";
 // side of the registry without a cycle.
 import { stuck, readHistory, clearHistory } from "./output";
 import {
-  basename,
   childKindOf,
+  basename,
   formatPath,
-  fromSegments,
   resolvePath,
   ROOT,
-  segmentsOf as pathSegments,
   type Location,
 } from "./location";
 import {
@@ -94,8 +91,7 @@ function badOption(ctx: CommandCtx, command: string, flag: string, usage: string
  *  a bad character — which a shell reports the same way it reports a name that
  *  is merely absent.
  *
- *  No argument means *here*. `ls`, `find` and `grep` with no path all work on
- *  the current directory, while `resolvePath` reads an absent argument as home,
+ *  No argument means *here*. `resolvePath` reads an absent argument as home,
  *  because that is what bare `cd` means. The two senses part company here
  *  rather than in each caller, so `cd` is the one command that asks for home. */
 function targetOf(ctx: CommandCtx, arg?: string): Location {
@@ -109,12 +105,6 @@ function targetOf(ctx: CommandCtx, arg?: string): Location {
   return loc;
 }
 
-/** Turn a listing entry into the location it names. */
-function childOf(parent: Location, entry: VfsEntry): Location {
-  return (
-    fromSegments([...pathSegments(parent), entry.name]) ?? parent
-  );
-}
 
 /** The marker `ls` prints for a concept, straight from the theme. Directories
  *  have no completion state of their own, so they get a blank of the same
@@ -138,59 +128,6 @@ function isDirectory(loc: Location): boolean {
   return childKindOf(loc) !== null;
 }
 
-// ─── Walking, for find and grep ─────────────────────────────────────────────
-
-interface Found {
-  loc: Location;
-  entry: VfsEntry;
-  isDir: boolean;
-}
-
-/** Every location under `root`, breadth-first, to `maxDepth` levels below it.
- *
- *  Reports progress through `io.status` because a full walk is several requests
- *  and a silent pause reads as a hang. It is interruptible: every request goes
- *  through `api`, which carries the host's abort signal, so ^C stops the walk
- *  rather than letting it finish into a screen nobody is watching. */
-async function walk(
-  ctx: CommandCtx,
-  root: Location,
-  maxDepth: number,
-): Promise<Found[]> {
-  const out: Found[] = [];
-  let frontier: Location[] = [root];
-  let depth = 0;
-
-  while (frontier.length && depth < maxDepth) {
-    const next: Location[] = [];
-    for (const dir of frontier) {
-      if (!isDirectory(dir)) continue;
-      ctx.io.status?.(`searching ${formatPath(dir)}`);
-      // A directory that cannot be read is skipped, not fatal — `find` reports
-      // what it could reach rather than abandoning the whole walk.
-      const entries = await listChildren(dir).catch(() => [] as VfsEntry[]);
-      for (const entry of entries) {
-        const loc = childOf(dir, entry);
-        const dir_ = isDirectory(loc);
-        out.push({ loc, entry, isDir: dir_ });
-        if (dir_) next.push(loc);
-      }
-    }
-    frontier = next;
-    depth += 1;
-  }
-  return out;
-}
-
-/** `*` and `?` as a shell glob, anchored, case-insensitive — matching how
- *  `find -name` is used in practice on a curriculum full of prose titles. */
-function globToRegExp(pattern: string): RegExp {
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".");
-  return new RegExp(`^${escaped}$`, "i");
-}
 
 // ─── pwd ────────────────────────────────────────────────────────────────────
 
@@ -566,251 +503,6 @@ const less: CommandSpec = {
   },
 };
 
-// ─── find ───────────────────────────────────────────────────────────────────
-
-const find: CommandSpec = {
-  name: "find",
-  usage: "find [path] [-name pattern] [-type f|d]",
-  completes: "path",
-  help: {
-    usage: "find [path] [-name pattern] [-type f|d] [-maxdepth n]",
-    description: [
-      "Walk the tree from a starting point and print what is under it,",
-      "breadth-first. With no path it walks from the current directory.",
-    ],
-    args: [{ name: "[path]", text: "Where to start; here when omitted" }],
-    options: [
-      {
-        name: "-name <pattern>",
-        text: "Match the name or title against a glob (* and ?)",
-      },
-      { name: "-type f", text: "Lessons only" },
-      { name: "-type d", text: "Roadmaps and modules only" },
-      { name: "-maxdepth <n>", text: "Do not descend more than n levels" },
-    ],
-    examples: [
-      "find",
-      "find -name '*voip*'",
-      "find -type f",
-      "find /roadmaps -type d -maxdepth 1",
-    ],
-  },
-  summary: "search the tree by name",
-  group: "filesystem",
-  run: async (ctx) => {
-    // `find` takes `-name x` and `-type f` as word-plus-value pairs rather than
-    // getopt-style flags, so it is parsed on its own terms.
-    const args = [...ctx.args];
-    let start: string | undefined;
-    let name: string | undefined;
-    let type: "f" | "d" | undefined;
-    let maxDepth = 3;
-
-    while (args.length) {
-      const arg = args.shift() as string;
-      if (arg === "-name" || arg === "-iname") {
-        name = args.shift();
-        if (!name) {
-          ctx.io.print(`find: missing argument to \`${arg}'`, "err");
-          return;
-        }
-        continue;
-      }
-      if (arg === "-type") {
-        const value = args.shift();
-        if (value !== "f" && value !== "d") {
-          ctx.io.print("find: -type must be 'f' or 'd'", "err");
-          return;
-        }
-        type = value;
-        continue;
-      }
-      if (arg === "-maxdepth") {
-        const value = Number(args.shift());
-        if (!Number.isInteger(value) || value < 0) {
-          ctx.io.print("find: -maxdepth expects a whole number", "err");
-          return;
-        }
-        maxDepth = Math.min(value, 3);
-        continue;
-      }
-      if (arg.startsWith("-")) {
-        ctx.io.print(`find: unknown predicate \`${arg}'`, "err");
-        ctx.io.print("usage: find [path] [-name pattern] [-type f|d]", "dim");
-        return;
-      }
-      if (start === undefined) {
-        start = arg;
-        continue;
-      }
-      ctx.io.print(`find: paths must precede expression: \`${arg}'`, "err");
-      return;
-    }
-
-    let root: Location;
-    try {
-      root = targetOf(ctx, start);
-    } catch (error) {
-      ctx.io.print(vfsErrorText("find", error), "err");
-      return;
-    }
-
-    // `find file` prints the file. Same rule as `ls`.
-    if (!isDirectory(root)) {
-      ctx.io.print(formatPath(root));
-      return;
-    }
-
-    const matcher = name ? globToRegExp(name) : null;
-    const found = await walk(ctx, root, maxDepth);
-
-    // The starting point is itself a result in real find, when it matches.
-    const rows = found.filter((item) => {
-      if (type === "f" && item.isDir) return false;
-      if (type === "d" && !item.isDir) return false;
-      if (matcher && !matcher.test(item.entry.name) && !matcher.test(item.entry.title))
-        return false;
-      return true;
-    });
-
-    if (!rows.length) {
-      stuck(
-        ctx.io,
-        `No match under ${formatPath(root)}.`,
-        "Try a wider pattern, or list what is there with {ls}.",
-      );
-      return;
-    }
-    for (const row of rows) ctx.io.print(formatPath(row.loc));
-    ctx.io.print(
-      `${rows.length} ${rows.length === 1 ? "match" : "matches"}`,
-      "dim",
-    );
-  },
-};
-
-// ─── grep ───────────────────────────────────────────────────────────────────
-
-const grep: CommandSpec = {
-  name: "grep",
-  usage: "grep [-i] [-n] [-r] <pattern> [path]",
-  // The pattern comes first and is not a path; everything after it is.
-  completes: "path-after-first",
-  help: {
-    usage: "grep [-i] [-n] [-r] [-l] <pattern> [path]",
-    description: [
-      "Search lesson text for a pattern and print the lines that match.",
-      "A directory needs -r, exactly as GNU grep insists.",
-    ],
-    args: [
-      { name: "<pattern>", text: "A regular expression" },
-      { name: "[path]", text: "What to search; here when omitted" },
-    ],
-    options: [
-      { name: "-i", text: "Ignore case" },
-      { name: "-n", text: "Prefix each line with its line number" },
-      { name: "-r", text: "Search a directory and everything under it" },
-      { name: "-l", text: "Print the matching lesson names only, one hit each" },
-    ],
-    examples: [
-      "grep codec what-is-voip",
-      "grep -i sip -r .",
-      "grep -rn 'packet loss' /roadmaps/voip-basics",
-      "grep -rl jitter",
-    ],
-  },
-  summary: "search lesson text for a pattern",
-  group: "filesystem",
-  run: async (ctx) => {
-    const { flags, operands } = parseArgs(ctx.args);
-    const bad = unknownFlag(flags, "inrl");
-    if (bad)
-      return badOption(ctx, "grep", bad, "grep [-i] [-n] [-r] <pattern> [path]");
-
-    const [pattern, where] = operands;
-    if (!pattern) {
-      ctx.io.print("grep: missing pattern", "err");
-      ctx.io.print("usage: grep [-i] [-n] [-r] <pattern> [path]", "dim");
-      return;
-    }
-
-    let re: RegExp;
-    try {
-      re = new RegExp(pattern, flags.has("i") ? "i" : "");
-    } catch {
-      ctx.io.print(`grep: ${pattern}: invalid regular expression`, "err");
-      return;
-    }
-
-    let root: Location;
-    try {
-      root = targetOf(ctx, where);
-    } catch (error) {
-      ctx.io.print(vfsErrorText("grep", error), "err");
-      return;
-    }
-
-    // GNU grep refuses a directory without -r rather than silently recursing.
-    // Keeping that refusal is the difference between a command that behaves
-    // like grep and one that is merely called grep.
-    const recursive = flags.has("r");
-    if (isDirectory(root) && !recursive) {
-      ctx.io.print(`grep: ${formatPath(root)}: Is a directory`, "err");
-      stuck(ctx.io, "", `Search the whole subtree with {grep -r ${pattern} .}.`);
-      return;
-    }
-
-    const files: Array<{ loc: Location; id: string }> = [];
-    if (isDirectory(root)) {
-      for (const item of await walk(ctx, root, 3)) {
-        if (!item.isDir) files.push({ loc: item.loc, id: item.entry.id });
-      }
-    } else {
-      try {
-        const { conceptId } = await resolveLocation(root);
-        if (conceptId) files.push({ loc: root, id: conceptId });
-      } catch (error) {
-        ctx.io.print(vfsErrorText("grep", error), "err");
-        return;
-      }
-    }
-
-    const namesOnly = flags.has("l");
-    const numbered = flags.has("n");
-    let hits = 0;
-
-    for (const file of files) {
-      ctx.io.status?.(`searching ${basename(file.loc)}`);
-      const concept = await readConcept(file.id).catch(() => null);
-      if (!concept?.content) continue;
-
-      const lines = concept.content.split("\n");
-      let matchedHere = false;
-      for (let i = 0; i < lines.length; i += 1) {
-        if (!re.test(lines[i])) continue;
-        matchedHere = true;
-        hits += 1;
-        if (namesOnly) break;
-        // `path:line:text` when several files are in play, `line:text` for one —
-        // grep's own rule, and the reason its output pipes so well.
-        const prefix = files.length > 1 ? `${formatPath(file.loc)}:` : "";
-        const lineNo = numbered ? `${i + 1}:` : "";
-        ctx.io.print(`${prefix}${lineNo}${lines[i].trim()}`);
-      }
-      if (namesOnly && matchedHere) ctx.io.print(formatPath(file.loc));
-    }
-
-    if (!hits) {
-      // grep exits 1 in silence. Silence here would be indistinguishable from a
-      // broken command, so it says so — and offers the wider search.
-      stuck(
-        ctx.io,
-        `No match for ${pattern}.`,
-        "Widen it with {grep -i} for any case, or search names instead with {find -name}.",
-      );
-    }
-  },
-};
 
 // ─── history ────────────────────────────────────────────────────────────────
 
@@ -882,7 +574,5 @@ export const FS_COMMANDS: CommandSpec[] = [
   cd,
   cat,
   less,
-  find,
-  grep,
   history,
 ];

@@ -32,14 +32,14 @@ export default function StudentAppShellLayout({
   }, [router]);
   useEffect(() => {
     try {
-      const recent = sessionStorage.getItem("kip_just_logged_in");
+      const recent = sessionStorage.getItem("sd_just_logged_in");
       if (recent && Date.now() - Number(recent) < 30000) setIsLoaderDone(true);
     } catch {
       /* Storage is optional. */
     }
     const timer = setTimeout(() => {
       try {
-        sessionStorage.removeItem("kip_just_logged_in");
+        sessionStorage.removeItem("sd_just_logged_in");
       } catch {}
     }, 5000);
     return () => clearTimeout(timer);

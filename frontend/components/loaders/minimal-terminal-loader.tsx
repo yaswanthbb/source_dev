@@ -43,12 +43,12 @@ export function MinimalTerminalLoader({
   const isCompletedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const displayTitle = title ? title.toUpperCase() : 'KIP // SYS_BOOT';
+  const displayTitle = title ? title.toUpperCase() : 'source-dev // SYS_BOOT';
 
   const [shouldBypass] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        const val = sessionStorage.getItem('kip_just_logged_in');
+        const val = sessionStorage.getItem('sd_just_logged_in');
         if (val && Date.now() - parseInt(val, 10) < 30000) {
           return true;
         }
@@ -86,7 +86,7 @@ export function MinimalTerminalLoader({
   useEffect(() => {
     if (shouldBypass) return;
     if (typeof document !== 'undefined') {
-      const existingOverlay = document.getElementById('kip-minimal-terminal-overlay');
+      const existingOverlay = document.getElementById('sd-minimal-terminal-overlay');
       if (existingOverlay) existingOverlay.remove();
     }
 
@@ -240,7 +240,7 @@ export function MinimalTerminalLoader({
           {/* Top System Line */}
           <div className="flex items-center justify-between pb-2.5 mb-3.5 border-b border-[#26292e]">
             <div className="flex items-center gap-2">
-              <span className="kip-spinner text-[13px] font-bold text-white w-3 inline-block tabular-nums">
+              <span className="sd-spinner text-[13px] font-bold text-white w-3 inline-block tabular-nums">
                 {SPINNER_FRAMES[spinnerIdx]}
               </span>
               <span className="text-[12px] font-bold tracking-tight text-white uppercase">
@@ -258,13 +258,13 @@ export function MinimalTerminalLoader({
               <span className="text-[#8e95a2] uppercase tracking-wider font-semibold">
                 Index Cache
               </span>
-              <span className="kip-progress-pct font-bold text-white tabular-nums">
+              <span className="sd-progress-pct font-bold text-white tabular-nums">
                 {progress}%
               </span>
             </div>
 
             {/* 24-Segment Hardware Block Track */}
-            <div className="kip-segments w-full h-5 p-[2px] bg-[#0c0e10] border border-[#26292e] flex gap-[2px]">
+            <div className="sd-segments w-full h-5 p-[2px] bg-[#0c0e10] border border-[#26292e] flex gap-[2px]">
               {Array.from({ length: TOTAL_SEGMENTS }).map((_, i) => (
                 <div
                   key={i}
@@ -280,12 +280,12 @@ export function MinimalTerminalLoader({
           <div className="mt-3.5 pt-2.5 border-t border-[#26292e] flex items-center justify-between text-[11px]">
             <div className="flex items-center gap-1.5 text-[#e6e8eb] truncate min-w-0">
               <span className="text-[#75777b]">::</span>
-              <span className="kip-status-msg truncate text-[#e6e8eb] lowercase">
+              <span className="sd-status-msg truncate text-[#e6e8eb] lowercase">
                 {STATUS_MESSAGES[statusIdx]}
               </span>
               <span className="inline-block w-2 h-3.5 bg-white terminal-cursor ml-0.5 align-middle shrink-0" />
             </div>
-            <span className="kip-timer text-[#8e95a2] ml-2 text-[10px] shrink-0 tabular-nums">
+            <span className="sd-timer text-[#8e95a2] ml-2 text-[10px] shrink-0 tabular-nums">
               {elapsedSeconds}s
             </span>
           </div>
@@ -303,7 +303,7 @@ export function MinimalTerminalLoader({
           {/* Top System Line */}
           <div className="flex items-center justify-between pb-2 mb-3 border-b border-black/20">
             <div className="flex items-center gap-2">
-              <span className="kip-spinner text-[13px] font-bold text-[#904d00] w-3 inline-block tabular-nums">
+              <span className="sd-spinner text-[13px] font-bold text-[#904d00] w-3 inline-block tabular-nums">
                 {SPINNER_FRAMES[spinnerIdx]}
               </span>
               <span className="text-[12px] font-bold tracking-tight text-black uppercase">
@@ -321,13 +321,13 @@ export function MinimalTerminalLoader({
               <span className="text-[#45474a] uppercase tracking-wider font-semibold">
                 Index Cache
               </span>
-              <span className="kip-progress-pct font-bold text-black tabular-nums">
+              <span className="sd-progress-pct font-bold text-black tabular-nums">
                 {progress}%
               </span>
             </div>
 
             {/* 24-Segment Hardware Block Track */}
-            <div className="kip-segments w-full h-5 p-[2px] bg-[#f5f4ef] border border-black flex gap-[2px]">
+            <div className="sd-segments w-full h-5 p-[2px] bg-[#f5f4ef] border border-black flex gap-[2px]">
               {Array.from({ length: TOTAL_SEGMENTS }).map((_, i) => (
                 <div
                   key={i}
@@ -343,12 +343,12 @@ export function MinimalTerminalLoader({
           <div className="mt-3 pt-2.5 border-t border-black/10 flex items-center justify-between text-[11px]">
             <div className="flex items-center gap-1.5 text-black truncate min-w-0">
               <span className="text-[#75777b]">::</span>
-              <span className="kip-status-msg truncate text-black lowercase">
+              <span className="sd-status-msg truncate text-black lowercase">
                 {STATUS_MESSAGES[statusIdx]}
               </span>
               <span className="inline-block w-2 h-3.5 bg-black terminal-cursor ml-0.5 align-middle shrink-0" />
             </div>
-            <span className="kip-timer text-[#75777b] ml-2 text-[10px] shrink-0 tabular-nums">
+            <span className="sd-timer text-[#75777b] ml-2 text-[10px] shrink-0 tabular-nums">
               {elapsedSeconds}s
             </span>
           </div>
@@ -374,14 +374,14 @@ function preserveMinimalLoader(
   if (typeof document === 'undefined') return;
   if (typeof window !== 'undefined') {
     try {
-      const val = sessionStorage.getItem('kip_just_logged_in');
+      const val = sessionStorage.getItem('sd_just_logged_in');
       if (val && Date.now() - parseInt(val, 10) < 30000) return;
     } catch {}
   }
-  if (document.getElementById('kip-minimal-terminal-overlay')) return;
+  if (document.getElementById('sd-minimal-terminal-overlay')) return;
 
   const overlay = sourceEl.cloneNode(true) as HTMLElement;
-  overlay.id = 'kip-minimal-terminal-overlay';
+  overlay.id = 'sd-minimal-terminal-overlay';
   overlay.style.position = 'fixed';
   overlay.style.inset = '0';
   overlay.style.zIndex = '99999';
@@ -391,11 +391,11 @@ function preserveMinimalLoader(
 
   document.body.appendChild(overlay);
 
-  const pctEl = overlay.querySelector('.kip-progress-pct');
-  const timerEl = overlay.querySelector('.kip-timer');
-  const statusEl = overlay.querySelector('.kip-status-msg');
-  const segmentsContainer = overlay.querySelector('.kip-segments');
-  const spinnerEl = overlay.querySelector('.kip-spinner');
+  const pctEl = overlay.querySelector('.sd-progress-pct');
+  const timerEl = overlay.querySelector('.sd-timer');
+  const statusEl = overlay.querySelector('.sd-status-msg');
+  const segmentsContainer = overlay.querySelector('.sd-segments');
+  const spinnerEl = overlay.querySelector('.sd-spinner');
 
   let rafId: number;
   let spinnerFrame = 0;

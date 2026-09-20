@@ -329,7 +329,7 @@ export default function ProfilePage() {
           <Link href="/" className="hidden sm:flex items-center py-1">
             <Image
               src="/logo.png"
-              alt="KIP Logo"
+              alt="source:dev logo"
               width={110}
               height={32}
               className="h-7 w-auto object-contain"
@@ -910,7 +910,7 @@ export default function ProfilePage() {
 
       {/* Footer */}
       <footer className="py-6 text-center text-xs text-text-secondary border-t border-border/60">
-        &copy; {new Date().getFullYear()} Knowledge is Power. All rights reserved.
+        &copy; {new Date().getFullYear()} source:dev. All rights reserved.
       </footer>
     </div>
   );

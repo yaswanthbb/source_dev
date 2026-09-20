@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const MOTION_KEY = "kip_dashboard_motion";
+const MOTION_KEY = "sd_dashboard_motion";
 const DECODE_GLYPHS = "01_:/·";
 
 /** One frame of the decode: real characters up to `revealed`, glyphs after.
@@ -91,7 +91,7 @@ export function TerminalReadout({
   }, [text, enabled]);
 
   return (
-    <span className="kip-readout">
+    <span className="sd-readout">
       <span className="sr-only">{text}</span>
       <span aria-hidden="true">{frame.value}</span>
     </span>
