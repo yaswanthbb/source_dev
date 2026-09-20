@@ -1482,9 +1482,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.ts": {
-    "mtime": 1789907484.1501656,
-    "seen": 1789910295.3209562,
-    "ast_hash": "3ed2535d7c13369183fbe4edcf7798ef",
+    "mtime": 1789917423.5312855,
+    "seen": 1789919331.294127,
+    "ast_hash": "dc4477d4bc7b0f77ffc2ab8817a194f7",
     "semantic_hash": ""
   },
   "frontend/lib/timezone.ts": {
@@ -1530,27 +1530,27 @@
     "semantic_hash": ""
   },
   "frontend/components/terminal/use-terminal-session.ts": {
-    "mtime": 1789731384.5088625,
-    "seen": 1789751382.258138,
-    "ast_hash": "394b04fd5a7db79fc62cc9de1d70ee74",
+    "mtime": 1789917257.101456,
+    "seen": 1789919331.2941206,
+    "ast_hash": "a5a0985c0b16408a398b2e8c3c787d05",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.test.mjs": {
-    "mtime": 1789904902.5019429,
-    "seen": 1789910295.3209558,
-    "ast_hash": "aed3c7ca7017a7ecc15c6cd20fc18d29",
+    "mtime": 1789917689.9035356,
+    "seen": 1789919331.2941263,
+    "ast_hash": "207e2ca76637eacb86a3d419a492557e",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/learning-commands.ts": {
-    "mtime": 1789903832.2138007,
-    "seen": 1789910295.3209577,
-    "ast_hash": "11325cb16860bca12758a1b0d8b3bc2d",
+    "mtime": 1789917599.2134082,
+    "seen": 1789919331.294129,
+    "ast_hash": "1f22eaa0ec495411148a36c44263e558",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/output.ts": {
-    "mtime": 1789903832.2144125,
-    "seen": 1789910295.3209598,
-    "ast_hash": "919902d4b70990e5d211d8ef6db70e85",
+    "mtime": 1789917223.771416,
+    "seen": 1789919331.2941308,
+    "ast_hash": "c06ec96280d03f6ba7a777491c58c21b",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/request.ts": {
@@ -1560,9 +1560,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/session.ts": {
-    "mtime": 1789635568.885894,
-    "seen": 1789637722.4149349,
-    "ast_hash": "d92348fd2d416cf2bba8db762a8140dd",
+    "mtime": 1789917230.5004056,
+    "seen": 1789919331.2941327,
+    "ast_hash": "db2c7e780427804c9699a7dcc9827a3d",
     "semantic_hash": ""
   },
   "backend/src/migrations/1787800000000-AddUserPreferences.ts": {
@@ -1614,21 +1614,21 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/fs-commands.test.mjs": {
-    "mtime": 1789904793.6978402,
-    "seen": 1789910295.3209567,
-    "ast_hash": "e0aeb0364eae0a5801edd15c40deefeb",
+    "mtime": 1789911321.0017943,
+    "seen": 1789919331.294128,
+    "ast_hash": "b5dfd45b16b59e125ef0b987b2998f32",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/fs-commands.ts": {
-    "mtime": 1789906800.8053355,
-    "seen": 1789910295.3209572,
-    "ast_hash": "f0dff7ab94725bb2f6816a88489ac2a2",
+    "mtime": 1789911321.0019863,
+    "seen": 1789919331.2941284,
+    "ast_hash": "676add34fe97276bfe51c1225751f161",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/resolve-location.ts": {
-    "mtime": 1789907484.1486347,
-    "seen": 1789910295.320961,
-    "ast_hash": "0c9da9b85a489d5fc87832c1290d57a5",
+    "mtime": 1789911321.0025811,
+    "seen": 1789919331.2941322,
+    "ast_hash": "aa09da0de119293e3f4a11892edb5145",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/theme-contract.ts": {

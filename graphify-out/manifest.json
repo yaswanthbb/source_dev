@@ -1482,9 +1482,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.ts": {
-    "mtime": 1789917423.5312855,
-    "seen": 1789919331.294127,
-    "ast_hash": "dc4477d4bc7b0f77ffc2ab8817a194f7",
+    "mtime": 1789924772.1459231,
+    "seen": 1789925636.3107915,
+    "ast_hash": "9ef8caf8d2e35f91f14c53dc6edd56a0",
     "semantic_hash": ""
   },
   "frontend/lib/timezone.ts": {
@@ -1524,27 +1524,27 @@
     "semantic_hash": ""
   },
   "frontend/components/terminal/terminal-workspace.tsx": {
-    "mtime": 1789905022.7406988,
-    "seen": 1789910295.320948,
-    "ast_hash": "9f860b26b5bd0e707a605ccf1373275a",
+    "mtime": 1789924871.0823069,
+    "seen": 1789925636.3107805,
+    "ast_hash": "cb70056db1dfc613de26649e221f0cf9",
     "semantic_hash": ""
   },
   "frontend/components/terminal/use-terminal-session.ts": {
-    "mtime": 1789917257.101456,
-    "seen": 1789919331.2941206,
-    "ast_hash": "a5a0985c0b16408a398b2e8c3c787d05",
+    "mtime": 1789924871.0823069,
+    "seen": 1789925636.3107839,
+    "ast_hash": "83d052f5d9445ee98fb3ad172a0bdaf9",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.test.mjs": {
-    "mtime": 1789917689.9035356,
-    "seen": 1789919331.2941263,
-    "ast_hash": "207e2ca76637eacb86a3d419a492557e",
+    "mtime": 1789923163.3772814,
+    "seen": 1789925636.3107905,
+    "ast_hash": "40bec6484e71cd332a764d9f97a37f02",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/learning-commands.ts": {
-    "mtime": 1789917599.2134082,
-    "seen": 1789919331.294129,
-    "ast_hash": "1f22eaa0ec495411148a36c44263e558",
+    "mtime": 1789921091.4365003,
+    "seen": 1789925636.3107939,
+    "ast_hash": "2984335d32dddb58568a74c1f957eb18",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/output.ts": {
