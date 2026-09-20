@@ -16,6 +16,7 @@ import { isAbortError } from "./request";
 import { stuck, recordHistory, fetchText, clearCurrentConcept } from "./output";
 import type { Location } from "./location";
 import { childKindOf, resolvePath } from "./location";
+import type { ChildKind } from "./location";
 import { listChildren, type VfsEntry } from "./resolve-location";
 import apiClient from "@/lib/api-client";
 import { User } from "@/lib/auth";
@@ -106,6 +107,12 @@ export interface TerminalIO {
   /** Open the OS file picker. Resolves null if the user cancels. The host
    *  owns the input element, so this module stays free of DOM work. */
   pickFile: (accept: string) => Promise<File | null>;
+  /** Pick one row by arrow keys, resolving its index. Esc rejects with
+   *  `CommandAborted`, the same as ^C — every caller treats "no choice" as
+   *  "stop everything". The host owns the cursor, the keys and the highlight,
+   *  none of which this layer can know; a host without them prints the rows
+   *  numbered and asks instead, which is the better failure. */
+  select?: (prompt: string, rows: string[]) => Promise<number>;
   /** Flow one markdown block — a lesson, an answer — as terminal text:
    *  headings, lists and code, with no frame of its own. The caller prints
    *  the header and footer lines around it, the way `man` or `glow` do. */
@@ -1095,7 +1102,11 @@ export function bootSequence(user?: User): BootStep[] {
           kind: "out",
         },
         {
-          text: "TAB completes · ↑ recalls · ^C interrupts · ^L clears",
+          text: "TAB completes · ↑↓ recalls · ^C stops · ^L clears",
+          kind: "dim",
+        },
+        {
+          text: "^Y searches history · ^S stashes the line · ? lists every key",
           kind: "dim",
         },
       ],
@@ -1375,6 +1386,23 @@ function operandUnderCursor(
   return { fragment, position: before.filter((p) => !p.startsWith("-")).length };
 }
 
+/** Whether a verb wants children of this kind completed. `cd` descends, so
+ *  lessons are never candidates — offering one only walks the reader into a
+ *  `Not a directory` refusal. `cat` and friends print lessons, so a bare
+ *  name where directories live would end in `Is a directory`; mid-path
+ *  segments still complete directories for every verb, because
+ *  `cat voip-basics/intro⇥` has to pass through one to get anywhere. */
+export function completableKind(
+  verb: string,
+  child: Exclude<ChildKind, null>,
+  final: boolean,
+): boolean {
+  if (verb === "cd") return child !== "concept";
+  if (verb === "cat" || verb === "less" || verb === "quiz" || verb === "complete")
+    return !final || child === "concept";
+  return true;
+}
+
 /** Complete the operand being typed against what is really there.
  *
  *  Prefix first, the way a shell matches, then a substring pass — because the
@@ -1410,6 +1438,9 @@ export async function completePath(
   if (!base) return [];
   const kind = childKindOf(base);
   if (!kind) return [];
+  // Never offer what the verb cannot take: lessons to `cd`, directories to
+  // `cat` at the final position. See `completableKind`.
+  if (!completableKind(spec.name, kind, cut === -1)) return [];
 
   let entries: VfsEntry[];
   try {

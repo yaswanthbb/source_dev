@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -18,6 +18,168 @@ import { getTheme, DEFAULT_THEME_ID } from "./themes";
 import { useUiMode } from "@/providers/ui-mode-provider";
 import { TerminalHeader, TerminalSurface } from "./terminal-chrome";
 import { useTerminalSession } from "./use-terminal-session";
+import type { SuggestMenu } from "./use-terminal-session";
+
+/** The suggestion menu: commands and completions as rows the arrows walk.
+ *  Text, not controls — accepting a row types it, exactly as if it had been
+ *  typed by hand, so pointer and keyboard stay on the same path by staying
+ *  off it entirely. */
+function SuggestPanel({ menu }: { menu: SuggestMenu }) {
+  if (!menu.rows.length) return null;
+  return (
+    <div className="sd-menu" role="listbox" aria-label="Suggestions">
+      {menu.rows.map((row, index) => (
+        <div
+          key={`${row.apply}-${index}`}
+          role="option"
+          aria-selected={index === menu.at}
+          data-active={index === menu.at ? "" : undefined}
+          className="sd-line"
+        >
+          <span className="sd-menu-cursor" aria-hidden="true">
+            {index === menu.at ? "❯" : " "}
+          </span>{" "}
+          <span className="sd-word">{row.label}</span>{" "}
+          <span className="sd-menu-detail">{row.detail}</span>
+        </div>
+      ))}
+      <div className="sd-line" data-kind="dim">
+        {menu.hint}
+      </div>
+    </div>
+  );
+}
+
+/** An arrow-key choice: the rows with a cursor, and what the keys do. */
+function SelectPanel({
+  prompt,
+  rows,
+  at,
+}: {
+  prompt: string;
+  rows: string[];
+  at: number;
+}) {
+  return (
+    <div className="sd-menu" role="listbox" aria-label={prompt}>
+      {rows.map((row, index) => (
+        <div
+          key={index}
+          role="option"
+          aria-selected={index === at}
+          data-active={index === at ? "" : undefined}
+          className="sd-line"
+        >
+          <span className="sd-menu-cursor" aria-hidden="true">
+            {index === at ? "❯" : " "}
+          </span>{" "}
+          {row}
+        </div>
+      ))}
+      <div className="sd-line" data-kind="dim">
+        ↑↓ move · enter picks · esc stops
+      </div>
+    </div>
+  );
+}
+
+/** The shortcut panel (`?` on an empty line): every key the shell answers
+ *  to, in one place. Closed by any key — it teaches, then gets out of the
+ *  way. */
+function KeysPanel() {
+  const rows: Array<[string, string]> = [
+    ["tab", "complete · accept suggestion"],
+    ["↑ ↓", "history · walk suggestions"],
+    ["enter", "run · accept highlighted"],
+    ["esc", "close · stop · clear line"],
+    ["ctrl+y", "search history"],
+    ["ctrl+s", "stash / restore line"],
+    ["ctrl+c", "stop command · clear line"],
+    ["ctrl+l", "clear screen"],
+    ["?", "this panel"],
+  ];
+  return (
+    <div className="sd-menu" role="dialog" aria-label="Keyboard shortcuts">
+      {rows.map(([keys, what]) => (
+        <div key={keys} className="sd-line">
+          <span className="sd-word">{keys}</span> {what}
+        </div>
+      ))}
+      <div className="sd-line" data-kind="dim">
+        any key closes
+      </div>
+    </div>
+  );
+}
+
+/** A small syntax highlighter for fenced code blocks: keywords, strings,
+ *  comments and numbers, four hues total. Regex-based rather than a grammar,
+ *  which means it occasionally misreads exotic syntax — but it never changes
+ *  the text, only wraps runs in spans, so the worst case is a plain block
+ *  with one oddly coloured word. Unknown languages fall back to plain. */
+const HIGHLIGHT_KEYWORDS: Record<string, string[]> = {
+  js: "const let var function return if else for while import export from class new await async try catch throw switch case break continue typeof this null undefined true false".split(" "),
+  py: "def return if elif else for while import from as class with try except raise lambda None True False and or not in is pass".split(" "),
+  sh: "if then else elif fi for while do done case esac function select until".split(" "),
+  json: ["true", "false", "null"],
+};
+HIGHLIGHT_KEYWORDS.ts = HIGHLIGHT_KEYWORDS.js;
+HIGHLIGHT_KEYWORDS.tsx = HIGHLIGHT_KEYWORDS.js;
+HIGHLIGHT_KEYWORDS.jsx = HIGHLIGHT_KEYWORDS.js;
+HIGHLIGHT_KEYWORDS.bash = HIGHLIGHT_KEYWORDS.sh;
+HIGHLIGHT_KEYWORDS.shell = HIGHLIGHT_KEYWORDS.sh;
+
+function highlightCode(text: string, lang: string): ReactNode[] {
+  const keywords = HIGHLIGHT_KEYWORDS[lang];
+  if (!keywords) return [text];
+  const comment =
+    lang === "py" || lang === "sh" || lang === "bash" || lang === "shell"
+      ? "#[^\\n]*"
+      : "//[^\\n]*|/\\*[\\s\\S]*?\\*/";
+  const pattern = new RegExp(
+    `(${comment})|("(?:[^"\\\\\\n]|\\\\.)*"|'(?:[^'\\\\\\n]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)|\\b(\\d[\\d_]*(?:\\.\\d+)?)\\b|\\b(${keywords.join("|")})\\b`,
+    "g",
+  );
+  const out: ReactNode[] = [];
+  let at = 0;
+  let key = 0;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > at) out.push(text.slice(at, index));
+    const [whole, com, str, num] = match;
+    const tone = com
+      ? "sd-tok-com"
+      : str
+        ? "sd-tok-str"
+        : num
+          ? "sd-tok-num"
+          : "sd-tok-kw";
+    out.push(
+      <span key={key++} className={tone}>
+        {whole}
+      </span>,
+    );
+    at = index + whole.length;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return out;
+}
+
+function CodeBlock({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: ReactNode;
+}) {
+  const lang =
+    /language-([\w+-]+)/.exec(className ?? "")?.[1]?.toLowerCase() ?? "";
+  // Inline code carries no language: it keeps the flat style, and only
+  // fenced blocks get token colours.
+  if (!lang) return <code>{children}</code>;
+  const text = String(children ?? "").replace(/\n$/, "");
+  return <code>{highlightCode(text, lang)}</code>;
+}
 
 /** The page already owns an h1, so a lesson's own headings start below it and
  *  the outline stays readable to a screen reader. */
@@ -211,7 +373,7 @@ function Line({
       <div className="sd-flow">
         {/* Markdown only — `rehype-raw` is deliberately absent, so authored
             HTML inside a lesson or an answer is escaped, never executed. */}
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOC_HEADINGS}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ ...DOC_HEADINGS, code: CodeBlock }}>
           {entry.text}
         </ReactMarkdown>
       </div>
@@ -310,6 +472,10 @@ function Console({
     busy,
     status,
     pending,
+    selecting,
+    menu,
+    searchActive,
+    keysOpen,
     pagerAt,
     execute,
     account,
@@ -317,6 +483,7 @@ function Console({
     fileRef,
     onKeyDown,
     answer,
+    acceptSelect,
     settleFile,
   } = session;
   // The prompt shows where the user actually is. It reads the same location the
@@ -346,8 +513,8 @@ function Console({
   // A paging `less` is technically still running, but it is waiting on a
   // keypress, not on work — so the spinner would be claiming something untrue.
   // The pager's own status line stands in its place, exactly as it does for a
-  // question waiting on an answer.
-  const running = busy && !pending && !pagerAt;
+  // question waiting on an answer. A choice in progress counts the same way.
+  const running = busy && !pending && !selecting && !pagerAt;
   const showCaret = atEnd && !running;
 
   // ─── Streaming reveal ─────────────────────────────────────────────────────
@@ -446,6 +613,19 @@ function Console({
             </div>
           )}
 
+          {/* The choice panel and the suggestion menu stand where the prompt
+              would be waiting — both borrow its keyboard, so the prompt
+              stays mounted underneath and keeps the caret warm. */}
+          {selecting && (
+            <SelectPanel
+              prompt={selecting.prompt}
+              rows={selecting.rows}
+              at={selecting.at}
+            />
+          )}
+          {menu && !selecting && <SuggestPanel menu={menu} />}
+          {keysOpen && !selecting && !menu && <KeysPanel />}
+
           {/* The prompt lives at the end of the output, not in a bar below
               it — so the caret sits exactly where the next line would be
               printed, which is what makes this read as a terminal. It has no
@@ -463,12 +643,17 @@ function Console({
               onSubmit={(event) => {
                 event.preventDefault();
                 if (pending) answer(cmd);
-                else void execute(cmd);
+                else if (selecting) acceptSelect();
+                else if (!searchActive) void execute(cmd);
               }}
             >
               <label htmlFor="terminal-input" className="sd-prompt-label">
                 {pending ? (
                   <span className="sd-prompt-ask">{pending.prompt}:</span>
+                ) : selecting ? (
+                  <span className="sd-prompt-ask">{selecting.prompt}:</span>
+                ) : searchActive ? (
+                  <span className="sd-prompt-ask">history:</span>
                 ) : (
                   <>
                     <span className="sd-prompt-user">student@source-dev</span>
@@ -493,7 +678,15 @@ function Console({
                   }}
                   onBlur={() => setFocused(false)}
                   type={pending?.options?.mask ? "password" : "text"}
-                  aria-label={pending ? pending.prompt : "Terminal command"}
+                  aria-label={
+                    pending
+                      ? pending.prompt
+                      : selecting
+                        ? selecting.prompt
+                        : searchActive
+                          ? "Search history"
+                          : "Terminal command"
+                  }
                   placeholder=""
                   spellCheck={false}
                   autoComplete="off"
@@ -510,9 +703,9 @@ function Console({
             which is the whole of a terminal — what used to sit below here was a
             status bar with `[back]`/`[next]` and a strip of command chips, and
             both were the old panelled dashboard showing through. Anything the
-            reader needs to know now gets printed: TAB prints its candidates,
-            `less` prints `--More--`, a running command prints how to stop it,
-            and `help` prints the rest. */}
+            reader needs to know now gets printed or panelled above the prompt:
+            TAB lists suggestions, `less` prints `--More--`, a running command
+            prints how to stop it, and `help` prints the rest. */}
         <input
           ref={fileRef}
           type="file"

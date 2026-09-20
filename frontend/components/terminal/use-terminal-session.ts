@@ -10,6 +10,7 @@ import {
   CommandAborted,
   completeCommand,
   completeArgument,
+  matchCommands,
   runCommand,
   type AskOptions,
   type LineKind,
@@ -34,6 +35,32 @@ interface PendingQuestion {
   options?: AskOptions;
   resolve: (value: string) => void;
   reject: (error: Error) => void;
+}
+
+/** An arrow-key choice in progress: what was asked, the rows to pick from,
+ *  where the cursor sits, and the promise the command is awaiting. */
+interface PendingSelect {
+  prompt: string;
+  rows: string[];
+  at: number;
+  resolve: (index: number) => void;
+  reject: (error: Error) => void;
+}
+
+/** One row of the suggestion menu: what it reads as, what it means, and the
+ *  line it writes back into the prompt when accepted. */
+export interface SuggestRow {
+  label: string;
+  detail: string;
+  apply: string;
+}
+
+export interface SuggestMenu {
+  rows: SuggestRow[];
+  /** -1 with nothing highlighted: Enter runs what was typed. */
+  at: number;
+  /** Hint under the rows — completion, history search, or shortcuts. */
+  hint: string;
 }
 
 /** A `less` session in progress.
@@ -111,14 +138,10 @@ function chunkEnd(lines: string[], from: number, rows: number): number {
   return end;
 }
 
-/** What TAB prints when more than one name matches: the candidates, and
- *  nothing else. A shell prints the column and leaves the line alone. */
-function candidateOf(line: string): string {
-  const at = line.indexOf(" ");
-  return at === -1 ? line : line.slice(at + 1);
-}
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Rows kept small enough to scan: commands first, then completed values. */
+const MENU_ROWS = 8;
 
 export function useTerminalSession(user: User, initialCommand?: string) {
   const router = useRouter();
@@ -154,6 +177,22 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   const runAbort = useRef<AbortController | null>(null);
   const [pending, setPending] = useState<PendingQuestion | null>(null);
   const question = useRef<PendingQuestion | null>(null);
+  /** An arrow-key choice in progress. Mirrors the question above: the ref is
+   *  what `cancel` and the key handler read, the state is what renders. */
+  const [selecting, setSelecting] = useState<PendingSelect | null>(null);
+  const choice = useRef<PendingSelect | null>(null);
+  /** The suggestion menu under the prompt — command rows plus completed
+   *  values. `at` is -1 with nothing highlighted, so Enter still runs what
+   *  was typed and only an explicit arrow step selects a row. */
+  const [menu, setMenu] = useState<SuggestMenu | null>(null);
+  /** Reverse history search (`Ctrl+Y` — never `Ctrl+R`: that reloads the
+   *  browser tab): the draft stashed on entry, restored on cancel. While set,
+   *  the input is the query and the menu shows matches.
+   *  The `?` shortcut panel reuses the closed state — never both at once. */
+  const [search, setSearch] = useState<{ draft: string } | null>(null);
+  const [keysOpen, setKeysOpen] = useState(false);
+  /** Stashed prompt (`Ctrl+S`), restored onto the next empty line. */
+  const stash = useRef("");
   const filePick = useRef<((file: File | null) => void) | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -168,16 +207,83 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   const [pagerAt, setPagerAt] = useState<{ shown: number; total: number } | null>(
     null,
   );
-  /** What TAB is walking and where in it the line sits, so a second TAB moves
-   *  on instead of restarting. The candidates are printed into the buffer the
-   *  first time round, so nothing about this has to be rendered as UI. */
-  const cycle = useRef<{ items: string[]; at: number } | null>(null);
 
   // ↑ walks the same list `history` prints. There is no second store — the
   // dispatcher records every line in `output.ts`, and a command can read it
   // there without reaching into host state. Newest first, because ↑ walks
   // backwards.
   const recallList = () => readHistory().reverse();
+
+  // The suggestion menu, recomputed as the line changes. Command rows come
+  // from the static tables and are instant; value rows wait on a listing or
+  // the catalogue and join in when they resolve. A stale result — computed
+  // for a line since edited — is dropped on the floor instead of shown.
+  useEffect(() => {
+    if (booting || busy || pending || selecting || pagerAt) {
+      setMenu(null);
+      return;
+    }
+    if (search) {
+      const needle = cmd.toLowerCase();
+      const rows = recallList()
+        .filter((line, index, all) => all.indexOf(line) === index)
+        .filter((line) => line.toLowerCase().includes(needle))
+        .slice(0, MENU_ROWS)
+        .map((line) => ({ label: line, detail: "history", apply: line }));
+      setMenu({ rows, at: -1, hint: "enter/tab fills · esc cancels · ↑↓ move" });
+      return;
+    }
+    if (!cmd.trim()) {
+      setMenu(null);
+      return;
+    }
+    const value = cmd;
+    // Past the verb, the verb itself is not a suggestion: completing `cd in`
+    // must offer what `in` can become, never `cd ` over what was typed.
+    const commandRows = /\s/.test(value)
+      ? []
+      : matchCommands(value)
+          .slice(0, MENU_ROWS)
+          .map((spec) => ({
+            label: spec.name,
+            detail: spec.summary,
+            apply: `${spec.name} `,
+          }));
+    setMenu({
+      rows: commandRows,
+      at: -1,
+      hint: "tab accepts · ↑↓ move · esc closes",
+    });
+    const id = window.setTimeout(() => {
+      void (async () => {
+        const items = await completeArgument(value, location);
+        if (!active.current || inputRef.current?.value !== value) return;
+        setMenu((previous) => {
+          if (!previous) return previous;
+          const seen = new Set(previous.rows.map((row) => row.apply));
+          const extra = items
+            .filter((item) => !seen.has(item))
+            .slice(0, MENU_ROWS)
+            .map((item) => {
+              // The whole operand, not the untyped remainder: the row must
+              // read as what TAB will write, not as a fragment of it.
+              const cut = item.indexOf(" ");
+              return {
+                label: cut === -1 ? item : item.slice(cut + 1),
+                detail: "match",
+                apply: item,
+              };
+            });
+          if (!extra.length) return previous;
+          return {
+            ...previous,
+            rows: [...previous.rows, ...extra].slice(0, MENU_ROWS),
+          };
+        });
+      })();
+    }, 120);
+    return () => window.clearTimeout(id);
+  }, [cmd, booting, busy, pending, selecting, pagerAt, search, location]);
 
   useEffect(() => {
     active.current = true;
@@ -200,6 +306,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       armRequests(undefined);
       question.current?.reject(new CommandAborted());
       question.current = null;
+      choice.current?.reject(new CommandAborted());
+      choice.current = null;
       filePick.current?.(null);
       filePick.current = null;
     };
@@ -336,7 +444,9 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       setBusy(true);
       setCmd("");
       setStatus(null);
-      cycle.current = null;
+      setMenu(null);
+      setSearch(null);
+      setKeysOpen(false);
       recallIndex.current = -1;
       // One controller for this command, armed for the request layer, so ^C
       // aborts whatever it is waiting on rather than leaving it to land later.
@@ -425,6 +535,20 @@ export function useTerminalSession(user: User, initialCommand?: string) {
             question.current = next;
             setCmd("");
             setPending(next);
+          }),
+        select: (prompt, rows) =>
+          new Promise<number>((resolve, reject) => {
+            if (!isCurrent()) {
+              reject(new CommandAborted());
+              return;
+            }
+            // Choosing is not waiting on the network either: same treatment
+            // as a question, with a cursor instead of a caret.
+            setStatus(null);
+            setCmd("");
+            const next = { prompt, rows, at: 0, resolve, reject };
+            choice.current = next;
+            setSelecting(next);
           }),
         pickFile: (accept) =>
           new Promise((resolve) => {
@@ -595,6 +719,27 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     [append],
   );
 
+  const acceptSelect = useCallback(() => {
+    const current = choice.current;
+    if (!current) return;
+    choice.current = null;
+    setSelecting(null);
+    setCmd("");
+    // Echo the pick the way a terminal shows what you typed at a prompt, so
+    // the transcript keeps the decision after the panel is gone.
+    append(`${current.prompt}: ${current.rows[current.at]}`, "dim");
+    current.resolve(current.at);
+  }, [append]);
+
+  const moveSelect = useCallback((delta: number) => {
+    const current = choice.current;
+    if (!current) return;
+    const at =
+      (current.at + delta + current.rows.length) % current.rows.length;
+    choice.current = { ...current, at };
+    setSelecting({ ...current, at });
+  }, []);
+
   /** ^C. Whatever the shell is doing, this ends it and hands the prompt back:
    *  a parked question is rejected, and a command waiting on the network has
    *  its request aborted — the point of an interrupt is that the work stops,
@@ -604,6 +749,14 @@ export function useTerminalSession(user: User, initialCommand?: string) {
    *  print as it unwinds, which is also why the `^C` is printed here rather
    *  than left to the dispatcher's own handler. */
   const cancel = useCallback(() => {
+    const picking = choice.current;
+    if (picking) {
+      choice.current = null;
+      setSelecting(null);
+      setCmd("");
+      picking.reject(new CommandAborted());
+      return;
+    }
     const current = question.current;
     if (current) {
       question.current = null;
@@ -634,8 +787,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
   }, [append]);
 
   useEffect(() => {
-    if (pending) inputRef.current?.focus({ preventScroll: true });
-  }, [pending]);
+    if (pending || selecting) inputRef.current?.focus({ preventScroll: true });
+  }, [pending, selecting]);
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
@@ -716,6 +869,18 @@ export function useTerminalSession(user: User, initialCommand?: string) {
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
+
+    // An open choice eats its own keys: arrows move, Enter picks, Esc stops
+    // the command. Typing is ignored — the rows are the whole vocabulary.
+    if (selecting) {
+      event.preventDefault();
+      if (event.key === "ArrowUp" || (event.shiftKey && event.key === "Tab"))
+        moveSelect(-1);
+      else if (event.key === "ArrowDown" || event.key === "Tab") moveSelect(1);
+      else if (event.key === "Enter") acceptSelect();
+      else if (event.key === "Escape") cancel();
+      return;
+    }
     if (
       (event.key === "Escape" || (event.ctrlKey && event.key === "c")) &&
       pending
@@ -724,59 +889,167 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       cancel();
       return;
     }
-    if (pending || busy) return;
-    // Anything other than another TAB ends the cycle.
-    if (event.key !== "Tab" && event.key !== "Shift" && cycle.current) {
-      cycle.current = null;
+
+    // The shortcut panel is modal: anything closes it, nothing runs.
+    if (keysOpen) {
+      event.preventDefault();
+      setKeysOpen(false);
+      return;
     }
+
+    // Searching history: arrows walk the matches, Enter fills the line
+    // without running it, Esc hands back the stashed draft.
+    if (search) {
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        if (!menu?.rows.length) return;
+        event.preventDefault();
+        const at =
+          (menu.at + (event.key === "ArrowUp" ? -1 : 1) + menu.rows.length) %
+          menu.rows.length;
+        setMenu({ ...menu, at });
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        const row =
+          menu && menu.at >= 0 ? menu.rows[menu.at] : menu?.rows[0];
+        if (row) setCmd(row.apply);
+        setSearch(null);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setCmd(search.draft);
+        setSearch(null);
+        return;
+      }
+      return;
+    }
+
+    // The suggestion menu owns the arrows and TAB while it is open: ↑↓ move,
+    // TAB or Enter accepts the row, Enter with nothing highlighted runs the
+    // line as typed, Esc closes the menu and leaves the line alone.
+    if (menu && menu.rows.length) {
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        const at =
+          (menu.at + (event.key === "ArrowUp" ? -1 : 1) + menu.rows.length) %
+          menu.rows.length;
+        setMenu({ ...menu, at });
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const at = menu.at >= 0 ? menu.at : 0;
+        setCmd(menu.rows[at].apply);
+        setMenu(null);
+        return;
+      }
+      if (event.key === "Enter" && menu.at >= 0) {
+        event.preventDefault();
+        setCmd(menu.rows[menu.at].apply);
+        setMenu(null);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMenu(null);
+        return;
+      }
+    }
+
+    if (pending || busy) return;
     if (event.ctrlKey && event.key === "l") {
       event.preventDefault();
       reset();
       return;
     }
+    // Reverse history search: the line becomes the query, matches list above.
+    // `Ctrl+Y`, not the readline `Ctrl+R`: in a browser tab `Ctrl+R`
+    // reloads the page, and no web app should fight that muscle memory.
+    if (event.ctrlKey && (event.key === "y" || event.key === "Y")) {
+      event.preventDefault();
+      if (busy || pending || pagerAt) return;
+      setSearch({ draft: cmd });
+      setCmd("");
+      return;
+    }
+    // Stash the line, or restore it onto the next empty one.
+    if (event.ctrlKey && event.key === "s") {
+      event.preventDefault();
+      if (cmd) {
+        stash.current = cmd;
+        setCmd("");
+      } else if (stash.current) {
+        setCmd(stash.current);
+        stash.current = "";
+      }
+      return;
+    }
+    // Idle ^C clears the line, the way it does in every readline shell. A
+    // running command is interrupted by the window handler instead.
+    if (event.ctrlKey && (event.key === "c" || event.key === "C")) {
+      if (cmd) {
+        event.preventDefault();
+        setCmd("");
+      }
+      return;
+    }
     if (event.key === "Tab") {
       event.preventDefault();
-      // Already cycling: TAB steps on, Shift+TAB steps back.
-      if (cycle.current) {
-        const { items } = cycle.current;
-        const at =
-          (cycle.current.at + (event.shiftKey ? -1 : 1) + items.length) %
-          items.length;
-        cycle.current = { items, at };
-        setCmd(items[at]);
-        return;
-      }
       if (event.shiftKey) return;
-      // Verbs and subcommands first — they come from the static tables and are
-      // unambiguous when they match at all.
+      // A single unambiguous verb completes at once, with no menu —
+      // `quit` never needed a panel. Anything richer lists above.
       const completed = completeCommand(cmd);
       if (completed) {
         setCmd(completed);
         return;
       }
-      // Then the data. This one waits on a listing, because completing against
-      // what is really at this location means having read it — the same
-      // listing `ls` reads, through the same cache, so the first TAB in a
-      // directory costs one request and every TAB after it costs nothing.
-      const typed = cmd;
+      if (!cmd.trim()) return;
+      const value = cmd;
+      // Same rows the typing effect would list: verbs while the verb is
+      // still being named, values once it is complete — never the verb over
+      // its own arguments.
+      const commandRows = /\s/.test(value)
+        ? []
+        : matchCommands(value)
+            .slice(0, MENU_ROWS)
+            .map((spec) => ({
+              label: spec.name,
+              detail: spec.summary,
+              apply: `${spec.name} `,
+            }));
+      const finish = (extra: { label: string; detail: string; apply: string }[]) => {
+        if (!active.current || inputRef.current?.value !== value) return;
+        const rows = [...commandRows, ...extra].slice(0, MENU_ROWS);
+        if (!rows.length) return;
+        setMenu({ rows, at: -1, hint: "tab accepts · ↑↓ move · esc closes" });
+      };
+      const toRow = (item: string) => {
+        const cut = item.indexOf(" ");
+        return {
+          label: cut === -1 ? item : item.slice(cut + 1),
+          detail: "match",
+          apply: item,
+        };
+      };
+      if (!/\s/.test(value)) {
+        // Still naming the verb: answer at once, no waiting on values.
+        if (!commandRows.length) return;
+        finish([]);
+        return;
+      }
+      // Past the verb: the values are the whole menu.
       void (async () => {
-        const items = await completeArgument(typed, location);
-        // The line moved on while the listing was in flight: completing it now
-        // would overwrite what was typed in the meantime.
-        if (!active.current || inputRef.current?.value !== typed) return;
-        if (!items.length) return;
-        if (items.length === 1) {
-          setCmd(items[0]);
-          return;
-        }
-        // More than one. A shell prints the candidates and leaves the line for
-        // you to keep typing or to TAB through — so they go into the buffer as
-        // output, not into a list of things to click.
-        pushEntry({ text: typed, kind: "cmd", path: displayPath(location) });
-        append(items.map(candidateOf).join("   "), "dim");
-        cycle.current = { items, at: 0 };
-        setCmd(items[0]);
+        const items = await completeArgument(value, location);
+        finish(items.slice(0, MENU_ROWS).map(toRow));
       })();
+      return;
+    }
+    // `?` on an empty line opens the shortcut panel instead of typing.
+    if (event.key === "?" && !cmd) {
+      event.preventDefault();
+      setKeysOpen(true);
       return;
     }
     if (event.key === "ArrowUp") {
@@ -806,11 +1079,16 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     busy,
     status,
     pending,
+    selecting,
+    menu,
+    searchActive: search !== null,
+    keysOpen,
     /** Non-null while `less` is paging: how far through the text the reader is,
      *  for the renderer to draw the theme's `--More--` line. */
     pagerAt,
     execute,
     answer,
+    acceptSelect,
     cancel,
     onKeyDown,
     inputRef,

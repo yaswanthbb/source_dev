@@ -39,7 +39,7 @@ const loaded = new Map();
  *  layer, which is worth noticing rather than resolving silently. */
 const EXTERNAL = {
   "@/lib/api-client": {
-    default: { get: catalogOrFail, post: fail, patch: fail },
+    default: { get: catalogOrFail, post: attemptOrFail, patch: fail },
   },
   "@/lib/image": {
     AVATAR_ACCEPT: "image/*",
@@ -78,10 +78,61 @@ const CATALOGUE = {
       answers: [],
     },
   ],
+  "/concepts/c1/questions": [
+    {
+      id: "q1",
+      questionText: "What does SIP set up?",
+      orderIndex: 0,
+      options: [
+        { id: "o1", optionText: "The call", orderIndex: 0 },
+        { id: "o2", optionText: "The billing", orderIndex: 1 },
+      ],
+    },
+  ],
+  "/concepts/c1/quiz-status": () =>
+    ++quizStatusCalls > 1
+      ? {
+          totalQuestions: 1,
+          allQuestionsResolved: true,
+          questions: [
+            {
+              questionId: "q1",
+              attemptsRemaining: 2,
+              isCorrect: true,
+              isResolved: true,
+              correctOptionId: "o1",
+            },
+          ],
+        }
+      : {
+          totalQuestions: 1,
+          allQuestionsResolved: false,
+          questions: [
+            {
+              questionId: "q1",
+              attemptsRemaining: 3,
+              isCorrect: false,
+              isResolved: false,
+            },
+          ],
+        },
 };
 
-function catalogOrFail(url) {
-  if (url in CATALOGUE) return { data: CATALOGUE[url] };
+let quizStatusCalls = 0;
+
+async function catalogOrFail(url) {
+  if (url in CATALOGUE) {
+    const value = CATALOGUE[url];
+    return { data: typeof value === "function" ? value() : value };
+  }
+  return fail();
+}
+
+async function attemptOrFail(url) {
+  if (url === "/questions/q1/attempt")
+    return {
+      data: { isCorrect: true, attemptsRemaining: 2, correctOptionId: "o1" },
+    };
   return fail();
 }
 
@@ -394,11 +445,13 @@ test("the learn group is exactly what survived", () => {
   assert.deepEqual(learn.sort(), [
     "complete",
     "continue",
+    "heatmap",
     "jump",
     "qa",
     "quiz",
     "review",
     "status",
+    "today",
   ]);
 });
 
@@ -436,6 +489,7 @@ test("bare quiz and complete with no lesson on screen print usage", async () => 
 });
 
 test("a bare verb reaches for the lesson on screen instead of usage", async () => {
+  quizStatusCalls = 0;
   commands.setCurrentConcept({ id: "c1", title: "What is VoIP" });
   try {
     for (const verb of ["quiz", "complete"]) {
@@ -588,4 +642,80 @@ test("cold commands close with a brief", async () => {
   const tz = recorder();
   await runCommand("timezone", ctx(tz.io));
   assert.match(text(tz.lines), /Change it with timezone/);
+});
+
+test("quiz answers through the arrow-key picker", async () => {
+  // A host with `select` never sees the numbered list or the ask loop: one
+  // call, one index back, and the attempt runs exactly as a typed answer.
+  // The status stub answers unresolved-then-resolved per run, so reset it:
+  // an earlier test already spent this run's unresolved round.
+  quizStatusCalls = 0;
+  commands.setCurrentConcept({ id: "c1", title: "What is VoIP" });
+  try {
+    const lines = [];
+    const seen = [];
+    await runCommand("quiz", {
+      io: {
+        print: (text, kind, actions) => lines.push({ text, kind, actions }),
+        ask: () => {
+          throw new Error("must use select");
+        },
+        pickFile: () => {
+          throw new Error("no picker here");
+        },
+        clear: () => {},
+        close: () => {},
+        select: async (prompt, rows) => {
+          seen.push({ prompt, rows });
+          return 0;
+        },
+      },
+      cwd: { kind: "root" },
+      setCwd: () => {},
+      refreshUser: async () => {},
+      isDark: true,
+      setTheme: () => {},
+      logout: () => {},
+    });
+    assert.equal(seen.length, 1);
+    assert.deepEqual(seen[0].rows, [
+      "The call",
+      "The billing",
+      "skip this question",
+      "stop for now",
+    ]);
+    const printed = lines.map((l) => l.text).join("\n");
+    assert.match(printed, /\[OK\] Correct\./);
+    assert.match(printed, /mastered/);
+  } finally {
+    commands.clearCurrentConcept();
+  }
+});
+
+test("today and heatmap document themselves like every command", async () => {
+  for (const name of ["today", "heatmap"]) {
+    const host = recorder();
+    await runCommand(`${name} --help`, ctx(host.io));
+    assert.match(text(host.lines), /^Usage: /);
+  }
+});
+
+test("TAB never offers what the verb cannot take", () => {
+  // `cd` descends: lessons are not candidates at any position, so accepting
+  // one can never walk into `Not a directory`.
+  assert.equal(commands.completableKind("cd", "roadmap", true), true);
+  assert.equal(commands.completableKind("cd", "module", true), true);
+  assert.equal(commands.completableKind("cd", "concept", true), false);
+  assert.equal(commands.completableKind("cd", "concept", false), false);
+  // `cat` and friends print lessons: a bare name where directories live
+  // would end in `Is a directory`. Mid-path segments still pass through.
+  for (const verb of ["cat", "less", "quiz", "complete"]) {
+    assert.equal(commands.completableKind(verb, "concept", true), true);
+    assert.equal(commands.completableKind(verb, "module", true), false);
+    assert.equal(commands.completableKind(verb, "roadmap", true), false);
+    assert.equal(commands.completableKind(verb, "module", false), true);
+  }
+  // `ls` keeps completing everything, files included.
+  assert.equal(commands.completableKind("ls", "concept", true), true);
+  assert.equal(commands.completableKind("ls", "roadmap", true), true);
 });

@@ -153,6 +153,37 @@ function next(ctx: CommandCtx, actions: TerminalAction[], lead = "→") {
   ctx.io.print(lead, "dim", actions);
 }
 
+/** Choose one row: arrow keys where the host offers them, a typed number or
+ *  word everywhere else. Returns the picked row index. `aliases` names the
+ *  words that pick each row — `skip`, `ai` — so typing keeps working where
+ *  digits were never the interface. Esc aborts the command: the rejection
+ *  carries `CommandAborted`, so callers never handle "no choice" as one. */
+async function pickRow(
+  ctx: CommandCtx,
+  prompt: string,
+  rows: string[],
+  aliases: string[][] = [],
+): Promise<number> {
+  if (ctx.io.select) return ctx.io.select(prompt, rows);
+  rows.forEach((row, i) => ctx.io.print(`  ${i + 1}. ${row}`));
+  for (;;) {
+    const reply = (
+      await ctx.io.ask(`${prompt} — answer 1–${rows.length}`)
+    ).trim();
+    if (/^\d+$/.test(reply)) {
+      const at = Number(reply) - 1;
+      if (at >= 0 && at < rows.length) return at;
+    } else {
+      const word = reply.toLowerCase();
+      const hit = aliases.findIndex((names) =>
+        names.some((name) => name.toLowerCase() === word),
+      );
+      if (hit !== -1) return hit;
+    }
+    ctx.io.print(`Enter a number from 1 to ${rows.length}.`, "err");
+  }
+}
+
 /** Flow a markdown body as terminal text. Falls back to printing it raw when
  *  the host has no markdown renderer, which is what the dashboard's one-line
  *  prompt does. */
@@ -550,47 +581,25 @@ const quiz: CommandSpec = {
         continue;
       }
 
-      options.forEach((o, i) => ctx.io.print(`  ${i + 1}. ${o.optionText}`));
       let remaining = known?.attemptsRemaining ?? 3;
 
       while (remaining > 0) {
-        // The options are already on screen above, so the prompt offers only
-        // the two ways out of the question — listing them again here is what
-        // printed every answer twice.
-        const reply = (
-          await ctx.io.ask(
-            `Choose 1–${options.length} · ${plural(remaining, "attempt")} left`,
-            {
-              choices: [
-                { value: "skip", label: "[skip this question]" },
-                { value: "stop", label: "[stop for now]" },
-              ],
-            },
-          )
-        )
-          .trim()
-          .toLowerCase();
-
-        if (reply === "stop") {
+        // One call for both hosts: arrows where they exist, a numbered list
+        // everywhere else. The two escapes ride along as rows so the words
+        // keep working too — `skip` is still `skip`.
+        const at = await pickRow(
+          ctx,
+          `Choose · ${plural(remaining, "attempt")} left`,
+          [...options.map((o) => o.optionText), "skip this question", "stop for now"],
+          [...options.map(() => [] as string[]), ["skip"], ["stop"]],
+        );
+        if (at === options.length + 1) {
           stopped = true;
           break;
         }
-        if (reply === "skip") break;
+        if (at === options.length) break;
 
-        const picked = Number(reply) - 1;
-        if (
-          !/^\d+$/.test(reply) ||
-          !Number.isInteger(picked) ||
-          picked < 0 ||
-          picked >= options.length
-        ) {
-          ctx.io.print(
-            `Enter a number from 1 to ${options.length}, or choose skip or stop.`,
-            "err",
-          );
-          continue;
-        }
-
+        const picked = at;
         const { data: result } = await api.post<AttemptResult>(
           `/questions/${encodeURIComponent(question.id)}/attempt`,
           { selectedOptionId: options[picked].id },
@@ -838,25 +847,13 @@ const review: CommandSpec = {
         `[${answered + 1}/${items.length}] ${item.question.conceptTitle} — ${item.question.questionText}`,
         "head",
       );
-      options.forEach((o, i) => ctx.io.print(`  ${i + 1}. ${o.optionText}`));
-      let selected: number;
-      for (;;) {
-        // Same rule as the quiz: the options are printed above, so the prompt
-        // adds nothing but the answer itself.
-        const answer = (await ctx.io.ask(`Choose 1–${options.length}`)).trim();
-        selected = Number(answer) - 1;
-        if (
-          /^\d+$/.test(answer) &&
-          Number.isInteger(selected) &&
-          selected >= 0 &&
-          selected < options.length
-        )
-          break;
-        ctx.io.print(
-          `Enter a number from 1 to ${options.length}, or press Escape to stop.`,
-          "err",
-        );
-      }
+      // Arrows where they exist; pickRow prints the numbered list for the
+      // fallback. Esc stops the session, exactly as it always has.
+      const selected = await pickRow(
+        ctx,
+        "Choose",
+        options.map((o) => o.optionText),
+      );
       const { data: result } = await api.post<ReviewResult>(
         `/review/${encodeURIComponent(item.id)}/answer`,
         { selectedOptionId: options[selected].id },
@@ -1069,22 +1066,13 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
   // Only two answers mean anything here, so only two are accepted. Anything
   // else re-asks: routing an unrecognised reply to the AI would spend one of
   // a shared daily quota on a question nobody aimed anywhere.
-  let to: "ai" | "instructor" | undefined;
-  while (!to) {
-    const target = (
-      await ctx.io.ask("Who should answer?", {
-        choices: [
-          { value: "ai", label: "[ai] instant explanation" },
-          { value: "instructor", label: "[instructor] replies on the board" },
-        ],
-      })
-    )
-      .trim()
-      .toLowerCase();
-    if (target === "ai") to = "ai";
-    else if (target === "instructor") to = "instructor";
-    else ctx.io.print('invalid: enter "ai" or "instructor"', "err");
-  }
+  const at = await pickRow(
+    ctx,
+    "Who should answer?",
+    ["ai · instant explanation", "instructor · replies on the board"],
+    [["ai"], ["instructor"]],
+  );
+  const to = at === 0 ? "ai" : "instructor";
 
   // Checked here, before the request: an AI generation is metered, so a blank
   // or one-word question must never cost one.
@@ -1341,6 +1329,216 @@ const status: CommandSpec = {
   },
 };
 
+const today: CommandSpec = {
+  name: "today",
+  usage: "today",
+  help: {
+    usage: "today",
+    description: [
+      "The morning briefing: greeting, streak and XP, reviews due, the",
+      "next unlocked lesson, and the last seven days as one sparkline.",
+      "Read-only — nothing here answers, completes or reschedules anything.",
+    ],
+    examples: ["today", "continue", "heatmap"],
+  },
+  summary: "your briefing: streak, reviews, and what's next",
+  group: "learn",
+  run: async (ctx) => {
+    const hour = new Date().getHours();
+    const part = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+    const date = new Date().toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
+
+    // One round of requests, all independent. A probe that fails reads as
+    // unknown and its row is skipped — a briefing that refuses to print
+    // because one number was unavailable helps nobody.
+    const [stats, due, week, all, recent] = await Promise.all([
+      api
+        .get<{ totalXp: number; currentStreak: number }>("/gamification/me")
+        .then((r) => r.data)
+        .catch(() => undefined),
+      api
+        .get<{ count?: number; dueCount?: number }>("/review/due-count")
+        .then((r) => r.data.dueCount ?? r.data.count ?? 0)
+        .catch(() => undefined),
+      api
+        .get<Array<{ date: string; active: boolean; xp: number }>>(
+          "/gamification/activity?days=7",
+        )
+        .then((r) => r.data)
+        .catch(() => undefined),
+      catalog().catch(() => [] as Roadmap[]),
+      api.get<Progress[]>("/progress/me").then((r) => r.data).catch(() => []),
+    ]);
+
+    heading(ctx, `today / ${date}`);
+    const name = ctx.user?.name?.split(" ")[0];
+    ctx.io.print(
+      `Good ${part}${name ? `, ${name}` : ""}. Here's the shape of it.`,
+      "dim",
+    );
+
+    if (stats) {
+      entry(
+        ctx,
+        stats.currentStreak > 0 ? "[STREAK]" : "[REST]",
+        `${plural(stats.currentStreak, "day")} running · ${stats.totalXp} XP banked`,
+      );
+    }
+    if (due !== undefined) {
+      entry(
+        ctx,
+        due ? "[DUE]" : "[CLEAR]",
+        due
+          ? `${plural(due, "review")} ready to answer`
+          : "nothing due — your recall is up to date",
+      );
+    }
+    if (week?.length) {
+      const peak = Math.max(1, ...week.map((d) => d.xp));
+      const cells = " .:-=#";
+      const spark = week
+        .map((d) => cells[Math.min(4, Math.round((d.xp / peak) * 4))])
+        .join("");
+      detail(ctx, `week  ${spark}   oldest → today`);
+    }
+
+    // The next lesson, by the same rule `continue` walks — read here, opened
+    // there. `today` never opens anything itself.
+    let following: { label: string; command: string } | undefined;
+    if (all.length) {
+      const results = await Promise.allSettled(all.map((r) => progressFor(r.id)));
+      const available = results.flatMap((r) =>
+        r.status === "fulfilled" ? (r.value.concepts ?? []) : [],
+      );
+      const inProgress = recent
+        .filter((p) => p.status === "in_progress")
+        .sort(
+          (a, b) =>
+            Date.parse(b.updatedAt || b.createdAt) -
+            Date.parse(a.updatedAt || a.createdAt),
+        );
+      const latest = inProgress
+        .map((p) =>
+          available.find((c) => c.conceptId === p.conceptId && unlocked(c)),
+        )
+        .find(Boolean);
+      const upcoming = latest ?? nextConcept(available);
+      if (upcoming) {
+        const roadmap = all.find((r) =>
+          results.some(
+            (res, i) =>
+              res.status === "fulfilled" &&
+              all[i].id === r.id &&
+              (res.value.concepts ?? []).some(
+                (c) => c.conceptId === upcoming.conceptId,
+              ),
+          ),
+        );
+        entry(
+          ctx,
+          "[NEXT]",
+          `${upcoming.conceptTitle ?? "your lesson"}${roadmap ? ` — ${roadmap.title}` : ""}`,
+        );
+        following = { label: "continue", command: "continue" };
+      }
+    }
+
+    next(ctx, [
+      ...(following ? [following] : []),
+      ...(due ? [{ label: "review start", command: "review start" }] : []),
+      { label: "heatmap", command: "heatmap" },
+    ]);
+  },
+};
+
+const heatmap: CommandSpec = {
+  name: "heatmap",
+  usage: "heatmap [days]",
+  help: {
+    usage: "heatmap [days]",
+    description: [
+      "Draw the contribution graph as text: one column per week, seven rows",
+      "Monday to Sunday, darker cells for bigger XP days. Same data as the",
+      "dashboard graph, counted in your own timezone.",
+    ],
+    args: [
+      { name: "[days]", text: "How many days back, 7 to 371; twelve weeks when omitted" },
+    ],
+    examples: ["heatmap", "heatmap 30", "heatmap 365"],
+  },
+  summary: "draw your activity graph as text",
+  group: "learn",
+  run: async (ctx) => {
+    let days = 84;
+    if (ctx.args[0] !== undefined) {
+      const count = Number(ctx.args[0]);
+      if (!Number.isInteger(count) || count < 1 || count > 371) {
+        ctx.io.print("heatmap: days must be a whole number from 1 to 371", "err");
+        return;
+      }
+      days = count;
+    }
+
+    let data: Array<{ date: string; active: boolean; xp: number }>;
+    try {
+      ({ data } = await api.get<Array<{ date: string; active: boolean; xp: number }>>(
+        `/gamification/activity?days=${days}`,
+      ));
+    } catch (e) {
+      ctx.io.print(
+        `heatmap: ${e instanceof Error ? e.message : "request failed"}`,
+        "err",
+      );
+      return;
+    }
+    if (!data.length) {
+      stuck(
+        ctx.io,
+        "No days came back.",
+        "Try again in a moment, or start the streak with {continue}.",
+      );
+      return;
+    }
+
+    const peak = Math.max(0, ...data.map((d) => d.xp));
+    const cell = (xp: number) => {
+      if (xp <= 0) return "·";
+      if (peak <= 0) return ":";
+      if (xp < peak / 3) return ":";
+      return xp < (peak * 2) / 3 ? "+" : "#";
+    };
+    const total = data.reduce((sum, d) => sum + d.xp, 0);
+    const active = data.filter((d) => d.active).length;
+
+    heading(
+      ctx,
+      `activity / last ${data.length} days · ${active} active · ${total} XP`,
+    );
+    // Columns are weeks, rows Monday to Sunday: pad the head so the first
+    // column starts on Monday, the way wall calendars read.
+    const lead = (new Date(`${data[0].date}T00:00:00Z`).getUTCDay() + 6) % 7;
+    const padded: Array<{ xp: number } | null> = [
+      ...Array<null>(lead).fill(null),
+      ...data,
+    ];
+    const names = ["M", " ", "W", " ", "F", " ", " "];
+    for (let row = 0; row < 7; row += 1) {
+      let line = `${names[row]} `;
+      for (let col = row; col < padded.length; col += 7) {
+        const day = padded[col];
+        line += day ? cell(day.xp) : " ";
+      }
+      ctx.io.print(line);
+    }
+    ctx.io.print("  · none   : some   + solid   # peak", "dim");
+    next(ctx, [{ label: "continue", command: "continue" }]);
+  },
+};
+
 export const LEARNING_COMMANDS: CommandSpec[] = [
   continueLearning,
   jump,
@@ -1349,6 +1547,8 @@ export const LEARNING_COMMANDS: CommandSpec[] = [
   review,
   qa,
   status,
+  today,
+  heatmap,
   {
     name: "dashboard",
     usage: "dashboard",

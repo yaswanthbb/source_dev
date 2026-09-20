@@ -704,6 +704,53 @@
     padding-left: 12px;
   }
 }
+/* ─── Suggestion menu, choice panel, shortcut panel ───────────────────────
+   Floating rows above the prompt. Text throughout: accepting a row types it,
+   so there is nothing to click and no button styling to keep honest. The
+   cursor row inverts, the way a focused menu item does everywhere. */
+.sd-menu {
+  margin: 10px 0 0;
+  padding: 6px 0;
+  border: 1px solid var(--term-line);
+  background: var(--term-panel);
+  box-shadow: 3px 3px 0 var(--term-shadow);
+  max-height: 12.5em;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.sd-menu .sd-line {
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sd-menu .sd-line[data-active] {
+  background: var(--term-head);
+  color: var(--term-ink);
+}
+.sd-menu-cursor {
+  color: var(--term-accent);
+  font-weight: 700;
+}
+.sd-menu-detail {
+  color: var(--term-dim);
+}
+/* ─── Code tokens ─────────────────────────────────────────────────────────
+   A small highlighter for fenced blocks: keywords carry the accent, strings
+   the second hue, comments recede. Four hues total — anything more reads as
+   decoration rather than structure. */
+.sd-tok-kw {
+  color: var(--term-accent);
+}
+.sd-tok-str {
+  color: var(--term-alert);
+}
+.sd-tok-com {
+  color: var(--term-faint);
+}
+.sd-tok-num {
+  color: var(--term-ink);
+}
 @media (prefers-reduced-motion: reduce) {
   .sd-terminal-theme *,
   .sd-terminal-theme *::before,
