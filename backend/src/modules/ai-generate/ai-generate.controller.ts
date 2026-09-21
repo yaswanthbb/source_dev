@@ -35,7 +35,7 @@ import { AiGenerationJob } from './entities/ai-generation-job.entity';
 @ApiTags('AI Generate')
 @ApiBearerAuth('bearer-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+@Roles(UserRole.DEVELOPER, UserRole.ADMIN)
 @Controller('ai-generate')
 export class AiGenerateController {
   constructor(private readonly aiGenerateService: AiGenerateService) {}
@@ -43,7 +43,7 @@ export class AiGenerateController {
   @Get('quota')
   @ApiOperation({
     summary:
-      'Get the remaining daily AI generation quota for the authenticated instructor/admin',
+      'Get the remaining daily AI generation quota for the authenticated developer/admin',
   })
   @ApiResponse({
     status: 200,
@@ -64,7 +64,7 @@ export class AiGenerateController {
   @Get('jobs/active')
   @ApiOperation({
     summary:
-      'List all pending/running AI generation jobs for the current instructor',
+      'List all pending/running AI generation jobs for the current developer',
   })
   @ApiResponse({
     status: 200,

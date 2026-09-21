@@ -10,7 +10,6 @@ dotenv.config({ path: process.env.ENV_FILE_PATH || '.env' });
 
 
 import { User } from '../modules/users/entities/user.entity';
-import { InstructorProfile } from '../modules/users/entities/instructor-profile.entity';
 import { Roadmap } from '../modules/content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../modules/content/entities/module.entity';
 import { Concept } from '../modules/content/entities/concept.entity';
@@ -36,7 +35,6 @@ import { PasswordResetOtp } from '../modules/auth/entities/password-reset-otp.en
 
 export const entities = [
   User,
-  InstructorProfile,
   AccountDeletionRequest,
   Roadmap,
   ModuleEntity,

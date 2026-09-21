@@ -23,7 +23,6 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { User } from './entities/user.entity';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { UpdateInstructorBioDto } from './dto/update-instructor-bio.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { RequestDeletionDto } from './dto/request-deletion.dto';
 
@@ -36,8 +35,7 @@ export class UsersController {
 
   @Get('me')
   @ApiOperation({
-    summary:
-      'Get current user profile (includes instructorProfile if applicable)',
+    summary: 'Get current user profile',
   })
   @ApiResponse({ status: 200, description: 'Profile retrieved successfully.' })
   async getSelfProfile(@CurrentUser() user: User) {
@@ -67,41 +65,6 @@ export class UsersController {
     return this.usersService.changePassword(user.id, dto);
   }
 
-  @Patch('me/instructor-bio')
-  @ApiOperation({
-    summary: 'Update instructor biography (instructors/admins only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Instructor bio updated successfully.',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Only instructors/admins can update bio.',
-  })
-  async updateInstructorBio(
-    @CurrentUser() user: User,
-    @Body() dto: UpdateInstructorBioDto,
-  ) {
-    return this.usersService.updateInstructorBio(user.id, dto);
-  }
-
-
-  @Get('instructor-applications')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({
-    summary:
-      'List all instructor applicants and approved instructors (Admin only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Instructor applications and approved instructors retrieved.',
-  })
-  @ApiResponse({ status: 403, description: 'Forbidden (Admin role required).' })
-  async getInstructorApplications() {
-    return this.usersService.getAllInstructorsAndApplicants();
-  }
-
   @Get()
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'List and filter users (Admin only)' })
@@ -109,75 +72,6 @@ export class UsersController {
   @ApiResponse({ status: 403, description: 'Forbidden (Admin role required).' })
   async findUsers(@Query() query: GetUsersQueryDto) {
     return this.usersService.findUsers(query);
-  }
-
-  @Patch(':id/promote-to-instructor')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({
-    summary: 'Directly promote a user to instructor role (Admin only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User promoted directly to instructor with approved status.',
-  })
-  async promoteToInstructor(
-    @Param('id') id: string,
-    @CurrentUser() adminUser: User,
-  ) {
-    return this.usersService.promoteToInstructor(id, adminUser.id);
-  }
-
-  @Patch(':id/demote-to-student')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({
-    summary: 'Demote/degrade an instructor back to student role (Admin only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User degraded to student role.',
-  })
-  async demoteToStudent(@Param('id') id: string) {
-    return this.usersService.demoteToStudent(id);
-  }
-
-  @Patch(':id/degrade-to-student')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({
-    summary: 'Alias for degrading an instructor to student role (Admin only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User degraded to student role.',
-  })
-  async degradeToStudent(@Param('id') id: string) {
-    return this.usersService.demoteToStudent(id);
-  }
-
-  @Patch(':id/approve-instructor')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({
-    summary:
-      'Approve a pending instructor application and set role to instructor (Admin only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Instructor application approved and role updated.',
-  })
-  async approveInstructor(@Param('id') id: string) {
-    return this.usersService.approveInstructor(id);
-  }
-
-  @Patch(':id/reject-instructor')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({
-    summary: 'Reject a pending instructor application (Admin only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Instructor application rejected.',
-  })
-  async rejectInstructor(@Param('id') id: string) {
-    return this.usersService.rejectInstructor(id);
   }
 
   @Post('request-deletion')

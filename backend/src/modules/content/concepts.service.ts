@@ -8,9 +8,7 @@ import { Repository, ILike, FindOptionsWhere } from 'typeorm';
 
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
 import { slugify } from '../../common/utils/slugify.util';
 import { hasSignificantContentChange } from '../../common/utils/content-diff.util';
@@ -25,29 +23,16 @@ export class ConceptsService {
     private readonly conceptRepository: Repository<Concept>,
     @InjectRepository(ModuleConcept)
     private readonly moduleConceptRepository: Repository<ModuleConcept>,
-    @InjectRepository(InstructorProfile)
-    private readonly instructorProfileRepository: Repository<InstructorProfile>,
   ) {}
 
-  async checkApprovedContentCreator(
+  async checkContentCreator(
     user: Omit<User, 'passwordHash'>,
   ): Promise<void> {
-    if (user.role === UserRole.ADMIN) {
-      return;
-    }
-    if (user.role === UserRole.INSTRUCTOR) {
-      const profile = await this.instructorProfileRepository.findOne({
-        where: { userId: user.id },
-      });
-      if (!profile || profile.status !== InstructorStatus.APPROVED) {
-        throw new ForbiddenException(
-          'Approved instructor or admin access required to create content',
-        );
-      }
+    if (user.role === UserRole.ADMIN || user.role === UserRole.DEVELOPER) {
       return;
     }
     throw new ForbiddenException(
-      'Approved instructor or admin access required to create content',
+      'Developer or admin access required to create content',
     );
   }
 
@@ -80,7 +65,7 @@ export class ConceptsService {
     user: Omit<User, 'passwordHash'>,
     dto: CreateConceptDto,
   ): Promise<Concept> {
-    await this.checkApprovedContentCreator(user);
+    await this.checkContentCreator(user);
     const slug = await this.generateUniqueConceptSlug(dto.title);
     const concept = this.conceptRepository.create({
       title: dto.title,
@@ -101,25 +86,37 @@ export class ConceptsService {
     search?: string,
     user?: User | Omit<User, 'passwordHash'>,
   ): Promise<Concept[]> {
-    const isStudent = user && user.role === UserRole.STUDENT;
+    // Visibility gating (§1 interim, full rules land in §2/§3): admins see
+    // everything; developers see approved concepts plus their own drafts;
+    // unauthenticated callers see approved concepts only.
+    const isAdmin = user && user.role === UserRole.ADMIN;
 
-    if (search) {
-      const whereCondition: FindOptionsWhere<Concept> = {
-        title: ILike(`%${search}%`),
-      };
-      if (isStudent) {
-        whereCondition.reviewStatus = ConceptReviewStatus.APPROVED;
+    if (isAdmin) {
+      if (search) {
+        return this.conceptRepository.find({
+          where: { title: ILike(`%${search}%`) },
+        });
       }
-      return this.conceptRepository.find({ where: whereCondition });
+      return this.conceptRepository.find();
     }
 
-    if (isStudent) {
+    const visibleWhere: FindOptionsWhere<Concept>[] = [
+      { reviewStatus: ConceptReviewStatus.APPROVED },
+    ];
+    if (user) {
+      visibleWhere.push({ authorId: user.id });
+    }
+
+    if (search) {
       return this.conceptRepository.find({
-        where: { reviewStatus: ConceptReviewStatus.APPROVED },
+        where: visibleWhere.map((w) => ({
+          ...w,
+          title: ILike(`%${search}%`),
+        })),
       });
     }
 
-    return this.conceptRepository.find();
+    return this.conceptRepository.find({ where: visibleWhere });
   }
 
   async findConceptById(
@@ -133,9 +130,12 @@ export class ConceptsService {
       throw new NotFoundException('Concept not found');
     }
 
-    // Visibility gating: unapproved concepts are hidden from students
-    const isStudent = user && user.role === UserRole.STUDENT;
-    if (isStudent && concept.reviewStatus !== ConceptReviewStatus.APPROVED) {
+    // Visibility gating: unapproved concepts are hidden from everyone
+    // except admins and the concept's own author.
+    const isAdmin = user && user.role === UserRole.ADMIN;
+    const isAuthor =
+      user && concept.authorId !== null && concept.authorId === user.id;
+    if (!isAdmin && !isAuthor && concept.reviewStatus !== ConceptReviewStatus.APPROVED) {
       throw new NotFoundException('Concept not found');
     }
 

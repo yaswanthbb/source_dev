@@ -8,9 +8,8 @@ import { Repository } from 'typeorm';
 import { Question } from './entities/question.entity';
 import { Answer } from './entities/answer.entity';
 import { Concept } from '../content/entities/concept.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
+import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
 import { User } from '../users/entities/user.entity';
 import { AiGenerateService } from '../ai-generate/ai-generate.service';
 import { CreateQaQuestionDto } from './dto/create-qa-question.dto';
@@ -27,29 +26,8 @@ export class QaService {
     private readonly answerRepository: Repository<Answer>,
     @InjectRepository(Concept)
     private readonly conceptRepository: Repository<Concept>,
-    @InjectRepository(InstructorProfile)
-    private readonly instructorProfileRepository: Repository<InstructorProfile>,
     private readonly aiGenerateService: AiGenerateService,
   ) {}
-
-  private async checkApprovedContentCreator(
-    user: Omit<User, 'passwordHash'>,
-  ): Promise<void> {
-    if (user.role === UserRole.ADMIN) {
-      return;
-    }
-    if (user.role === UserRole.INSTRUCTOR) {
-      const profile = await this.instructorProfileRepository.findOne({
-        where: { userId: user.id },
-      });
-      if (profile && profile.status === InstructorStatus.APPROVED) {
-        return;
-      }
-    }
-    throw new ForbiddenException(
-      'Only approved instructors or admins can post answers',
-    );
-  }
 
   private checkOwnership(
     ownerId: string | null | undefined,
@@ -66,6 +44,46 @@ export class QaService {
     );
   }
 
+  /**
+   * Discussion visibility mirrors concept visibility: if you cannot see the
+   * concept ( someone else's pending draft ), you cannot list, ask, or answer
+   * on it either. 404 (not 403) so pending drafts are not leaked.
+   */
+  private checkConceptVisible(
+    concept: Concept,
+    user: Omit<User, 'passwordHash'>,
+  ): void {
+    if (concept.reviewStatus === ConceptReviewStatus.APPROVED) return;
+    if (user.role === UserRole.ADMIN) return;
+    if (concept.authorId !== null && concept.authorId === user.id) return;
+    throw new NotFoundException('Concept not found');
+  }
+
+  /**
+   * Only the concept's author or an admin may (un)verify answers. Legacy
+   * concepts with no author fall back to admin-only.
+   */
+  private async checkVerifier(
+    conceptId: string,
+    user: Omit<User, 'passwordHash'>,
+  ): Promise<void> {
+    if (user.role === UserRole.ADMIN) {
+      return;
+    }
+    const concept = await this.conceptRepository.findOne({
+      where: { id: conceptId },
+    });
+    if (
+      !concept ||
+      concept.authorId === null ||
+      concept.authorId !== user.id
+    ) {
+      throw new ForbiddenException(
+        'Only the concept author or an admin can verify answers',
+      );
+    }
+  }
+
   async createQuestion(
     conceptId: string,
     user: Omit<User, 'passwordHash'>,
@@ -77,15 +95,17 @@ export class QaService {
     if (!concept) {
       throw new NotFoundException('Concept not found');
     }
+    this.checkConceptVisible(concept, user);
 
     const question = this.questionRepository.create({
       conceptId,
-      studentId: user.id,
+      askerId: user.id,
       body: dto.body,
     });
     const savedQuestion = await this.questionRepository.save(question);
 
-    // If student requested "Ask AI", generate and attach AI answer immediately
+    // "Ask AI" is private: the generated answer is visible only to the asking
+    // developer (see getQuestionsForConcept), never in the public discussion.
     if (dto.target === 'ai') {
       const aiAnswerText = await this.aiGenerateService.generateQaAnswer(
         concept.title,
@@ -96,7 +116,7 @@ export class QaService {
 
       const aiAnswer = this.answerRepository.create({
         questionId: savedQuestion.id,
-        instructorId: null,
+        responderId: null,
         body: aiAnswerText,
         isAiAnswer: true,
       });
@@ -108,41 +128,62 @@ export class QaService {
     return savedQuestion;
   }
 
-  async getQuestionsForConcept(conceptId: string): Promise<any[]> {
+  async getQuestionsForConcept(
+    conceptId: string,
+    user?: Omit<User, 'passwordHash'> | User,
+  ): Promise<any[]> {
     const concept = await this.conceptRepository.findOne({
       where: { id: conceptId },
     });
     if (!concept) {
       throw new NotFoundException('Concept not found');
     }
+    if (user) {
+      this.checkConceptVisible(concept, user);
+    }
 
     const questions = await this.questionRepository.find({
       where: { conceptId },
-      relations: ['student', 'answers', 'answers.instructor'],
+      relations: ['asker', 'answers', 'answers.responder'],
       order: { createdAt: 'ASC' },
     });
 
+    // AI answers are private to the developer who asked (admins excepted).
+    // Everyone else sees only the human discussion.
+    const canSeeAiAnswer = (q: Question): boolean => {
+      if (!user) return false;
+      if (user.role === UserRole.ADMIN) return true;
+      return q.askerId === user.id;
+    };
+
     return questions.map((q) => {
-      const sortedAnswers = (q.answers || []).sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      const visibleAnswers = (q.answers || []).filter(
+        (a) => !a.isAiAnswer || canSeeAiAnswer(q),
+      );
+      // Verified answers first, then oldest-first within each group.
+      const sortedAnswers = visibleAnswers.sort(
+        (a, b) =>
+          Number(b.isVerified) - Number(a.isVerified) ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
       );
 
       return {
         id: q.id,
         conceptId: q.conceptId,
-        studentId: q.studentId,
-        studentName: q.student?.name || null,
+        askerId: q.askerId,
+        askerName: q.asker?.name || null,
         body: q.body,
         createdAt: q.createdAt,
         updatedAt: q.updatedAt,
         answers: sortedAnswers.map((ans) => ({
           id: ans.id,
           questionId: ans.questionId,
-          instructorId: ans.instructorId,
-          instructorName: ans.isAiAnswer
+          responderId: ans.responderId,
+          responderName: ans.isAiAnswer
             ? 'AI Assistant'
-            : ans.instructor?.name || null,
+            : ans.responder?.name || null,
           isAiAnswer: Boolean(ans.isAiAnswer),
+          isVerified: Boolean(ans.isVerified),
           body: ans.body,
           createdAt: ans.createdAt,
           updatedAt: ans.updatedAt,
@@ -163,15 +204,18 @@ export class QaService {
     if (!question) {
       throw new NotFoundException('Question not found');
     }
-    this.checkOwnership(question.studentId, user);
+    this.checkOwnership(question.askerId, user);
 
+    // Any existing answer freezes the question: editing would orphan the
+    // replies people already wrote — and for AI answers it would leave a
+    // stale generated answer attached to a question it no longer answers.
     if (
       user.role !== UserRole.ADMIN &&
       question.answers &&
       question.answers.length > 0
     ) {
       throw new ForbiddenException(
-        'Questions that have already been answered by an instructor cannot be edited',
+        'Questions that have already been answered cannot be edited',
       );
     }
 
@@ -189,7 +233,7 @@ export class QaService {
     if (!question) {
       throw new NotFoundException('Question not found');
     }
-    this.checkOwnership(question.studentId, user);
+    this.checkOwnership(question.askerId, user);
 
     await this.questionRepository.remove(question);
   }
@@ -201,17 +245,33 @@ export class QaService {
   ): Promise<Answer> {
     const question = await this.questionRepository.findOne({
       where: { id: questionId },
+      relations: ['concept'],
     });
     if (!question) {
       throw new NotFoundException('Question not found');
     }
+    if (!question.concept) {
+      throw new NotFoundException('Concept not found');
+    }
+    this.checkConceptVisible(question.concept, user);
 
-    await this.checkApprovedContentCreator(user);
-
+    // Discussion model (§12): any authenticated developer may answer.
+    // Authoritative answers are verified on arrival: the concept's author
+    // and admins speak for the content, so their answers carry the badge
+    // without a second verify step. Everyone else's answers start
+    // unverified until the author or an admin marks them.
+    const isAuthoritative =
+      user.role === UserRole.ADMIN ||
+      (question.concept.authorId !== null &&
+        question.concept.authorId === user.id);
+    const now = new Date();
     const answer = this.answerRepository.create({
       questionId,
-      instructorId: user.id,
+      responderId: user.id,
       body: dto.body,
+      isVerified: isAuthoritative,
+      verifiedByUserId: isAuthoritative ? user.id : null,
+      verifiedAt: isAuthoritative ? now : null,
     });
     return this.answerRepository.save(answer);
   }
@@ -227,7 +287,7 @@ export class QaService {
     if (!answer) {
       throw new NotFoundException('Answer not found');
     }
-    this.checkOwnership(answer.instructorId, user);
+    this.checkOwnership(answer.responderId, user);
 
     answer.body = dto.body;
     return this.answerRepository.save(answer);
@@ -243,8 +303,31 @@ export class QaService {
     if (!answer) {
       throw new NotFoundException('Answer not found');
     }
-    this.checkOwnership(answer.instructorId, user);
+    this.checkOwnership(answer.responderId, user);
 
     await this.answerRepository.remove(answer);
+  }
+
+  async setAnswerVerified(
+    id: string,
+    user: Omit<User, 'passwordHash'>,
+    verified: boolean,
+  ): Promise<Answer> {
+    const answer = await this.answerRepository.findOne({
+      where: { id },
+      relations: ['question'],
+    });
+    if (!answer) {
+      throw new NotFoundException('Answer not found');
+    }
+    if (answer.isAiAnswer) {
+      throw new ForbiddenException('AI answers cannot be verified');
+    }
+    await this.checkVerifier(answer.question.conceptId, user);
+
+    answer.isVerified = verified;
+    answer.verifiedByUserId = verified ? user.id : null;
+    answer.verifiedAt = verified ? new Date() : null;
+    return this.answerRepository.save(answer);
   }
 }

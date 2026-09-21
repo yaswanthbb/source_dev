@@ -13,12 +13,12 @@ export class Question extends BaseEntity {
   @JoinColumn({ name: 'concept_id' })
   concept: Concept;
 
-  @Column({ name: 'student_id' })
-  studentId: string;
+  @Column({ name: 'asker_id' })
+  askerId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'student_id' })
-  student: User;
+  @JoinColumn({ name: 'asker_id' })
+  asker: User;
 
   @Column({ type: 'text' })
   body: string;

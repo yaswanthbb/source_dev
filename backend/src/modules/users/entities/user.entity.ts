@@ -1,7 +1,6 @@
-import { Entity, Column, OneToOne } from 'typeorm';
+import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { UserRole } from '../../../common/enums/user-role.enum';
-import { InstructorProfile } from './instructor-profile.entity';
 
 /**
  * Cross-device UI state. Kept as one JSONB blob rather than a column each: the
@@ -44,7 +43,7 @@ export class User extends BaseEntity {
   @Column({
     type: 'enum',
     enum: UserRole,
-    default: UserRole.STUDENT,
+    default: UserRole.DEVELOPER,
   })
   role: UserRole;
 
@@ -56,7 +55,4 @@ export class User extends BaseEntity {
 
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   preferences: UserPreferences;
-
-  @OneToOne(() => InstructorProfile, (profile) => profile.user)
-  instructorProfile: InstructorProfile;
 }

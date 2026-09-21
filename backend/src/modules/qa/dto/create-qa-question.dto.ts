@@ -11,11 +11,12 @@ export class CreateQaQuestionDto {
   body: string;
 
   @ApiPropertyOptional({
-    enum: ['instructor', 'ai'],
-    default: 'instructor',
-    description: 'Target: ask a human instructor or get an immediate AI answer',
+    enum: ['discussion', 'ai'],
+    default: 'discussion',
+    description:
+      'Target: post publicly in the discussion, or ask AI privately (visible only to you)',
   })
   @IsOptional()
-  @IsIn(['instructor', 'ai'])
-  target?: 'instructor' | 'ai';
+  @IsIn(['discussion', 'ai'])
+  target?: 'discussion' | 'ai';
 }

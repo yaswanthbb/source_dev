@@ -2,9 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ForbiddenException } from '@nestjs/common';
 
-import { InstructorAnalyticsService } from './instructor-analytics.service';
+import { DeveloperAnalyticsService } from './developer-analytics.service';
 import { User } from '../users/entities/user.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Concept } from '../content/entities/concept.entity';
 import { UserConceptProgress } from '../progress/entities/user-concept-progress.entity';
@@ -13,7 +12,6 @@ import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { McqAttempt } from '../quiz/entities/mcq-attempt.entity';
 
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 
 import {
   createMockRepository,
@@ -22,9 +20,8 @@ import {
 } from '../../common/testing/mock-repository';
 import { makeUser } from '../../common/testing/factories';
 
-describe('InstructorAnalyticsService', () => {
-  let service: InstructorAnalyticsService;
-  let profileRepo: MockRepository;
+describe('DeveloperAnalyticsService', () => {
+  let service: DeveloperAnalyticsService;
   let roadmapRepo: MockRepository;
   let conceptRepo: MockRepository;
   let progressRepo: MockRepository;
@@ -33,18 +30,13 @@ describe('InstructorAnalyticsService', () => {
   let mcqAttemptRepo: MockRepository;
 
   const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
-  const instructor = makeUser({ id: 'i1', role: UserRole.INSTRUCTOR });
-  const student = makeUser({ id: 's1', role: UserRole.STUDENT });
+  const developer = makeUser({ id: 'd1', role: UserRole.DEVELOPER });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        InstructorAnalyticsService,
+        DeveloperAnalyticsService,
         { provide: getRepositoryToken(User), useValue: createMockRepository() },
-        {
-          provide: getRepositoryToken(InstructorProfile),
-          useValue: createMockRepository(),
-        },
         {
           provide: getRepositoryToken(Roadmap),
           useValue: createMockRepository(),
@@ -72,8 +64,7 @@ describe('InstructorAnalyticsService', () => {
       ],
     }).compile();
 
-    service = module.get(InstructorAnalyticsService);
-    profileRepo = module.get(getRepositoryToken(InstructorProfile));
+    service = module.get(DeveloperAnalyticsService);
     roadmapRepo = module.get(getRepositoryToken(Roadmap));
     conceptRepo = module.get(getRepositoryToken(Concept));
     progressRepo = module.get(getRepositoryToken(UserConceptProgress));
@@ -84,51 +75,30 @@ describe('InstructorAnalyticsService', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('checkApprovedInstructor', () => {
-    it('allows an admin without reading a profile', async () => {
+  describe('checkDeveloperAccess', () => {
+    it('allows an admin', async () => {
       await expect(
-        service.checkApprovedInstructor(admin),
+        service.checkDeveloperAccess(admin),
       ).resolves.toBeUndefined();
-      expect(profileRepo.findOne).not.toHaveBeenCalled();
     });
 
-    it('forbids a plain student', async () => {
+    it('allows a developer', async () => {
       await expect(
-        service.checkApprovedInstructor(student),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('forbids an instructor with no profile', async () => {
-      profileRepo.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.checkApprovedInstructor(instructor),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('forbids an instructor whose profile is not approved', async () => {
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.PENDING,
-      });
-
-      await expect(
-        service.checkApprovedInstructor(instructor),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('allows an approved instructor', async () => {
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.APPROVED,
-      });
-
-      await expect(
-        service.checkApprovedInstructor(instructor),
+        service.checkDeveloperAccess(developer),
       ).resolves.toBeUndefined();
+    });
+
+    it('forbids any other role', async () => {
+      const ghost = makeUser({ role: 'ghost' as never });
+
+      await expect(service.checkDeveloperAccess(ghost)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
   });
 
   describe('getOverview', () => {
-    it('assembles the overview and coerces the engaged-students count', async () => {
+    it('assembles the overview and coerces the engaged-developers count', async () => {
       roadmapRepo.count.mockResolvedValue(2);
       conceptRepo.count.mockResolvedValue(5);
       answerRepo.count.mockResolvedValue(1);
@@ -144,15 +114,8 @@ describe('InstructorAnalyticsService', () => {
         conceptsAuthored: 5,
         questionsAnswered: 1,
         mcqQuestionsCreated: 3,
-        studentsEngaged: 6,
+        developersEngaged: 6,
       });
-    });
-
-    it('enforces the approved-instructor guard before counting', async () => {
-      await expect(service.getOverview(student)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      expect(roadmapRepo.count).not.toHaveBeenCalled();
     });
   });
 

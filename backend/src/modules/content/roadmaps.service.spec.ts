@@ -12,7 +12,6 @@ import { Module as ModuleEntity } from './entities/module.entity';
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
 import { ModuleConceptPrerequisite } from './entities/module-concept-prerequisite.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 
 import { UserRole } from '../../common/enums/user-role.enum';
@@ -31,9 +30,12 @@ describe('RoadmapsService', () => {
   let moduleConceptRepo: MockRepository;
   let prereqRepo: MockRepository;
 
-  const owner = makeUser({ id: 'author-1', role: UserRole.INSTRUCTOR });
+  const owner = makeUser({ id: 'author-1', role: UserRole.DEVELOPER });
   const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
-  const student = makeUser({ id: 'student-1', role: UserRole.STUDENT });
+  const otherDeveloper = makeUser({
+    id: 'developer-2',
+    role: UserRole.DEVELOPER,
+  });
 
   // A module whose parent roadmap is owned by `owner`.
   const moduleWithOwner = () => ({
@@ -67,10 +69,6 @@ describe('RoadmapsService', () => {
           useValue: createMockRepository(),
         },
         {
-          provide: getRepositoryToken(InstructorProfile),
-          useValue: createMockRepository(),
-        },
-        {
           provide: getRepositoryToken(McqQuestion),
           useValue: createMockRepository(),
         },
@@ -96,9 +94,9 @@ describe('RoadmapsService', () => {
     });
 
     it('forbids a non-owner non-admin', () => {
-      expect(() => service.checkOwnership('author-1', student)).toThrow(
-        ForbiddenException,
-      );
+      expect(() =>
+        service.checkOwnership('author-1', otherDeveloper),
+      ).toThrow(ForbiddenException);
     });
 
     it('forbids when there is no owner id', () => {

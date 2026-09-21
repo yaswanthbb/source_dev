@@ -84,12 +84,8 @@ describe('AnalyticsService', () => {
 
   describe('getOverviewAnalytics', () => {
     it('aggregates platform-wide counts and coerces raw SQL strings to numbers', async () => {
-      // count() is called twice: STUDENT total, then ADMIN total.
+      // count() is called twice: DEVELOPER total, then ADMIN total.
       userRepo.count.mockResolvedValueOnce(3).mockResolvedValueOnce(1);
-      // The instructor count comes from a query builder getCount().
-      userRepo.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({ count: 2 }),
-      );
       roadmapRepo.count.mockResolvedValue(5);
       moduleRepo.count.mockResolvedValue(10);
       conceptRepo.count.mockResolvedValue(20);
@@ -104,23 +100,19 @@ describe('AnalyticsService', () => {
       const result = await service.getOverviewAnalytics();
 
       expect(result).toEqual({
-        totalStudents: 3,
-        totalInstructors: 2,
+        totalDevelopers: 3,
         totalAdmins: 1,
         totalRoadmaps: 5,
         totalModules: 10,
         totalConcepts: 20,
         totalConceptCompletions: 7,
-        activeStudents: 4,
+        activeDevelopers: 4,
         totalXpAwarded: 999,
       });
     });
 
-    it('defaults the active-student and XP sums to zero when the raw query returns nothing', async () => {
+    it('defaults the active-developer and XP sums to zero when the raw query returns nothing', async () => {
       userRepo.count.mockResolvedValue(0);
-      userRepo.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({ count: 0 }),
-      );
       roadmapRepo.count.mockResolvedValue(0);
       moduleRepo.count.mockResolvedValue(0);
       conceptRepo.count.mockResolvedValue(0);
@@ -133,7 +125,7 @@ describe('AnalyticsService', () => {
 
       const result = await service.getOverviewAnalytics();
 
-      expect(result.activeStudents).toBe(0);
+      expect(result.activeDevelopers).toBe(0);
       expect(result.totalXpAwarded).toBe(0);
     });
   });
@@ -150,7 +142,7 @@ describe('AnalyticsService', () => {
         roadmapId: 'r0',
         title: 'Empty',
         totalConcepts: 0,
-        totalEnrolledStudents: 0,
+        totalEnrolledDevelopers: 0,
         averageCompletionPercentage: 0,
         totalCompletedConcepts: 0,
       });
@@ -169,7 +161,7 @@ describe('AnalyticsService', () => {
           ],
         },
       ]);
-      // Student A finished 2 of 3 concepts; student B has one in-progress (0 done).
+      // Developer A finished 2 of 3 concepts; developer B has one in-progress (0 done).
       progressRepo.createQueryBuilder.mockReturnValue(
         createMockQueryBuilder({
           many: [
@@ -186,7 +178,7 @@ describe('AnalyticsService', () => {
         roadmapId: 'r1',
         title: 'Roadmap One',
         totalConcepts: 3,
-        totalEnrolledStudents: 2,
+        totalEnrolledDevelopers: 2,
         // A = (2/3)*100 = 66.67, B = 0; mean = 33.33 after rounding.
         averageCompletionPercentage: 33.33,
         totalCompletedConcepts: 2,
@@ -243,32 +235,28 @@ describe('AnalyticsService', () => {
     });
   });
 
-  describe('getInstructorAnalytics', () => {
-    it('counts authored artifacts per approved instructor', async () => {
-      userRepo.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({
-          many: [
-            makeUser({
-              id: 'i1',
-              name: 'Ivy',
-              email: 'ivy@test.dev',
-              role: UserRole.INSTRUCTOR,
-            }),
-          ],
+  describe('getDeveloperAnalytics', () => {
+    it('counts authored artifacts per developer', async () => {
+      userRepo.find.mockResolvedValue([
+        makeUser({
+          id: 'd1',
+          name: 'Dev',
+          email: 'dev@test.dev',
+          role: UserRole.DEVELOPER,
         }),
-      );
+      ]);
       roadmapRepo.count.mockResolvedValue(2);
       conceptRepo.count.mockResolvedValue(7);
       answerRepo.count.mockResolvedValue(3);
       mcqRepo.count.mockResolvedValue(4);
 
-      const result = await service.getInstructorAnalytics();
+      const result = await service.getDeveloperAnalytics();
 
       expect(result).toEqual([
         {
-          instructorId: 'i1',
-          name: 'Ivy',
-          email: 'ivy@test.dev',
+          developerId: 'd1',
+          name: 'Dev',
+          email: 'dev@test.dev',
           roadmapsCreated: 2,
           conceptsAuthored: 7,
           questionsAnswered: 3,

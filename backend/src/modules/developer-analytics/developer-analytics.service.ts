@@ -2,7 +2,6 @@ import { Injectable, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Concept } from '../content/entities/concept.entity';
 import { UserConceptProgress } from '../progress/entities/user-concept-progress.entity';
@@ -10,18 +9,17 @@ import { Answer } from '../qa/entities/answer.entity';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { McqAttempt } from '../quiz/entities/mcq-attempt.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { ProgressStatus } from '../../common/enums/progress-status.enum';
 
-export interface InstructorOverviewAnalytics {
+export interface DeveloperOverviewAnalytics {
   roadmapsCreated: number;
   conceptsAuthored: number;
   questionsAnswered: number;
   mcqQuestionsCreated: number;
-  studentsEngaged: number;
+  developersEngaged: number;
 }
 
-export interface InstructorConceptAnalytics {
+export interface DeveloperConceptAnalytics {
   conceptId: string;
   title: string;
   difficulty: string;
@@ -34,7 +32,7 @@ export interface MostMissedOption {
   selectedCount: number;
 }
 
-export interface InstructorQuizQuestionAnalytics {
+export interface DeveloperQuizQuestionAnalytics {
   questionId: string;
   questionText: string;
   conceptTitle: string;
@@ -44,12 +42,10 @@ export interface InstructorQuizQuestionAnalytics {
 }
 
 @Injectable()
-export class InstructorAnalyticsService {
+export class DeveloperAnalyticsService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(InstructorProfile)
-    private readonly instructorProfileRepository: Repository<InstructorProfile>,
     @InjectRepository(Roadmap)
     private readonly roadmapRepository: Repository<Roadmap>,
     @InjectRepository(Concept)
@@ -64,30 +60,21 @@ export class InstructorAnalyticsService {
     private readonly mcqAttemptRepository: Repository<McqAttempt>,
   ) {}
 
-  async checkApprovedInstructor(
+  async checkDeveloperAccess(
     user: Omit<User, 'passwordHash'>,
   ): Promise<void> {
-    if (user.role === UserRole.ADMIN) {
-      return;
-    }
-
-    if (user.role !== UserRole.INSTRUCTOR) {
-      throw new ForbiddenException('Instructor access required');
-    }
-
-    const profile = await this.instructorProfileRepository.findOne({
-      where: { userId: user.id },
-    });
-
-    if (!profile || profile.status !== InstructorStatus.APPROVED) {
-      throw new ForbiddenException('Approved instructor access required');
+    if (
+      user.role !== UserRole.DEVELOPER &&
+      user.role !== UserRole.ADMIN
+    ) {
+      throw new ForbiddenException('Developer access required');
     }
   }
 
   async getOverview(
     user: Omit<User, 'passwordHash'>,
-  ): Promise<InstructorOverviewAnalytics> {
-    await this.checkApprovedInstructor(user);
+  ): Promise<DeveloperOverviewAnalytics> {
+    await this.checkDeveloperAccess(user);
 
     const roadmapsCreated = await this.roadmapRepository.count({
       where: { createdById: user.id },
@@ -98,48 +85,48 @@ export class InstructorAnalyticsService {
     });
 
     const questionsAnswered = await this.answerRepository.count({
-      where: { instructorId: user.id },
+      where: { responderId: user.id },
     });
 
     const mcqQuestionsCreated = await this.mcqQuestionRepository.count({
       where: { createdById: user.id },
     });
 
-    // Count distinct students who have progress on any concept authored by current instructor
+    // Count distinct developers who have progress on any concept authored by current developer
     const rawEngaged = await this.userConceptProgressRepository
       .createQueryBuilder('ucp')
       .innerJoin('concepts', 'concept', 'concept.id = ucp.concept_id')
-      .innerJoin('users', 'student', 'student.id = ucp.user_id')
-      .where('concept.author_id = :instructorId', { instructorId: user.id })
-      .andWhere('student.role = :studentRole', {
-        studentRole: UserRole.STUDENT,
+      .innerJoin('users', 'developer', 'developer.id = ucp.user_id')
+      .where('concept.author_id = :developerId', { developerId: user.id })
+      .andWhere('developer.role = :developerRole', {
+        developerRole: UserRole.DEVELOPER,
       })
       .select('COUNT(DISTINCT ucp.user_id)', 'count')
       .getRawOne<{ count: string }>();
 
-    const studentsEngaged = parseInt(rawEngaged?.count || '0', 10);
+    const developersEngaged = parseInt(rawEngaged?.count || '0', 10);
 
     return {
       roadmapsCreated,
       conceptsAuthored,
       questionsAnswered,
       mcqQuestionsCreated,
-      studentsEngaged,
+      developersEngaged,
     };
   }
 
   async getConcepts(
     user: Omit<User, 'passwordHash'>,
-  ): Promise<InstructorConceptAnalytics[]> {
-    await this.checkApprovedInstructor(user);
+  ): Promise<DeveloperConceptAnalytics[]> {
+    await this.checkDeveloperAccess(user);
 
     const rawConcepts = await this.conceptRepository
       .createQueryBuilder('concept')
       .innerJoin('user_concept_progress', 'ucp', 'ucp.concept_id = concept.id')
-      .innerJoin('users', 'student', 'student.id = ucp.user_id')
-      .where('concept.author_id = :instructorId', { instructorId: user.id })
-      .andWhere('student.role = :studentRole', {
-        studentRole: UserRole.STUDENT,
+      .innerJoin('users', 'developer', 'developer.id = ucp.user_id')
+      .where('concept.author_id = :developerId', { developerId: user.id })
+      .andWhere('developer.role = :developerRole', {
+        developerRole: UserRole.DEVELOPER,
       })
       .select('concept.id', 'conceptId')
       .addSelect('concept.title', 'title')
@@ -182,16 +169,16 @@ export class InstructorAnalyticsService {
 
   async getQuizQuestions(
     user: Omit<User, 'passwordHash'>,
-  ): Promise<InstructorQuizQuestionAnalytics[]> {
-    await this.checkApprovedInstructor(user);
+  ): Promise<DeveloperQuizQuestionAnalytics[]> {
+    await this.checkDeveloperAccess(user);
 
     // 1. Fetch all McqQuestions authored by current user with at least one McqAttempt
     const rawQuestions = await this.mcqQuestionRepository
       .createQueryBuilder('question')
       .innerJoin('concepts', 'concept', 'concept.id = question.concept_id')
       .innerJoin('mcq_attempts', 'attempt', 'attempt.question_id = question.id')
-      .where('question.created_by_user_id = :instructorId', {
-        instructorId: user.id,
+      .where('question.created_by_user_id = :developerId', {
+        developerId: user.id,
       })
       .select('question.id', 'questionId')
       .addSelect('question.question_text', 'questionText')
@@ -262,7 +249,7 @@ export class InstructorAnalyticsService {
     });
 
     // 3. Assemble and calculate correctRate
-    const result: InstructorQuizQuestionAnalytics[] = rawQuestions.map((q) => {
+    const result: DeveloperQuizQuestionAnalytics[] = rawQuestions.map((q) => {
       const totalAttempts = parseInt(q.totalAttempts || '0', 10);
       const correctAttempts = parseInt(q.correctAttempts || '0', 10);
       const correctRate =

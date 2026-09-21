@@ -11,9 +11,7 @@ import { Module as ModuleEntity } from './entities/module.entity';
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
 import { ModuleConceptPrerequisite } from './entities/module-concept-prerequisite.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { slugify } from '../../common/utils/slugify.util';
 import { CreateRoadmapDto } from './dto/create-roadmap.dto';
 import { UpdateRoadmapDto } from './dto/update-roadmap.dto';
@@ -39,31 +37,18 @@ export class RoadmapsService {
     private readonly moduleConceptRepository: Repository<ModuleConcept>,
     @InjectRepository(ModuleConceptPrerequisite)
     private readonly moduleConceptPrerequisiteRepository: Repository<ModuleConceptPrerequisite>,
-    @InjectRepository(InstructorProfile)
-    private readonly instructorProfileRepository: Repository<InstructorProfile>,
     @InjectRepository(McqQuestion)
     private readonly mcqQuestionRepository: Repository<McqQuestion>,
   ) {}
 
-  async checkApprovedContentCreator(
+  async checkContentCreator(
     user: Omit<User, 'passwordHash'>,
   ): Promise<void> {
-    if (user.role === UserRole.ADMIN) {
-      return;
-    }
-    if (user.role === UserRole.INSTRUCTOR) {
-      const profile = await this.instructorProfileRepository.findOne({
-        where: { userId: user.id },
-      });
-      if (!profile || profile.status !== InstructorStatus.APPROVED) {
-        throw new ForbiddenException(
-          'Approved instructor or admin access required to create content',
-        );
-      }
+    if (user.role === UserRole.ADMIN || user.role === UserRole.DEVELOPER) {
       return;
     }
     throw new ForbiddenException(
-      'Approved instructor or admin access required to create content',
+      'Developer or admin access required to create content',
     );
   }
 
@@ -96,7 +81,7 @@ export class RoadmapsService {
     user: Omit<User, 'passwordHash'>,
     dto: CreateRoadmapDto,
   ): Promise<Roadmap> {
-    await this.checkApprovedContentCreator(user);
+    await this.checkContentCreator(user);
     const slug = await this.generateUniqueRoadmapSlug(dto.title);
     const roadmap = this.roadmapRepository.create({
       title: dto.title,
@@ -121,20 +106,26 @@ export class RoadmapsService {
       },
     });
 
-    const isStudent = user && user.role === UserRole.STUDENT;
+    // Visibility gating (§1 interim, full rules land in §2/§3): admins see
+    // everything; developers see approved concepts plus their own drafts.
+    const canSeeConcept = (
+      concept: Concept | null | undefined,
+    ): boolean => {
+      if (!concept) return false;
+      if (concept.reviewStatus === ConceptReviewStatus.APPROVED) return true;
+      if (!user) return false;
+      if (user.role === UserRole.ADMIN) return true;
+      return concept.authorId !== null && concept.authorId === user.id;
+    };
 
     for (const roadmap of roadmaps) {
       if (roadmap.modules) {
         roadmap.modules.sort((a, b) => a.orderIndex - b.orderIndex);
         for (const mod of roadmap.modules) {
           if (mod.moduleConcepts) {
-            if (isStudent) {
-              mod.moduleConcepts = mod.moduleConcepts.filter(
-                (mc) =>
-                  mc.concept &&
-                  mc.concept.reviewStatus === ConceptReviewStatus.APPROVED,
-              );
-            }
+            mod.moduleConcepts = mod.moduleConcepts.filter((mc) =>
+              canSeeConcept(mc.concept),
+            );
             mod.moduleConcepts.sort((a, b) => a.orderIndex - b.orderIndex);
           }
         }
@@ -165,17 +156,19 @@ export class RoadmapsService {
       throw new NotFoundException('Roadmap not found');
     }
 
-    const isStudent = user && user.role === UserRole.STUDENT;
+    const isRestrictedViewer =
+      user && user.role !== UserRole.ADMIN;
 
-    // Filter unapproved concepts for student callers
-    if (isStudent && roadmap.modules) {
+    // Filter unapproved concepts for non-admin callers (authors keep their own drafts)
+    if (isRestrictedViewer && roadmap.modules) {
       for (const mod of roadmap.modules) {
         if (mod.moduleConcepts) {
-          mod.moduleConcepts = mod.moduleConcepts.filter(
-            (mc) =>
-              mc.concept &&
-              mc.concept.reviewStatus === ConceptReviewStatus.APPROVED,
-          );
+          mod.moduleConcepts = mod.moduleConcepts.filter((mc) => {
+            const c = mc.concept;
+            if (!c) return false;
+            if (c.reviewStatus === ConceptReviewStatus.APPROVED) return true;
+            return c.authorId !== null && c.authorId === user.id;
+          });
         }
       }
     }
@@ -222,12 +215,20 @@ export class RoadmapsService {
                 questionCountMap.get(mc.conceptId) || 0;
             }
             const filteredPrereqs = (mc.prerequisites || []).filter((p) => {
-              if (!isStudent) return true;
-              const prereqReviewStatus =
-                p.prerequisiteModuleConcept?.concept?.reviewStatus;
-              return (
+              if (user && user.role === UserRole.ADMIN) return true;
+              const prereqConcept = p.prerequisiteModuleConcept?.concept;
+              const prereqReviewStatus = prereqConcept?.reviewStatus;
+              if (
                 !prereqReviewStatus ||
                 prereqReviewStatus === ConceptReviewStatus.APPROVED
+              )
+                return true;
+              // Authors keep their own drafts visible in the chain.
+              return (
+                !!user &&
+                !!prereqConcept &&
+                prereqConcept.authorId !== null &&
+                prereqConcept.authorId === user.id
               );
             });
             (mc as unknown as { prerequisites: unknown[] }).prerequisites =

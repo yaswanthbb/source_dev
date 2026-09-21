@@ -10,7 +10,7 @@ import {
   OverviewAnalytics,
   RoadmapAnalytics,
   ConceptAnalytics,
-  InstructorAnalytics,
+  DeveloperAnalytics,
 } from './analytics.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -62,17 +62,17 @@ export class AnalyticsController {
     return this.analyticsService.getConceptAnalytics();
   }
 
-  @Get('instructors')
+  @Get('developers')
   @ApiOperation({
     summary:
-      'Get per-instructor content creation and Q&A activity breakdown (Admin only)',
+      'Get per-developer content creation and Q&A activity breakdown (Admin only)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Instructor analytics retrieved successfully.',
+    description: 'Developer analytics retrieved successfully.',
   })
   @ApiResponse({ status: 403, description: 'Forbidden (Admin role required).' })
-  async getInstructorAnalytics(): Promise<InstructorAnalytics[]> {
-    return this.analyticsService.getInstructorAnalytics();
+  async getDeveloperAnalytics(): Promise<DeveloperAnalytics[]> {
+    return this.analyticsService.getDeveloperAnalytics();
   }
 }

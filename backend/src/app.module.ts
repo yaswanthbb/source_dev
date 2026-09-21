@@ -11,7 +11,7 @@ import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { QaModule } from './modules/qa/qa.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
-import { InstructorAnalyticsModule } from './modules/instructor-analytics/instructor-analytics.module';
+import { DeveloperAnalyticsModule } from './modules/developer-analytics/developer-analytics.module';
 import { ReviewModule } from './modules/review/review.module';
 import { AiGenerateModule } from './modules/ai-generate/ai-generate.module';
 import { AppController } from './app.controller';
@@ -34,7 +34,7 @@ import { AppService } from './app.service';
     QaModule,
     GamificationModule,
     AnalyticsModule,
-    InstructorAnalyticsModule,
+    DeveloperAnalyticsModule,
     ReviewModule,
     AiGenerateModule,
   ],
