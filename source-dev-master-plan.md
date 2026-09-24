@@ -24,7 +24,7 @@ Core differentiator: one-click AI-assisted course generation, without the hassle
 
 ## 1. Roles — collapsed from three to two
 
-**Status: BACKEND DONE 2026-09-21 (frontend deferred to frontend phase).** Deleted entirely: `InstructorProfile` entity, `InstructorStatus` enum, `POST /users/apply-instructor` (already gone), `GET /users/instructor-applications`, `PATCH /users/:id/{promote-to-instructor,demote-to-student,degrade-to-student,approve-instructor,reject-instructor}`, `PATCH /users/me/instructor-bio`. `UserRole` is now `developer`/`admin` only; migration `RoleCollapseToDeveloper` maps every existing student+instructor row to developer and drops the profiles table. New accounts register as developer. `instructor-analytics` module renamed to `developer-analytics` (`developer/my-analytics`, guard developer/admin, no approval check); admin analytics retargeted (`totalDevelopers`/`activeDevelopers`/`totalEnrolledDevelopers`, per-developer table at `admin/analytics/developers`). AI-generate guard is now developer/admin.
+**Status: ✅ BACKEND DONE 2026-09-21 (frontend deferred to frontend phase).** Deleted entirely: `InstructorProfile` entity, `InstructorStatus` enum, `POST /users/apply-instructor` (already gone), `GET /users/instructor-applications`, `PATCH /users/:id/{promote-to-instructor,demote-to-student,degrade-to-student,approve-instructor,reject-instructor}`, `PATCH /users/me/instructor-bio`. `UserRole` is now `developer`/`admin` only; migration `RoleCollapseToDeveloper` maps every existing student+instructor row to developer and drops the profiles table. New accounts register as developer. `instructor-analytics` module renamed to `developer-analytics` (`developer/my-analytics`, guard developer/admin, no approval check); admin analytics retargeted (`totalDevelopers`/`activeDevelopers`/`totalEnrolledDevelopers`, per-developer table at `admin/analytics/developers`). AI-generate guard is now developer/admin.
 
 **Locked API contract (backend-first rule):** `GET /users/me` no longer includes `instructorProfile`. `GET /users?role=` accepts `developer`/`admin` only. Content visibility interim rule (§2/§3 will finalize): admins see all; developers see approved concepts + their own drafts (author exception in roadmaps/concepts reads).
 
@@ -45,7 +45,7 @@ Core differentiator: one-click AI-assisted course generation, without the hassle
 
 ## 2. Content ownership & reuse
 
-**Status: BACKEND DONE 2026-09-21.**
+**Status: ✅ BACKEND DONE 2026-09-21.**
 - Developers keep authored content private indefinitely: drafts are author-only until published (no submit requirement, no expiry).
 - **Attach gate** (`POST modules/:moduleId/concepts`): a concept attaches only inside its own author's roadmap (`concept.authorId === roadmap.createdById`, strict, no admin bypass). Cross-developer reuse is a `403`.
 
@@ -53,7 +53,7 @@ Core differentiator: one-click AI-assisted course generation, without the hassle
 
 ## 3. Publishing / review workflow
 
-**Status: BACKEND DONE 2026-09-21** (frontend screens deferred). Shipped: `POST roadmaps/:id/submit` (soft 3×3 warnings, resubmit re-queues rejected-only), `GET roadmaps/:id/review` (compiled response: per-module rollup with derived `approved` flags + `canPublish`), per-concept approve/reject restricted to SUBMITTED roadmaps, pending queue filtered to submitted roadmaps, `PATCH admin/content-review/roadmaps/:id/publish` (all-approved + ≥3 modules), `PATCH .../reject` (outright, back to draft with reason, concepts untouched), `PATCH .../unpublish` (takedown, approvals intact).
+**Status: ✅ BACKEND DONE 2026-09-21** (frontend screens deferred). Shipped: `POST roadmaps/:id/submit` (soft 3×3 warnings, resubmit re-queues rejected-only), `GET roadmaps/:id/review` (compiled response: per-module rollup with derived `approved` flags + `canPublish`), per-concept approve/reject restricted to SUBMITTED roadmaps, pending queue filtered to submitted roadmaps, `PATCH admin/content-review/roadmaps/:id/publish` (all-approved + ≥3 modules), `PATCH .../reject` (outright, back to draft with reason, concepts untouched), `PATCH .../unpublish` (takedown, approvals intact).
 
 **Specified 2026-09-21 (locked for the §3 build):**
 
@@ -66,7 +66,7 @@ When a Developer wants a roadmap to go public:
 5. **Resubmission after rejection:** only the previously-rejected concepts get re-queued for review.
 6. **Module approved (derived display, no stored state):** a module counts as approved when **all** its concepts are approved. Frontend shows "module approved" instead of N concept rows; backend exposes the flag per module in the review response. There is no module approve/publish click.
 7. **Roadmap publish:** explicit admin click, unlocked only when every concept is approved. Structure minimums are not re-checked at publish — submit already guarantees them.
-8. **Published-content edit model (specified 2026-09-22, BACKEND DONE):**
+8. ✅ **Published-content edit model (specified 2026-09-22, BACKEND DONE):**
 - **Names live-editable:** roadmap/module/concept titles edit freely, no review gate, effective immediately.
 - **Concept content draft/live split (published concepts only):** significant edits (existing `hasSignificantContentChange`, ≥40 edit distance) to an approved concept in a published roadmap are stored as a pending draft — readers keep seeing live until admin approves, then draft replaces live. Small edits go live instantly. New/unpublished concepts keep the simple pending→hidden→approved flow.
 - **While published:** concepts attachable, never detachable by the developer; nothing directly deletable by the developer.
@@ -79,13 +79,12 @@ When a Developer wants a roadmap to go public:
 
 ## 4. Content labeling (AI-generated vs hand-written vs partial)
 
-**Status: not yet built.**
-
-Computed bottom-up, filterable by readers:
-- A **Concept** is labeled AI-generated or hand-written based on how it was created.
-- A **Module** is "AI-generated" only if *every* concept in it is AI-generated. If even one concept is hand-written, the whole module is "Partial."
-- A **Roadmap** follows the same logic one level up.
-- Readers get a filter to browse by this label.
+**Status: ✅ BACKEND DONE 2026-09-24** (three-state per decision; no migration — computed at read time, never stored).
+- Concept: `ai` iff `isAiGenerated`, else `handwritten` (exposed as `originLabel` on concept reads).
+- Module: `ai` only if every visible concept is AI; `handwritten` only if every visible concept is hand-written; `partial` on any mix; `null` when empty.
+- Roadmap: same rollup one level up over non-empty modules.
+- Labels compute from **visible** concepts only (hidden drafts can't skew a reader's label) and ride the existing reads (concept list/detail, roadmap list/detail, review response).
+- Reader filters: `GET /concepts?label=` and `GET /roadmaps?label=` (`ai`/`handwritten`/`partial`, else `400`); unlabeled (empty) items never match a filter; concepts are never `partial`.
 
 ---
 
@@ -198,8 +197,8 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 1. ~~Dashboard bugfix pass~~ — done (§9a)
 2. ~~Full CLI mode (student)~~ — done, exceeded scope (§9b)
 3. ~~Rebrand pass~~ — essentially done (§9c), Render env var still pending (low urgency, local dev unaffected)
-4. ~~Role collapse (§1) + QA discussion backend (§12)~~ — **backend done + manually verified**
-5. ~~Content ownership (§2) + Publishing/review workflow (§3) + content labeling (§4)~~ — **§2+§3 backend done** (§4 labeling still open)
+4. ✅ ~~Role collapse (§1) + QA discussion backend (§12)~~ — **backend done + manually verified**
+5. ✅ ~~Content ownership (§2) + Publishing/review workflow (§3) + content labeling (§4)~~ — **backend done**
 6. AI course-generation quality deep-dive (§8) — before or alongside BYOK, it's the core differentiator
 7. BYOK AI generation system (§5)
 8. Notifications system (§7)
@@ -225,6 +224,7 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 - **2026-09-22 — Published-edit model backend shipped (migration `PublishedEditModel`):** concept `draft_content` staging for significant live edits (small edits live, titles always live); detach blocked on published roadmaps (append-only); unpublish request→approve/deny with 30-day public countdown (lazy expiry flip, no cron); scheduled admin deletion + purge endpoint; concept-delete blocked while attached; admin approve promotes drafts, draft-reject keeps live + reason; review queue covers published placements. Deletion-notification payload contract saved for §7 (no infra yet).
 - **2026-09-24 — Draft leak fixed:** `draftContent` rode the spread entity into reader responses (`findConceptById`, `findAllConcepts`, roadmap reads). Stripped for non-author non-admin everywhere; review response carries `hasPendingDraft` instead.
 - **2026-09-24 — Countdown abort added:** author-cancel and admin-deny now also work on an approved (not yet elapsed) unpublish countdown, clearing status + date. Previously nothing could stop it post-approval.
+- **2026-09-24 — §4 backend shipped (no migration):** three-state origin labels computed bottom-up at read time (`origin-label.util`, unit-tested); `originLabel` on concept/roadmap/module reads + review response; `?label=` filters on both list endpoints; empties unlabeled and excluded from filtered results.
 - **2026-09-21 — QA refinements from manual testing:** author/admin answers auto-verify on arrival (their own verify step would be pointless); question edit-lock applies to ANY answer (editing under an AI reply strands a stale answer); answers stay editable. Test guide `backend/write-tests-for-me.md` updated to match.
 - **2026-09-21 — Working agreement:** implement strictly one feature at a time on user instruction only; test/verify each before moving on. This doc is the reference across sessions and models.
 

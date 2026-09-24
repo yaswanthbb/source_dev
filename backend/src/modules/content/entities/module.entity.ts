@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { Roadmap } from './roadmap.entity';
 import { ModuleConcept } from './module-concept.entity';
+import type { OriginLabel } from '../utils/origin-label.util';
 
 @Entity('modules')
 export class Module extends BaseEntity {
@@ -22,4 +23,7 @@ export class Module extends BaseEntity {
 
   @OneToMany(() => ModuleConcept, (mc) => mc.module)
   moduleConcepts: ModuleConcept[];
+
+  /** §4 transient rollup label (ai/handwritten/partial/null), set at read time. */
+  originLabel?: OriginLabel | null;
 }

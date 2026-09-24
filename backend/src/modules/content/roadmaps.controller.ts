@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -13,6 +14,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { RoadmapsService } from './roadmaps.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -95,9 +97,17 @@ export class RoadmapsController {
 
   @Get('roadmaps')
   @ApiOperation({ summary: 'List all roadmaps' })
+  @ApiQuery({
+    name: 'label',
+    required: false,
+    description: 'Filter by origin label: ai, handwritten, partial',
+  })
   @ApiResponse({ status: 200, description: 'Roadmaps list retrieved.' })
-  async findAllRoadmaps(@CurrentUser() user: User) {
-    return this.roadmapsService.findAllRoadmaps(user);
+  async findAllRoadmaps(
+    @CurrentUser() user: User,
+    @Query('label') label?: string,
+  ) {
+    return this.roadmapsService.findAllRoadmaps(user, label);
   }
 
   @Get('roadmaps/:id')

@@ -897,4 +897,61 @@ describe('RoadmapsService', () => {
       expect(roadmapRepo.remove).toHaveBeenCalledWith(overdue);
     });
   });
+
+  describe('findAllRoadmaps — origin labels and filter (§4)', () => {
+    const conceptFlag = (id: string, isAi: boolean) =>
+      makeConcept({
+        id,
+        authorId: 'someone-else',
+        reviewStatus: ConceptReviewStatus.APPROVED,
+        isAiGenerated: isAi,
+      });
+    const modWith = (id: string, flags: boolean[]) => ({
+      id,
+      orderIndex: 1,
+      moduleConcepts: flags.map((f, j) => ({
+        conceptId: `${id}-c${j}`,
+        concept: conceptFlag(`${id}-c${j}`, f),
+      })),
+    });
+    const pubRoadmap = (id: string, modules: any[]) => ({
+      id,
+      reviewStatus: RoadmapReviewStatus.PUBLISHED,
+      createdById: 'someone-else',
+      modules,
+    });
+
+    beforeEach(() => {
+      roadmapRepo.find.mockResolvedValue([
+        pubRoadmap('r-ai', [modWith('m1', [true, true])]),
+        pubRoadmap('r-mix', [modWith('m2', [true]), modWith('m3', [false])]),
+        pubRoadmap('r-hand', [modWith('m4', [false, false])]),
+        pubRoadmap('r-empty', [{ id: 'm5', orderIndex: 1, moduleConcepts: [] }]),
+      ]);
+    });
+
+    it('rolls labels bottom-up: ai, partial, handwritten, null', async () => {
+      const result = await service.findAllRoadmaps(otherDeveloper);
+
+      const byId = Object.fromEntries(result.map((r: any) => [r.id, r]));
+      expect(byId['r-ai'].originLabel).toBe('ai');
+      expect(byId['r-mix'].originLabel).toBe('partial');
+      expect(byId['r-hand'].originLabel).toBe('handwritten');
+      expect(byId['r-empty'].originLabel).toBeNull();
+      expect(byId['r-mix'].modules[0].originLabel).toBe('ai');
+      expect(byId['r-mix'].modules[1].originLabel).toBe('handwritten');
+    });
+
+    it('filters to partial, excluding unlabeled roadmaps', async () => {
+      const result = await service.findAllRoadmaps(otherDeveloper, 'partial');
+
+      expect(result.map((r) => r.id)).toEqual(['r-mix']);
+    });
+
+    it('rejects an invalid label', async () => {
+      await expect(
+        service.findAllRoadmaps(otherDeveloper, 'human'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

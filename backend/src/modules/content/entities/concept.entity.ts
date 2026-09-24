@@ -78,4 +78,7 @@ export class Concept extends BaseEntity {
   author: User | null;
 
   questionCount?: number;
+
+  /** §4 transient leaf label (ai/handwritten), set at read time. */
+  originLabel?: 'ai' | 'handwritten';
 }

@@ -295,6 +295,57 @@ describe('ConceptsService', () => {
     });
   });
 
+  describe('findAllConcepts — origin label filter (§4)', () => {
+    beforeEach(() => {
+      conceptRepo.find
+        .mockResolvedValueOnce([
+          makeConcept({ id: 'c-ai', authorId: 'someone-else', isAiGenerated: true, reviewStatus: ConceptReviewStatus.APPROVED }),
+          makeConcept({ id: 'c-hand', authorId: 'someone-else', isAiGenerated: false, reviewStatus: ConceptReviewStatus.APPROVED }),
+        ])
+        .mockResolvedValueOnce([]);
+      moduleConceptRepo.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({ rawMany: [{ conceptId: 'c-ai' }, { conceptId: 'c-hand' }] }),
+      );
+    });
+
+    it('attaches origin labels and filters to ai', async () => {
+      const result: any[] = await service.findAllConcepts(
+        undefined,
+        otherDeveloper,
+        'ai',
+      );
+
+      expect(result.map((c) => c.id)).toEqual(['c-ai']);
+      expect(result[0].originLabel).toBe('ai');
+    });
+
+    it('filters to handwritten', async () => {
+      const result: any[] = await service.findAllConcepts(
+        undefined,
+        otherDeveloper,
+        'handwritten',
+      );
+
+      expect(result.map((c) => c.id)).toEqual(['c-hand']);
+    });
+
+    it('returns nothing for partial (concepts are never partial)', async () => {
+      const result: any[] = await service.findAllConcepts(
+        undefined,
+        otherDeveloper,
+        'partial',
+      );
+
+      expect(result).toEqual([]);
+    });
+
+    it('rejects an invalid label', async () => {
+      await expect(
+        service.findAllConcepts(undefined, otherDeveloper, 'human'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
   describe('updateConcept — draft/live split (§3.8)', () => {
     const liveConcept = () =>
       makeConcept({

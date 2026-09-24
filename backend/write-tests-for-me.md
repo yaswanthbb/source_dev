@@ -256,6 +256,23 @@ Prerequisite: `$CONCEPT` published via 1.9 (authored by `A`, visible to all).
 
 ## 4. AI-generate guard (§1)
 
-### 4.1 Developer can check quota
+### 4.1 Labels on reads
+- **Endpoint:** `GET /concepts` (as `B`)
+- **Expected:** each entry carries `originLabel: "ai"` or `"handwritten"` matching its `isAiGenerated`.
+- **Endpoint:** `GET /roadmaps` (as `B`)
+- **Expected:** each roadmap carries `originLabel`, each module carries `originLabel` (all-`ai` → `ai`, mixed → `partial`, all-hand → `handwritten`, empty module/roadmap → `null`).
+
+### 4.2 Reader filters
+- **Endpoint:** `GET /roadmaps?label=partial` (as `B`)
+- **Expected:** `200`, every returned roadmap `originLabel === "partial"`; empty roadmaps excluded.
+- **Endpoint:** `GET /concepts?label=ai` (as `B`)
+- **Expected:** `200`, all entries `isAiGenerated: true`.
+- **Endpoint:** `GET /roadmaps?label=bogus` — **Expected:** `400`.
+
+---
+
+## 5. AI-generate guard (§1)
+
+### 5.1 Developer can check quota
 - **Endpoint:** `GET /ai-generate/quota` (as `B`)
 - **Expected:** `200`, `{ remaining, limit }` (no approval-gate `403`).

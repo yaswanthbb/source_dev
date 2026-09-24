@@ -26,6 +26,12 @@ import { ConceptReviewStatus } from '../../common/enums/concept-review-status.en
 import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
 import { RoadmapUnpublishStatus } from '../../common/enums/roadmap-unpublish-status.enum';
 import { canSeeConcept, canSeeRoadmap, isUnpublishDue } from './utils/visibility.util';
+import {
+  conceptOriginLabel,
+  rollupOriginLabel,
+  parseOriginLabel,
+  OriginLabel,
+} from './utils/origin-label.util';
 
 @Injectable()
 export class RoadmapsService {
@@ -97,6 +103,7 @@ export class RoadmapsService {
 
   async findAllRoadmaps(
     user?: User | Omit<User, 'passwordHash'>,
+    label?: string,
   ): Promise<Roadmap[]> {
     const roadmaps = await this.roadmapRepository.find({
       relations: [
@@ -113,6 +120,15 @@ export class RoadmapsService {
     // inside a visible roadmap, concepts follow the shared predicate
     // (approved + published placement, authors keep own drafts).
     const visibleRoadmaps = roadmaps.filter((r) => canSeeRoadmap(r, user));
+
+    let parsedLabel: OriginLabel | undefined;
+    try {
+      parsedLabel = parseOriginLabel(label);
+    } catch {
+      throw new BadRequestException(
+        'Invalid label filter. Expected one of: ai, handwritten, partial.',
+      );
+    }
 
     for (const roadmap of visibleRoadmaps) {
       const placement = [
@@ -147,7 +163,28 @@ export class RoadmapsService {
       roadmap.moduleCount = roadmap.modules ? roadmap.modules.length : 0;
     }
 
-    return visibleRoadmaps;
+    // §4 labels, computed bottom-up from the visible concepts (hidden
+    // drafts never skew a reader's label).
+    for (const roadmap of visibleRoadmaps) {
+      const moduleLabels: (OriginLabel | null)[] = [];
+      if (roadmap.modules) {
+        for (const mod of roadmap.modules) {
+          const conceptLabels = (mod.moduleConcepts ?? [])
+            .filter((mc) => mc.concept)
+            .map((mc) => conceptOriginLabel(mc.concept.isAiGenerated));
+          mod.originLabel = rollupOriginLabel(conceptLabels);
+          moduleLabels.push(mod.originLabel);
+        }
+      }
+      roadmap.originLabel = rollupOriginLabel(
+        moduleLabels.filter((l): l is OriginLabel => l !== null),
+      );
+    }
+
+    // Unlabeled (empty) roadmaps never match a label filter.
+    return parsedLabel === undefined
+      ? visibleRoadmaps
+      : visibleRoadmaps.filter((r) => r.originLabel === parsedLabel);
   }
 
   async findRoadmapById(
@@ -241,6 +278,9 @@ export class RoadmapsService {
             if (mc.concept) {
               mc.concept.questionCount =
                 questionCountMap.get(mc.conceptId) || 0;
+              mc.concept.originLabel = conceptOriginLabel(
+                mc.concept.isAiGenerated,
+              );
             }
             // Prereqs live in the same module, so the parent roadmap's
             // status is one of their placements — the shared predicate
@@ -262,6 +302,21 @@ export class RoadmapsService {
         }
       }
     }
+
+    // §4 labels, bottom-up from the visible concepts.
+    const moduleLabels: (OriginLabel | null)[] = [];
+    if (roadmap.modules) {
+      for (const mod of roadmap.modules) {
+        const conceptLabels = (mod.moduleConcepts ?? [])
+          .filter((mc) => mc.concept)
+          .map((mc) => conceptOriginLabel(mc.concept.isAiGenerated));
+        mod.originLabel = rollupOriginLabel(conceptLabels);
+        moduleLabels.push(mod.originLabel);
+      }
+    }
+    roadmap.originLabel = rollupOriginLabel(
+      moduleLabels.filter((l): l is OriginLabel => l !== null),
+    );
 
     return roadmap;
   }
@@ -410,7 +465,11 @@ export class RoadmapsService {
           reviewStatus: mc.concept.reviewStatus,
           rejectionReason: mc.concept.rejectionReason,
           hasPendingDraft: mc.concept.draftContent !== null,
+          originLabel: conceptOriginLabel(mc.concept.isAiGenerated),
         }));
+      const moduleLabel = rollupOriginLabel(
+        concepts.map((c) => c.originLabel),
+      );
       return {
         moduleId: mod.id,
         title: mod.title,
@@ -419,6 +478,7 @@ export class RoadmapsService {
           concepts.every(
             (c) => c.reviewStatus === ConceptReviewStatus.APPROVED,
           ),
+        originLabel: moduleLabel,
         concepts,
       };
     });

@@ -13,6 +13,11 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
 import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
 import { canSeeConcept } from './utils/visibility.util';
+import {
+  conceptOriginLabel,
+  parseOriginLabel,
+  OriginLabel,
+} from './utils/origin-label.util';
 import { slugify } from '../../common/utils/slugify.util';
 import { hasSignificantContentChange } from '../../common/utils/content-diff.util';
 import { CreateConceptDto } from './dto/create-concept.dto';
@@ -88,6 +93,7 @@ export class ConceptsService {
   async findAllConcepts(
     search?: string,
     user?: User | Omit<User, 'passwordHash'>,
+    label?: string,
   ): Promise<Concept[]> {
     // Visibility gating (§2/§3): admins see everything; authors see approved
     // concepts plus their own drafts; everyone else sees approved concepts
@@ -148,16 +154,32 @@ export class ConceptsService {
       );
     }
 
-    return merged.map((c) => ({
-      ...c,
-      // Staged drafts are author/admin-only; readers see live content only.
-      draftContent:
-        user &&
-        (user.role === UserRole.ADMIN ||
-          (c.authorId !== null && c.authorId === user.id))
-          ? c.draftContent
-          : null,
-    }));
+    let parsedLabel: OriginLabel | undefined;
+    try {
+      parsedLabel = parseOriginLabel(label);
+    } catch {
+      throw new BadRequestException(
+        'Invalid label filter. Expected one of: ai, handwritten, partial.',
+      );
+    }
+
+    return merged
+      .filter(
+        (c) =>
+          parsedLabel === undefined ||
+          conceptOriginLabel(c.isAiGenerated) === parsedLabel,
+      )
+      .map((c) => ({
+        ...c,
+        originLabel: conceptOriginLabel(c.isAiGenerated),
+        // Staged drafts are author/admin-only; readers see live content only.
+        draftContent:
+          user &&
+          (user.role === UserRole.ADMIN ||
+            (c.authorId !== null && c.authorId === user.id))
+            ? c.draftContent
+            : null,
+      }));
   }
 
   async findConceptById(
@@ -209,6 +231,7 @@ export class ConceptsService {
 
     return {
       ...concept,
+      originLabel: conceptOriginLabel(concept.isAiGenerated),
       draftContent: canSeeDraft ? concept.draftContent : null,
       appearsIn: moduleConcepts.map((mc) => ({
         moduleConceptId: mc.id,

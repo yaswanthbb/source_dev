@@ -3,6 +3,7 @@ import { BaseEntity } from '../../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { RoadmapReviewStatus } from '../../../common/enums/roadmap-review-status.enum';
 import { RoadmapUnpublishStatus } from '../../../common/enums/roadmap-unpublish-status.enum';
+import type { OriginLabel } from '../utils/origin-label.util';
 import { Module } from './module.entity';
 
 @Entity('roadmaps')
@@ -78,4 +79,7 @@ export class Roadmap extends BaseEntity {
   modules: Module[];
 
   moduleCount?: number;
+
+  /** §4 transient rollup label (ai/handwritten/partial/null), set at read time. */
+  originLabel?: OriginLabel | null;
 }
