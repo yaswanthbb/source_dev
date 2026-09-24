@@ -23,6 +23,9 @@ import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { User } from '../users/entities/user.entity';
 
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
+import { RoadmapUnpublishStatus } from '../../common/enums/roadmap-unpublish-status.enum';
+import { canSeeConcept, canSeeRoadmap, isUnpublishDue } from './utils/visibility.util';
 
 @Injectable()
 export class RoadmapsService {
@@ -106,26 +109,37 @@ export class RoadmapsService {
       },
     });
 
-    // Visibility gating (§1 interim, full rules land in §2/§3): admins see
-    // everything; developers see approved concepts plus their own drafts.
-    const canSeeConcept = (
-      concept: Concept | null | undefined,
-    ): boolean => {
-      if (!concept) return false;
-      if (concept.reviewStatus === ConceptReviewStatus.APPROVED) return true;
-      if (!user) return false;
-      if (user.role === UserRole.ADMIN) return true;
-      return concept.authorId !== null && concept.authorId === user.id;
-    };
+    // Visibility gating (§2/§3): unpublished roadmaps are owner/admin-only;
+    // inside a visible roadmap, concepts follow the shared predicate
+    // (approved + published placement, authors keep own drafts).
+    const visibleRoadmaps = roadmaps.filter((r) => canSeeRoadmap(r, user));
 
-    for (const roadmap of roadmaps) {
+    for (const roadmap of visibleRoadmaps) {
+      const placement = [
+        { roadmapReviewStatus: roadmap.reviewStatus },
+      ];
+      const canSeeDrafts =
+        !!user &&
+        (user.role === UserRole.ADMIN ||
+          (roadmap.createdById !== null && roadmap.createdById === user.id));
       if (roadmap.modules) {
         roadmap.modules.sort((a, b) => a.orderIndex - b.orderIndex);
         for (const mod of roadmap.modules) {
           if (mod.moduleConcepts) {
-            mod.moduleConcepts = mod.moduleConcepts.filter((mc) =>
-              canSeeConcept(mc.concept),
+            mod.moduleConcepts = mod.moduleConcepts.filter(
+              (mc) => mc.concept && canSeeConcept(mc.concept, placement, user),
             );
+            for (const mc of mod.moduleConcepts) {
+              // Staged drafts are author/admin-only; readers see live only.
+              // (Serialization-only mutation — never saved.)
+              if (
+                mc.concept &&
+                !canSeeDrafts &&
+                mc.concept.authorId !== user?.id
+              ) {
+                mc.concept.draftContent = null;
+              }
+            }
             mod.moduleConcepts.sort((a, b) => a.orderIndex - b.orderIndex);
           }
         }
@@ -133,7 +147,7 @@ export class RoadmapsService {
       roadmap.moduleCount = roadmap.modules ? roadmap.modules.length : 0;
     }
 
-    return roadmaps;
+    return visibleRoadmaps;
   }
 
   async findRoadmapById(
@@ -155,20 +169,34 @@ export class RoadmapsService {
     if (!roadmap) {
       throw new NotFoundException('Roadmap not found');
     }
+    if (!canSeeRoadmap(roadmap, user)) {
+      throw new NotFoundException('Roadmap not found');
+    }
 
-    const isRestrictedViewer =
-      user && user.role !== UserRole.ADMIN;
+    const placement = [{ roadmapReviewStatus: roadmap.reviewStatus }];
 
-    // Filter unapproved concepts for non-admin callers (authors keep their own drafts)
-    if (isRestrictedViewer && roadmap.modules) {
+    // Filter concepts for non-privileged callers (authors keep own drafts)
+    if (roadmap.modules) {
       for (const mod of roadmap.modules) {
         if (mod.moduleConcepts) {
-          mod.moduleConcepts = mod.moduleConcepts.filter((mc) => {
-            const c = mc.concept;
-            if (!c) return false;
-            if (c.reviewStatus === ConceptReviewStatus.APPROVED) return true;
-            return c.authorId !== null && c.authorId === user.id;
-          });
+          mod.moduleConcepts = mod.moduleConcepts.filter(
+            (mc) => mc.concept && canSeeConcept(mc.concept, placement, user),
+          );
+          for (const mc of mod.moduleConcepts) {
+            // Staged drafts are author/admin-only; readers see live only.
+            // (Serialization-only mutation — never saved.)
+            if (
+              mc.concept &&
+              !(
+                user &&
+                (user.role === UserRole.ADMIN ||
+                  (mc.concept.authorId !== null &&
+                    mc.concept.authorId === user.id))
+              )
+            ) {
+              mc.concept.draftContent = null;
+            }
+          }
         }
       }
     }
@@ -214,22 +242,13 @@ export class RoadmapsService {
               mc.concept.questionCount =
                 questionCountMap.get(mc.conceptId) || 0;
             }
+            // Prereqs live in the same module, so the parent roadmap's
+            // status is one of their placements — the shared predicate
+            // applies directly.
             const filteredPrereqs = (mc.prerequisites || []).filter((p) => {
-              if (user && user.role === UserRole.ADMIN) return true;
               const prereqConcept = p.prerequisiteModuleConcept?.concept;
-              const prereqReviewStatus = prereqConcept?.reviewStatus;
-              if (
-                !prereqReviewStatus ||
-                prereqReviewStatus === ConceptReviewStatus.APPROVED
-              )
-                return true;
-              // Authors keep their own drafts visible in the chain.
-              return (
-                !!user &&
-                !!prereqConcept &&
-                prereqConcept.authorId !== null &&
-                prereqConcept.authorId === user.id
-              );
+              if (!prereqConcept) return false;
+              return canSeeConcept(prereqConcept, placement, user);
             });
             (mc as unknown as { prerequisites: unknown[] }).prerequisites =
               filteredPrereqs.map((p) => ({
@@ -280,6 +299,378 @@ export class RoadmapsService {
       throw new NotFoundException('Roadmap not found');
     }
     await this.roadmapRepository.remove(roadmap);
+  }
+
+  // --- §3 publishing / review workflow ---
+
+  private async loadRoadmapTree(id: string): Promise<Roadmap> {
+    const roadmap = await this.roadmapRepository.findOne({
+      where: { id },
+      relations: ['modules', 'modules.moduleConcepts', 'modules.moduleConcepts.concept'],
+    });
+    if (!roadmap) {
+      throw new NotFoundException('Roadmap not found');
+    }
+    // No cron exists: an elapsed unpublish countdown flips to draft here,
+    // on the write/review paths that all funnel through this loader.
+    if (isUnpublishDue(roadmap)) {
+      roadmap.reviewStatus = RoadmapReviewStatus.DRAFT;
+      roadmap.unpublishStatus = RoadmapUnpublishStatus.NONE;
+      roadmap.unpublishEffectiveAt = null;
+      await this.roadmapRepository.save(roadmap);
+    }
+    return roadmap;
+  }
+
+  private distinctConcepts(roadmap: Roadmap): Concept[] {
+    const seen = new Map<string, Concept>();
+    for (const mod of roadmap.modules ?? []) {
+      for (const mc of mod.moduleConcepts ?? []) {
+        if (mc.concept && !seen.has(mc.concept.id)) {
+          seen.set(mc.concept.id, mc.concept);
+        }
+      }
+    }
+    return [...seen.values()];
+  }
+
+  /**
+   * Whole-roadmap submit for review. Structure minimums (3 modules ×
+   * 3 concepts) are hard guards here at submit time — not at publish —
+   * so the author fixes structure before review starts. Resubmission
+   * re-queues only previously-rejected concepts.
+   */
+  async submitRoadmap(
+    id: string,
+    user: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.loadRoadmapTree(id);
+    this.checkOwnership(roadmap.createdById, user);
+
+    if (roadmap.reviewStatus === RoadmapReviewStatus.PUBLISHED) {
+      throw new BadRequestException(
+        'Roadmap is already published. Unpublish it first to resubmit.',
+      );
+    }
+    if (roadmap.reviewStatus === RoadmapReviewStatus.SUBMITTED) {
+      throw new BadRequestException('Roadmap is already submitted for review.');
+    }
+
+    const modules = roadmap.modules ?? [];
+    if (modules.length < 3) {
+      throw new BadRequestException(
+        `Submission requires at least 3 modules (found ${modules.length}).`,
+      );
+    }
+    for (const mod of modules) {
+      const count = mod.moduleConcepts?.length ?? 0;
+      if (count < 3) {
+        throw new BadRequestException(
+          `Module "${mod.title}" has ${count} concept(s); at least 3 are required to submit.`,
+        );
+      }
+    }
+
+    for (const concept of this.distinctConcepts(roadmap)) {
+      if (concept.reviewStatus === ConceptReviewStatus.REJECTED) {
+        concept.reviewStatus = ConceptReviewStatus.PENDING;
+        concept.rejectionReason = null;
+        concept.reviewedByUserId = null;
+        concept.reviewedAt = null;
+        await this.conceptRepository.save(concept);
+      }
+    }
+
+    roadmap.reviewStatus = RoadmapReviewStatus.SUBMITTED;
+    roadmap.rejectionReason = null;
+    roadmap.reviewedByUserId = null;
+    roadmap.reviewedAt = null;
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /**
+   * Compiled review response for the author/admin: per-module rollup with a
+   * derived `approved` flag (all concepts approved — display only, no stored
+   * module state) plus publish readiness.
+   */
+  async getReviewStatus(
+    id: string,
+    user: Omit<User, 'passwordHash'>,
+  ): Promise<Record<string, unknown>> {
+    const roadmap = await this.loadRoadmapTree(id);
+    this.checkOwnership(roadmap.createdById, user);
+
+    const modules = (roadmap.modules ?? []).map((mod) => {
+      const concepts = (mod.moduleConcepts ?? [])
+        .filter((mc) => mc.concept)
+        .sort((a, b) => a.orderIndex - b.orderIndex)
+        .map((mc) => ({
+          id: mc.concept.id,
+          title: mc.concept.title,
+          reviewStatus: mc.concept.reviewStatus,
+          rejectionReason: mc.concept.rejectionReason,
+          hasPendingDraft: mc.concept.draftContent !== null,
+        }));
+      return {
+        moduleId: mod.id,
+        title: mod.title,
+        approved:
+          concepts.length > 0 &&
+          concepts.every(
+            (c) => c.reviewStatus === ConceptReviewStatus.APPROVED,
+          ),
+        concepts,
+      };
+    });
+
+    const allConcepts = modules.flatMap((m) => m.concepts);
+    const pendingCount = allConcepts.filter(
+      (c) => c.reviewStatus === ConceptReviewStatus.PENDING,
+    ).length;
+    const rejectedCount = allConcepts.filter(
+      (c) => c.reviewStatus === ConceptReviewStatus.REJECTED,
+    ).length;
+
+    return {
+      roadmapId: roadmap.id,
+      title: roadmap.title,
+      reviewStatus: roadmap.reviewStatus,
+      rejectionReason: roadmap.rejectionReason,
+      reviewedAt: roadmap.reviewedAt,
+      modules,
+      moduleCount: modules.length,
+      conceptCount: allConcepts.length,
+      pendingCount,
+      rejectedCount,
+      canPublish:
+        roadmap.reviewStatus === RoadmapReviewStatus.SUBMITTED &&
+        pendingCount === 0 &&
+        rejectedCount === 0,
+    };
+  }
+
+  /**
+   * Explicit admin publish click. Unlocks only when every concept is
+   * approved (structure minimums were enforced at submit).
+   */
+  async publishRoadmap(
+    id: string,
+    admin: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.loadRoadmapTree(id);
+
+    if (roadmap.reviewStatus !== RoadmapReviewStatus.SUBMITTED) {
+      throw new BadRequestException(
+        'Only a submitted roadmap can be published.',
+      );
+    }
+    const concepts = this.distinctConcepts(roadmap);
+    const pending = concepts.filter(
+      (c) => c.reviewStatus === ConceptReviewStatus.PENDING,
+    ).length;
+    if (pending > 0) {
+      throw new BadRequestException(
+        `${pending} concept(s) are still pending review.`,
+      );
+    }
+    const rejected = concepts.filter(
+      (c) => c.reviewStatus === ConceptReviewStatus.REJECTED,
+    ).length;
+    if (rejected > 0) {
+      throw new BadRequestException(
+        `${rejected} concept(s) are rejected. Reject the roadmap with a reason or wait for fixes and resubmission.`,
+      );
+    }
+
+    roadmap.reviewStatus = RoadmapReviewStatus.PUBLISHED;
+    roadmap.rejectionReason = null;
+    roadmap.reviewedByUserId = admin.id;
+    roadmap.reviewedAt = new Date();
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /**
+   * Outright roadmap rejection (e.g. spam): back to draft with a reason.
+   * Per-concept marks are left untouched.
+   */
+  async rejectRoadmap(
+    id: string,
+    admin: Omit<User, 'passwordHash'>,
+    reason: string,
+  ): Promise<Roadmap> {
+    const roadmap = await this.roadmapRepository.findOne({ where: { id } });
+    if (!roadmap) {
+      throw new NotFoundException('Roadmap not found');
+    }
+    if (roadmap.reviewStatus !== RoadmapReviewStatus.SUBMITTED) {
+      throw new BadRequestException(
+        'Only a submitted roadmap can be rejected.',
+      );
+    }
+
+    roadmap.reviewStatus = RoadmapReviewStatus.DRAFT;
+    roadmap.rejectionReason = reason;
+    roadmap.reviewedByUserId = admin.id;
+    roadmap.reviewedAt = new Date();
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /** Takedown: published roadmap goes back to draft, approvals intact. */
+  async unpublishRoadmap(
+    id: string,
+    _admin: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.roadmapRepository.findOne({ where: { id } });
+    if (!roadmap) {
+      throw new NotFoundException('Roadmap not found');
+    }
+    if (roadmap.reviewStatus !== RoadmapReviewStatus.PUBLISHED) {
+      throw new BadRequestException('Only a published roadmap can be unpublished.');
+    }
+
+    roadmap.reviewStatus = RoadmapReviewStatus.DRAFT;
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  // --- §3.8 published-edit model: unpublish request flow ---
+
+  /** Author asks for takedown of a published roadmap (30-day countdown on approval). */
+  async requestUnpublish(
+    id: string,
+    user: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.loadRoadmapTree(id);
+    this.checkOwnership(roadmap.createdById, user);
+
+    if (roadmap.reviewStatus !== RoadmapReviewStatus.PUBLISHED) {
+      throw new BadRequestException('Only a published roadmap can be unpublished.');
+    }
+    if (roadmap.unpublishStatus !== RoadmapUnpublishStatus.NONE) {
+      throw new BadRequestException('An unpublish request is already open.');
+    }
+
+    roadmap.unpublishStatus = RoadmapUnpublishStatus.REQUESTED;
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /** Author withdraws a pending unpublish request (or an approved one still in countdown). */
+  async cancelUnpublishRequest(
+    id: string,
+    user: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.loadRoadmapTree(id);
+    this.checkOwnership(roadmap.createdById, user);
+
+    if (
+      roadmap.unpublishStatus !== RoadmapUnpublishStatus.REQUESTED &&
+      !this.isCountdownActive(roadmap)
+    ) {
+      throw new BadRequestException('No open unpublish request to cancel.');
+    }
+
+    roadmap.unpublishStatus = RoadmapUnpublishStatus.NONE;
+    roadmap.unpublishEffectiveAt = null;
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /** Admin approves takedown: roadmap stays fully public for 30 more days. */
+  async approveUnpublish(
+    id: string,
+    admin: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.loadRoadmapTree(id);
+
+    if (roadmap.unpublishStatus !== RoadmapUnpublishStatus.REQUESTED) {
+      throw new BadRequestException('No open unpublish request to approve.');
+    }
+
+    roadmap.unpublishStatus = RoadmapUnpublishStatus.APPROVED;
+    roadmap.unpublishEffectiveAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+    roadmap.reviewedByUserId = admin.id;
+    roadmap.reviewedAt = new Date();
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /** Admin denies takedown: request closed, roadmap stays published. */
+  async denyUnpublish(
+    id: string,
+    _admin: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.loadRoadmapTree(id);
+
+    if (
+      roadmap.unpublishStatus !== RoadmapUnpublishStatus.REQUESTED &&
+      !this.isCountdownActive(roadmap)
+    ) {
+      throw new BadRequestException('No open unpublish request to deny.');
+    }
+
+    roadmap.unpublishStatus = RoadmapUnpublishStatus.NONE;
+    roadmap.unpublishEffectiveAt = null;
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /**
+   * Countdown still running: approved but effective date in the future.
+   * (Expired countdowns never reach here — loadRoadmapTree flips them.)
+   */
+  private isCountdownActive(roadmap: Roadmap): boolean {
+    return (
+      roadmap.reviewStatus === RoadmapReviewStatus.PUBLISHED &&
+      roadmap.unpublishStatus === RoadmapUnpublishStatus.APPROVED &&
+      !!roadmap.unpublishEffectiveAt &&
+      new Date(roadmap.unpublishEffectiveAt).getTime() > Date.now()
+    );
+  }
+
+  /**
+   * Admin moderation delete with 30-day delay. Visible until the date, then
+   * hidden for everyone except admins; rows purged via purgeDeletedRoadmaps.
+   */
+  async scheduleRoadmapDeletion(
+    id: string,
+    admin: Omit<User, 'passwordHash'>,
+  ): Promise<Roadmap> {
+    const roadmap = await this.roadmapRepository.findOne({ where: { id } });
+    if (!roadmap) {
+      throw new NotFoundException('Roadmap not found');
+    }
+    if (roadmap.deleteEffectiveAt) {
+      throw new BadRequestException('Deletion is already scheduled.');
+    }
+
+    roadmap.deleteEffectiveAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+    roadmap.reviewedByUserId = admin.id;
+    roadmap.reviewedAt = new Date();
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /** Admin cancels a scheduled moderation deletion. */
+  async cancelScheduledRoadmapDeletion(id: string): Promise<Roadmap> {
+    const roadmap = await this.roadmapRepository.findOne({ where: { id } });
+    if (!roadmap) {
+      throw new NotFoundException('Roadmap not found');
+    }
+    if (!roadmap.deleteEffectiveAt) {
+      throw new BadRequestException('No scheduled deletion to cancel.');
+    }
+
+    roadmap.deleteEffectiveAt = null;
+    return this.roadmapRepository.save(roadmap);
+  }
+
+  /** Maintenance purge for rows past their scheduled deletion date. */
+  async purgeDeletedRoadmaps(): Promise<{ purged: number }> {
+    const overdue = await this.roadmapRepository
+      .createQueryBuilder('roadmap')
+      .where('roadmap.delete_effective_at IS NOT NULL')
+      .andWhere('roadmap.delete_effective_at <= now()')
+      .getMany();
+
+    for (const roadmap of overdue) {
+      await this.roadmapRepository.remove(roadmap);
+    }
+    return { purged: overdue.length };
   }
 
   async createModule(
@@ -403,6 +794,14 @@ export class RoadmapsService {
       throw new NotFoundException('Concept not found');
     }
 
+    // §2 ownership & reuse: concepts live only inside their own author's
+    // content — never across developers. Strict, no admin bypass.
+    if (concept.authorId !== moduleEntity.roadmap.createdById) {
+      throw new ForbiddenException(
+        'Concepts can only be attached inside their own author\u2019s content',
+      );
+    }
+
     const targetOrderIndex = await this.calculateAndReserveOrderIndex(
       moduleId,
       dto.orderIndex,
@@ -438,6 +837,14 @@ export class RoadmapsService {
       throw new NotFoundException('Module not found');
     }
     this.checkOwnership(moduleEntity.roadmap.createdById, user);
+
+    // §3.8: published trees are append-only for developers — detach would
+    // silently gut live content. Unpublish (or wait out the countdown) first.
+    if (moduleEntity.roadmap.reviewStatus === RoadmapReviewStatus.PUBLISHED) {
+      throw new BadRequestException(
+        'Concepts cannot be detached from a published roadmap.',
+      );
+    }
 
     const moduleConcept = await this.moduleConceptRepository.findOne({
       where: { moduleId, conceptId },

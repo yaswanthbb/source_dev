@@ -44,6 +44,18 @@ export class Concept extends BaseEntity {
   })
   rejectionReason: string | null;
 
+  /**
+   * Pending draft body for the draft/live split (§3.8): significant edits to
+   * an approved concept in a published roadmap land here. Readers keep seeing
+   * `content` until admin approves, which promotes the draft into `content`.
+   */
+  @Column({
+    type: 'text',
+    nullable: true,
+    name: 'draft_content',
+  })
+  draftContent: string | null;
+
   @Column({ name: 'reviewed_by_user_id', nullable: true })
   reviewedByUserId: string | null;
 

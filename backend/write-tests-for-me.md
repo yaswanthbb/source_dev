@@ -1,4 +1,4 @@
-# Backend manual tests — §1 role collapse + §12 QA discussion
+# Backend manual tests — §1 roles + §12 QA discussion + §2 ownership + §3 publishing
 
 Base URL used below: `http://localhost:3000`. Run the backend with `npm run start:dev`.
 Tokens: after each login, export the token, e.g. `export A=<accessToken>`.
@@ -60,41 +60,105 @@ UPDATE users SET role = 'admin' WHERE email = 'deva@test.dev';
 - **Endpoint:** `GET /users?search=deva` (as `ADMIN`)
 - **Expected:** `200`, matches by name/email.
 
-### 1.4 Any developer can author content (no approval gate)
-- **Endpoint:** `POST /concepts` (as `A`)
-- **Payload:**
-  ```json
-  { "title": "Closures in JS", "content": "A closure is a function bundled with its lexical scope. Extended body to pass validation.", "difficulty": "medium" }
-  ```
-- **Expected:** `201`, `authorId === <A's id>`, `reviewStatus === "pending"`. Save as `CONCEPT`.
+### 1.4 Author roadmap + 3 modules + 9 concepts, attach (§2)
+- **Endpoint:** `POST /roadmaps` (as `A`) + `{ "title": "JS Deep Dive" }`
+- **Expected:** `201`, `reviewStatus === "draft"`. Save as `ROADMAP`.
+- Create 3 modules (as `A`): `POST /roadmaps/$ROADMAP/modules` + `{ "title": "Scope", "orderIndex": 0 }` (then `"Closures"`, 1 and `"Async"`, 2). Save as `MOD1/2/3`.
+- Create 3 concepts per module (as `A`): `POST /concepts` + `{ "title": "Closures in JS", "content": "<long body>", "difficulty": "medium" }` etc. Save first as `CONCEPT`.
+- Attach each to its module (as `A`): `POST /modules/$MOD1/concepts` + `{ "conceptId": "$CONCEPT" }` → `201` (own concept in own roadmap).
+- **Endpoint:** same attach but with a concept authored by `B` (create one as `B` first)
+- **Expected:** `403` — cross-developer reuse is forbidden, strict, no admin bypass.
 
-### 1.6 Visibility — author sees own draft, others don't, admin does
-- **Endpoint:** `GET /concepts/$CONCEPT` (as `A`)
-- **Expected:** `200` (own pending draft visible).
+### 1.5 Visibility — drafts are owner/admin-only (roadmap + concept)
+- **Endpoint:** `GET /roadmaps` (as `B`)
+- **Expected:** `200` array **without** `ROADMAP`.
+- **Endpoint:** `GET /roadmaps/$ROADMAP` (as `B`)
+- **Expected:** `404`.
 - **Endpoint:** `GET /concepts/$CONCEPT` (as `B`)
 - **Expected:** `404` (someone else's pending draft hidden).
-- **Endpoint:** `GET /concepts/$CONCEPT` (as `ADMIN`)
-- **Expected:** `200`.
-- **Endpoint:** `GET /concepts` (as `B`)
-- **Expected:** `200` array **without** the pending concept (only approved + B's own).
+- **Endpoint:** `GET /concepts/$CONCEPT` (as `A` / `ADMIN`)
+- **Expected:** `200` both (author keeps own draft, admin sees all).
 
-### 1.7 Asking on an invisible concept fails (no leak)
+### 1.6 Asking on an invisible concept fails (no leak)
 - **Endpoint:** `POST /concepts/$CONCEPT/qa-questions` (as `B`) with `{ "body": "can I ask?", "target": "discussion" }`
 - **Expected:** `404` — B can't see the draft, so B can't ask on it either.
 - **Endpoint:** `GET /concepts/$CONCEPT/qa-questions` (as `B`)
 - **Expected:** `404` for the same reason.
 
-### 1.8 Admin approves the concept (unlocks §2 tests)
+### 1.7 Submit for review (hard 3×3 guards on the author)
+- New small roadmap (as `A`, 1 module + 1 concept): `POST /roadmaps/$SMALL/submit`
+- **Expected:** `400` (fewer than 3 modules) — the guard fires on the developer, not the admin.
+- **Endpoint:** `POST /roadmaps/$ROADMAP/submit` (as `A`, full 3×3)
+- **Expected:** `201`, `reviewStatus === "submitted"`.
+- **Repeat submit** — **Expected:** `400` (already submitted).
+- **Endpoint:** `GET /roadmaps/$ROADMAP/review` (as `A`)
+- **Expected:** `200` with `pendingCount: 9`, `canPublish: false`, each module `approved: false`.
+- **Endpoint:** `GET /admin/content-review/pending` (as `ADMIN`)
+- **Expected:** `200` array containing all 9 (submitted-roadmap concepts only).
+
+### 1.8 Approve, publish blocked while pending
 - **Endpoint:** `PATCH /admin/content-review/$CONCEPT/approve` (as `ADMIN`)
 - **Expected:** `200`, `reviewStatus === "approved"`.
+- **Endpoint:** `PATCH /admin/content-review/roadmaps/$ROADMAP/publish` (as `ADMIN`)
+- **Expected:** `400` — 8 concepts still pending.
 - **Endpoint:** `GET /concepts/$CONCEPT` (as `B`)
-- **Expected:** `200` now — approved concepts are visible to every developer.
+- **Expected:** still `404` — approved but roadmap unpublished. (This is the case you caught: no publish click, no visibility, no questions.)
+
+### 1.9 Approve the rest, publish
+- Approve the remaining 8 concepts (as `ADMIN`).
+- **Endpoint:** `PATCH /admin/content-review/roadmaps/$ROADMAP/publish` (as `ADMIN`)
+- **Expected:** `200`, `reviewStatus === "published"`.
+- **Endpoint:** `GET /concepts/$CONCEPT` (as `B`)
+- **Expected:** `200` now — approved + published placement.
+- **Endpoint:** `GET /roadmaps` (as `B`)
+- **Expected:** includes `ROADMAP` with all 3 modules.
+
+### 1.10 Reject-roadmap and unpublish
+- New roadmap `R2` (as `A`, 1 module + 1 concept), submit it.
+- **Endpoint:** `PATCH /admin/content-review/roadmaps/$R2/reject` (as `ADMIN`) + `{ "reason": "spam" }`
+- **Expected:** `200`, `reviewStatus === "draft"`, `rejectionReason === "spam"` (concept untouched, still `pending`).
+- **Endpoint:** `GET /roadmaps/$R2/review` (as `A`)
+- **Expected:** shows the rejection reason (compiled response).
+- Resubmit `R2` (as `A`) — **Expected:** `201` (pending concept stays pending, nothing to re-queue).
+- **Endpoint:** `PATCH /admin/content-review/roadmaps/$ROADMAP/unpublish` (as `ADMIN`)
+- **Expected:** `200`, back to `draft`, concept approvals intact.
+- **Endpoint:** `GET /concepts/$CONCEPT` (as `B`)
+- **Expected:** `404` again (unpublished hides everything).
+- Re-publish `ROADMAP` to restore the §2 prerequisite below: resubmit (as `A`) → approve any pending (none) → publish (as `ADMIN`).
+
+### 1.11 Draft/live split on published concepts (§3.8)
+- **Endpoint:** `PATCH /concepts/$CONCEPT` (as `A`) + `{ "content": "<80+ chars of new text>" }`
+- **Expected:** `200`, `draftContent` set, `content` unchanged (live kept), `reviewStatus` stays `approved`.
+- **Endpoint:** `GET /concepts/$CONCEPT` (as `B`)
+- **Expected:** `200` showing the OLD live body with `draftContent: null` (staged drafts are author/admin-only).
+- **Endpoint:** `GET /admin/content-review/pending` (as `ADMIN`)
+- **Expected:** includes `CONCEPT` with `draftContent` set (staged drafts queue without resubmit).
+- **Endpoint:** `PATCH /admin/content-review/$CONCEPT/approve` (as `ADMIN`)
+- **Expected:** `200`, `content` now the new text, `draftContent: null`.
+- Small edit: `PATCH /concepts/$CONCEPT` + `{ "content": "<old body>." }` (one char) — **Expected:** live `content` updated directly, no draft.
+- Title edit: `PATCH /concepts/$CONCEPT` + `{ "title": "New title" }` — **Expected:** live immediately, stays approved.
+
+### 1.12 Detach blocked on published, delete-concept guard (§3.8)
+- **Endpoint:** `DELETE /modules/$MOD1/concepts/$CONCEPT` (as `A`)
+- **Expected:** `400` — published trees are append-only (attach of a new pending concept still `201`s).
+- **Endpoint:** `DELETE /concepts/$CONCEPT` (as `ADMIN`)
+- **Expected:** `400` — attached, detach first (delete only works on detached concepts).
+
+### 1.13 Unpublish request flow + scheduled deletion (§3.8)
+- **Endpoint:** `POST /roadmaps/$ROADMAP/request-unpublish` (as `A`)
+- **Expected:** `201`, `unpublishStatus === "requested"`. Roadmap still fully public.
+- **Endpoint:** `PATCH /admin/content-review/roadmaps/$ROADMAP/approve-unpublish` (as `ADMIN`)
+- **Expected:** `200`, `unpublishStatus === "approved"`, `unpublishEffectiveAt` ≈ +30 days. Still public (countdown).
+- Abort paths (new): `POST /roadmaps/$ROADMAP/cancel-unpublish` (as `A`) or `PATCH /admin/content-review/roadmaps/$ROADMAP/deny-unpublish` (as `ADMIN`) during the countdown — **Expected:** `200`, status back to `none`, date cleared, stays published.
+- **Endpoint:** `PATCH /admin/content-review/roadmaps/$ROADMAP/schedule-delete` (as `ADMIN`)
+- **Expected:** `200`, `deleteEffectiveAt` ≈ +30 days. Cancel it: `PATCH .../cancel-scheduled-delete` → `200`, date cleared.
+- Purge: `DELETE /admin/content-review/roadmaps/purge-deleted` (as `ADMIN`) — **Expected:** `200 { purged: 0 }` (nothing overdue).
 
 ---
 
 ## 2. QA discussion (§12)
 
-Prerequisite: `$CONCEPT` approved in 1.8 (authored by `A`, now visible to all).
+Prerequisite: `$CONCEPT` published via 1.9 (authored by `A`, visible to all).
 
 ### 2.1 Post a public discussion question (as B)
 - **Endpoint:** `POST /concepts/$CONCEPT/qa-questions` (as `B`)

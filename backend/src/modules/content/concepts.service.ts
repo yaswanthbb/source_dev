@@ -2,14 +2,17 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike, FindOptionsWhere } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
+import { canSeeConcept } from './utils/visibility.util';
 import { slugify } from '../../common/utils/slugify.util';
 import { hasSignificantContentChange } from '../../common/utils/content-diff.util';
 import { CreateConceptDto } from './dto/create-concept.dto';
@@ -86,12 +89,10 @@ export class ConceptsService {
     search?: string,
     user?: User | Omit<User, 'passwordHash'>,
   ): Promise<Concept[]> {
-    // Visibility gating (§1 interim, full rules land in §2/§3): admins see
-    // everything; developers see approved concepts plus their own drafts;
-    // unauthenticated callers see approved concepts only.
-    const isAdmin = user && user.role === UserRole.ADMIN;
-
-    if (isAdmin) {
+    // Visibility gating (§2/§3): admins see everything; authors see approved
+    // concepts plus their own drafts; everyone else sees approved concepts
+    // placed in a PUBLISHED roadmap.
+    if (user && user.role === UserRole.ADMIN) {
       if (search) {
         return this.conceptRepository.find({
           where: { title: ILike(`%${search}%`) },
@@ -100,23 +101,63 @@ export class ConceptsService {
       return this.conceptRepository.find();
     }
 
-    const visibleWhere: FindOptionsWhere<Concept>[] = [
-      { reviewStatus: ConceptReviewStatus.APPROVED },
-    ];
-    if (user) {
-      visibleWhere.push({ authorId: user.id });
-    }
+    // Straightforward two-query approach: approved concepts with a published
+    // placement, plus the viewer's own drafts. Clearer than one mega-join
+    // and cheap at this scale.
+    const approved = await this.conceptRepository.find({
+      where: { reviewStatus: ConceptReviewStatus.APPROVED },
+    });
 
-    if (search) {
-      return this.conceptRepository.find({
-        where: visibleWhere.map((w) => ({
-          ...w,
-          title: ILike(`%${search}%`),
-        })),
+    let own: Concept[] = [];
+    if (user && user.role === UserRole.DEVELOPER) {
+      own = await this.conceptRepository.find({
+        where: { authorId: user.id },
       });
     }
 
-    return this.conceptRepository.find({ where: visibleWhere });
+    let merged = [...approved, ...own.filter((c) => c.reviewStatus !== ConceptReviewStatus.APPROVED)];
+
+    // Authors always keep their own concepts; everyone else's approved
+    // concepts need a published placement.
+    const ownIds = new Set(own.map((c) => c.id));
+    if (approved.length > 0) {
+      const approvedIds = approved.map((c) => c.id);
+      const placements = await this.moduleConceptRepository
+        .createQueryBuilder('mc')
+        .innerJoin('mc.module', 'module')
+        .innerJoin('module.roadmap', 'roadmap')
+        .where('mc.concept_id IN (:...ids)', { ids: approvedIds })
+        .andWhere('roadmap.review_status = :published', {
+          published: RoadmapReviewStatus.PUBLISHED,
+        })
+        .select('mc.concept_id', 'conceptId')
+        .getRawMany<{ conceptId: string }>();
+      const publishedIds = new Set(placements.map((p) => p.conceptId));
+      merged = merged.filter(
+        (c) =>
+          ownIds.has(c.id) ||
+          (c.reviewStatus === ConceptReviewStatus.APPROVED &&
+            publishedIds.has(c.id)),
+      );
+    }
+
+    if (search) {
+      const needle = search.toLowerCase();
+      merged = merged.filter((c) =>
+        c.title.toLowerCase().includes(needle),
+      );
+    }
+
+    return merged.map((c) => ({
+      ...c,
+      // Staged drafts are author/admin-only; readers see live content only.
+      draftContent:
+        user &&
+        (user.role === UserRole.ADMIN ||
+          (c.authorId !== null && c.authorId === user.id))
+          ? c.draftContent
+          : null,
+    }));
   }
 
   async findConceptById(
@@ -130,12 +171,22 @@ export class ConceptsService {
       throw new NotFoundException('Concept not found');
     }
 
-    // Visibility gating: unapproved concepts are hidden from everyone
-    // except admins and the concept's own author.
-    const isAdmin = user && user.role === UserRole.ADMIN;
-    const isAuthor =
-      user && concept.authorId !== null && concept.authorId === user.id;
-    if (!isAdmin && !isAuthor && concept.reviewStatus !== ConceptReviewStatus.APPROVED) {
+    // Visibility gating (§2/§3): unapproved concepts are hidden from
+    // everyone except admins and the concept's own author; approved concepts
+    // additionally need a PUBLISHED roadmap placement for non-authors.
+    const placements = await this.moduleConceptRepository.find({
+      where: { conceptId: id },
+      relations: ['module', 'module.roadmap'],
+    });
+    if (
+      !canSeeConcept(
+        concept,
+        placements.map((mc) => ({
+          roadmapReviewStatus: mc.module?.roadmap?.reviewStatus ?? null,
+        })),
+        user,
+      )
+    ) {
       throw new NotFoundException('Concept not found');
     }
 
@@ -150,8 +201,15 @@ export class ConceptsService {
       ],
     });
 
+    // Staged drafts are author/admin-only; readers see live content only.
+    const canSeeDraft =
+      !!user &&
+      (user.role === UserRole.ADMIN ||
+        (concept.authorId !== null && concept.authorId === user.id));
+
     return {
       ...concept,
+      draftContent: canSeeDraft ? concept.draftContent : null,
       appearsIn: moduleConcepts.map((mc) => ({
         moduleConceptId: mc.id,
         moduleId: mc.moduleId,
@@ -192,6 +250,18 @@ export class ConceptsService {
         isAiGen ||
         hasSignificantContentChange(concept.content, dto.content, 40);
 
+      // §3.8 draft/live split: significant edits to a live (approved +
+      // published) concept stage as a pending draft — readers keep seeing the
+      // live body until admin approves. Small edits go live instantly.
+      // Anything not live keeps the simple pending-reset flow.
+      if (isSignificant && (await this.isLivePublished(concept))) {
+        concept.draftContent = dto.content;
+        if (isAiGen) {
+          concept.isAiGenerated = true;
+        }
+        return this.conceptRepository.save(concept);
+      }
+
       concept.content = dto.content;
 
       if (isSignificant) {
@@ -226,6 +296,32 @@ export class ConceptsService {
       throw new NotFoundException('Concept not found');
     }
 
+    // §3.8: attached concepts are part of a tree — detach first so deletes
+    // never silently gut modules (module deletes cascade-detach instead).
+    const placements = await this.moduleConceptRepository.count({
+      where: { conceptId: id },
+    });
+    if (placements > 0) {
+      throw new BadRequestException(
+        'Concept is attached to a module. Detach it first.',
+      );
+    }
+
     await this.conceptRepository.remove(concept);
+  }
+
+  /** Live = approved with at least one published-roadmap placement. */
+  private async isLivePublished(concept: Concept): Promise<boolean> {
+    if (concept.reviewStatus !== ConceptReviewStatus.APPROVED) return false;
+    const placements = await this.moduleConceptRepository
+      .createQueryBuilder('mc')
+      .innerJoin('mc.module', 'module')
+      .innerJoin('module.roadmap', 'roadmap')
+      .where('mc.concept_id = :id', { id: concept.id })
+      .andWhere('roadmap.review_status = :published', {
+        published: RoadmapReviewStatus.PUBLISHED,
+      })
+      .getOne();
+    return !!placements;
   }
 }

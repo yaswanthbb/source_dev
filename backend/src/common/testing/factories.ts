@@ -54,6 +54,7 @@ export function makeConcept(overrides: Partial<Concept> = {}): Concept {
     rejectionReason: null,
     reviewedByUserId: null,
     reviewedAt: null,
+    draftContent: null,
     authorId: 'author-1',
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,

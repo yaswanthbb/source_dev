@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 
 import { ConceptsService } from './concepts.service';
 import { Concept } from './entities/concept.entity';
@@ -8,9 +8,11 @@ import { ModuleConcept } from './entities/module-concept.entity';
 
 import { UserRole } from '../../common/enums/user-role.enum';
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
 
 import {
   createMockRepository,
+  createMockQueryBuilder,
   MockRepository,
 } from '../../common/testing/mock-repository';
 import { makeUser, makeConcept } from '../../common/testing/factories';
@@ -45,6 +47,10 @@ describe('ConceptsService', () => {
     service = module.get(ConceptsService);
     conceptRepo = module.get(getRepositoryToken(Concept));
     moduleConceptRepo = module.get(getRepositoryToken(ModuleConcept));
+    // Default: no published placements (not live). Draft/live tests override.
+    moduleConceptRepo.createQueryBuilder.mockReturnValue(
+      createMockQueryBuilder({ one: undefined }),
+    );
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -129,6 +135,14 @@ describe('ConceptsService', () => {
   });
 
   describe('findConceptById — visibility gate', () => {
+    const publishedPlacement = [
+      { module: { roadmap: { reviewStatus: RoadmapReviewStatus.PUBLISHED } } },
+    ];
+
+    beforeEach(() => {
+      moduleConceptRepo.find.mockResolvedValue([]);
+    });
+
     it('hides an unapproved concept from a non-author developer (404)', async () => {
       conceptRepo.findOne.mockResolvedValue(
         makeConcept({ reviewStatus: ConceptReviewStatus.PENDING }),
@@ -139,22 +153,71 @@ describe('ConceptsService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('shows an approved concept to a developer', async () => {
+    it('hides an approved concept with no published placement (404)', async () => {
       conceptRepo.findOne.mockResolvedValue(
         makeConcept({ reviewStatus: ConceptReviewStatus.APPROVED }),
       );
-      moduleConceptRepo.find.mockResolvedValue([]);
+
+      await expect(
+        service.findConceptById('concept-1', otherDeveloper),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('shows an approved concept with a published placement', async () => {
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({ reviewStatus: ConceptReviewStatus.APPROVED }),
+      );
+      // First find() call feeds the visibility check, the second feeds appearsIn.
+      moduleConceptRepo.find
+        .mockResolvedValueOnce(publishedPlacement)
+        .mockResolvedValueOnce([]);
 
       await expect(
         service.findConceptById('concept-1', otherDeveloper),
       ).resolves.toMatchObject({ id: 'concept-1', appearsIn: [] });
     });
 
+    it('hides the staged draft from non-authors (live body only)', async () => {
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({
+          authorId: 'someone-else',
+          reviewStatus: ConceptReviewStatus.APPROVED,
+          draftContent: 'staged rewrite',
+        }),
+      );
+      moduleConceptRepo.find
+        .mockResolvedValueOnce(publishedPlacement)
+        .mockResolvedValueOnce([]);
+
+      const result: any = await service.findConceptById(
+        'concept-1',
+        otherDeveloper,
+      );
+
+      expect(result.draftContent).toBeNull();
+      expect(result.content).toBe('Original concept content.');
+    });
+
+    it('shows the staged draft to the author', async () => {
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({
+          reviewStatus: ConceptReviewStatus.APPROVED,
+          draftContent: 'staged rewrite',
+        }),
+      );
+      moduleConceptRepo.find
+        .mockResolvedValueOnce(publishedPlacement)
+        .mockResolvedValueOnce([]);
+
+      const result: any = await service.findConceptById('concept-1', owner);
+
+      expect(result.draftContent).toBe('staged rewrite');
+    });
+
     it('shows an unapproved concept to its author', async () => {
       conceptRepo.findOne.mockResolvedValue(
         makeConcept({ reviewStatus: ConceptReviewStatus.PENDING }),
       );
-      moduleConceptRepo.find.mockResolvedValue([]);
 
       await expect(
         service.findConceptById('concept-1', owner),
@@ -168,7 +231,6 @@ describe('ConceptsService', () => {
           reviewStatus: ConceptReviewStatus.PENDING,
         }),
       );
-      moduleConceptRepo.find.mockResolvedValue([]);
 
       await expect(
         service.findConceptById('concept-1', admin),
@@ -177,17 +239,32 @@ describe('ConceptsService', () => {
   });
 
   describe('findAllConcepts — visibility filtering', () => {
-    it('restricts developers to approved concepts plus their own drafts', async () => {
-      conceptRepo.find.mockResolvedValue([]);
-
-      await service.findAllConcepts(undefined, otherDeveloper);
-
-      expect(conceptRepo.find).toHaveBeenCalledWith({
-        where: [
-          { reviewStatus: ConceptReviewStatus.APPROVED },
-          { authorId: 'developer-2' },
-        ],
+    it('shows developers approved concepts with published placements plus their own drafts', async () => {
+      const approvedPub = makeConcept({
+        id: 'c-pub',
+        authorId: 'someone-else',
+        reviewStatus: ConceptReviewStatus.APPROVED,
       });
+      const approvedUnpub = makeConcept({
+        id: 'c-unpub',
+        authorId: 'someone-else',
+        reviewStatus: ConceptReviewStatus.APPROVED,
+      });
+      const ownDraft = makeConcept({
+        id: 'c-draft',
+        authorId: 'developer-2',
+        reviewStatus: ConceptReviewStatus.PENDING,
+      });
+      conceptRepo.find
+        .mockResolvedValueOnce([approvedPub, approvedUnpub])
+        .mockResolvedValueOnce([ownDraft]);
+      moduleConceptRepo.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({ rawMany: [{ conceptId: 'c-pub' }] }),
+      );
+
+      const result = await service.findAllConcepts(undefined, otherDeveloper);
+
+      expect(result.map((c) => c.id).sort()).toEqual(['c-draft', 'c-pub']);
     });
 
     it('returns everything for an admin', async () => {
@@ -198,19 +275,99 @@ describe('ConceptsService', () => {
       expect(conceptRepo.find).toHaveBeenCalledWith();
     });
 
-    it('adds the visibility filter to a developer search', async () => {
-      conceptRepo.find.mockResolvedValue([]);
-
-      await service.findAllConcepts('sql', otherDeveloper);
-
-      expect(conceptRepo.find).toHaveBeenCalledWith({
-        where: expect.arrayContaining([
-          expect.objectContaining({
-            reviewStatus: ConceptReviewStatus.APPROVED,
-          }),
-          expect.objectContaining({ authorId: 'developer-2' }),
-        ]),
+    it('filters a developer search by title', async () => {
+      const sqlConcept = makeConcept({
+        id: 'c-sql',
+        title: 'SQL Joins',
+        authorId: 'someone-else',
+        reviewStatus: ConceptReviewStatus.APPROVED,
       });
+      conceptRepo.find
+        .mockResolvedValueOnce([sqlConcept])
+        .mockResolvedValueOnce([]);
+      moduleConceptRepo.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({ rawMany: [{ conceptId: 'c-sql' }] }),
+      );
+
+      const result = await service.findAllConcepts('sql', otherDeveloper);
+
+      expect(result.map((c) => c.id)).toEqual(['c-sql']);
+    });
+  });
+
+  describe('updateConcept — draft/live split (§3.8)', () => {
+    const liveConcept = () =>
+      makeConcept({
+        authorId: 'author-1',
+        content: 'Original concept content.',
+        reviewStatus: ConceptReviewStatus.APPROVED,
+      });
+    const publishedPlacement = () =>
+      createMockQueryBuilder({ one: { id: 'mc1' } });
+
+    it('stages a significant edit as a draft, keeping live approved', async () => {
+      conceptRepo.findOne.mockResolvedValue(liveConcept());
+      moduleConceptRepo.createQueryBuilder.mockReturnValue(
+        publishedPlacement(),
+      );
+
+      const result = await service.updateConcept('concept-1', owner, {
+        content: 'X'.repeat(80),
+      } as any);
+
+      expect(result.draftContent).toBe('X'.repeat(80));
+      expect(result.content).toBe('Original concept content.');
+      expect(result.reviewStatus).toBe(ConceptReviewStatus.APPROVED);
+    });
+
+    it('applies a small edit to a live concept directly', async () => {
+      conceptRepo.findOne.mockResolvedValue(liveConcept());
+      moduleConceptRepo.createQueryBuilder.mockReturnValue(
+        publishedPlacement(),
+      );
+
+      const result = await service.updateConcept('concept-1', owner, {
+        content: 'Original concept content..',
+      } as any);
+
+      expect(result.content).toBe('Original concept content..');
+      expect(result.draftContent).toBeNull();
+    });
+
+    it('keeps the old pending-reset for non-live concepts', async () => {
+      conceptRepo.findOne.mockResolvedValue(liveConcept());
+      // No published placement → not live.
+      moduleConceptRepo.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({ one: undefined }),
+      );
+
+      const result = await service.updateConcept('concept-1', owner, {
+        content: 'X'.repeat(80),
+      } as any);
+
+      expect(result.reviewStatus).toBe(ConceptReviewStatus.PENDING);
+      expect(result.draftContent).toBeNull();
+    });
+  });
+
+  describe('deleteConcept — attached guard (§3.8)', () => {
+    it('refuses to delete an attached concept', async () => {
+      conceptRepo.findOne.mockResolvedValue(makeConcept());
+      moduleConceptRepo.count.mockResolvedValue(1);
+
+      await expect(
+        service.deleteConcept('concept-1', admin),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(conceptRepo.remove).not.toHaveBeenCalled();
+    });
+
+    it('deletes a detached concept', async () => {
+      conceptRepo.findOne.mockResolvedValue(makeConcept());
+      moduleConceptRepo.count.mockResolvedValue(0);
+
+      await service.deleteConcept('concept-1', admin);
+
+      expect(conceptRepo.remove).toHaveBeenCalled();
     });
   });
 });

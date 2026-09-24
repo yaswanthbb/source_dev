@@ -45,28 +45,37 @@ Core differentiator: one-click AI-assisted course generation, without the hassle
 
 ## 2. Content ownership & reuse
 
-**Status: not yet built.**
-
-- Developers can keep any authored content (roadmaps, concepts) **entirely private** to themselves indefinitely — there is no requirement to ever submit anything for public review.
-- **Concepts are strictly reusable only within their own author's content** — never across different developers.
+**Status: BACKEND DONE 2026-09-21.**
+- Developers keep authored content private indefinitely: drafts are author-only until published (no submit requirement, no expiry).
+- **Attach gate** (`POST modules/:moduleId/concepts`): a concept attaches only inside its own author's roadmap (`concept.authorId === roadmap.createdById`, strict, no admin bypass). Cross-developer reuse is a `403`.
 
 ---
 
 ## 3. Publishing / review workflow
 
-**Status: backend not yet built** (interim visibility predicate shipped in §1: admins see all, developers see approved + own drafts, enforced on concept reads AND QA list/ask/answer).
+**Status: BACKEND DONE 2026-09-21** (frontend screens deferred). Shipped: `POST roadmaps/:id/submit` (soft 3×3 warnings, resubmit re-queues rejected-only), `GET roadmaps/:id/review` (compiled response: per-module rollup with derived `approved` flags + `canPublish`), per-concept approve/reject restricted to SUBMITTED roadmaps, pending queue filtered to submitted roadmaps, `PATCH admin/content-review/roadmaps/:id/publish` (all-approved + ≥3 modules), `PATCH .../reject` (outright, back to draft with reason, concepts untouched), `PATCH .../unpublish` (takedown, approvals intact).
 
 **Specified 2026-09-21 (locked for the §3 build):**
 
 When a Developer wants a roadmap to go public:
 
 1. **Private by default:** an authored concept is visible only to its author until reviewed. A pending-review concept is likewise author-only.
-2. **Submit for review** happens at the **whole-roadmap level** — one action, not per-concept gating. **Submission minimums (soft):** at least 3 modules, each with at least 3 concepts. Soft warning, not a hard block.
+2. **Submit for review** happens at the **whole-roadmap level** — one action, not per-concept gating. **Submission minimums (hard, enforced on the author at submit):** at least 3 modules, each with at least 3 concepts. Submit below that is a `400`, not a warning.
 3. **Admin reviews the whole roadmap**, opening each module and each concept. Admin marks each concept OK or Reject (with a reason per rejected concept), or rejects the entire roadmap outright.
 4. On submission, the developer receives a single compiled response, auto-assembled from the per-concept marks.
 5. **Resubmission after rejection:** only the previously-rejected concepts get re-queued for review.
-6. **Module publish:** a module goes public only when **all** its concepts are approved **and** the admin clicks publish on the module.
-7. **Roadmap publish:** a roadmap goes public only when at least **3 modules** are published (approved).
+6. **Module approved (derived display, no stored state):** a module counts as approved when **all** its concepts are approved. Frontend shows "module approved" instead of N concept rows; backend exposes the flag per module in the review response. There is no module approve/publish click.
+7. **Roadmap publish:** explicit admin click, unlocked only when every concept is approved. Structure minimums are not re-checked at publish — submit already guarantees them.
+8. **Published-content edit model (specified 2026-09-22, BACKEND DONE):**
+- **Names live-editable:** roadmap/module/concept titles edit freely, no review gate, effective immediately.
+- **Concept content draft/live split (published concepts only):** significant edits (existing `hasSignificantContentChange`, ≥40 edit distance) to an approved concept in a published roadmap are stored as a pending draft — readers keep seeing live until admin approves, then draft replaces live. Small edits go live instantly. New/unpublished concepts keep the simple pending→hidden→approved flow.
+- **While published:** concepts attachable, never detachable by the developer; nothing directly deletable by the developer.
+- **Developer unpublish:** request (from published) → admin approves/denies → on approve, 30-day fully-public countdown → then private, normal draft freedom resumes. Author may cancel a pending request.
+- **Private content:** full developer freedom (attach/detach/edit/delete own, no restrictions).
+- **Admin moderation deletes:** roadmaps = immediate delete (existing) or 30-day-delayed delete (visible until date, then purged via maintenance endpoint); concepts/modules = immediate direct delete. Delete-concept blocked while attached to any module (detach first). Module delete auto-detaches its concepts; roadmap delete detaches all modules.
+- **Deletion notification contract (for §7, no infra yet):** payload states what was removed, who removed it, when, and a specific human reason (YouTube/Meta/Maps pattern). No appeal mechanism, no soft-delete system — hard delete + informal "contact admin" at current scale.
+- **Schema notes:** roadmaps need unpublish-request state + effective date and scheduled-deletion date; concepts need pending-draft content storage.
+- **History:** same rows throughout (no edition copies) — QA threads and learner progress carry over automatically.
 
 ## 4. Content labeling (AI-generated vs hand-written vs partial)
 
@@ -189,8 +198,8 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 1. ~~Dashboard bugfix pass~~ — done (§9a)
 2. ~~Full CLI mode (student)~~ — done, exceeded scope (§9b)
 3. ~~Rebrand pass~~ — essentially done (§9c), Render env var still pending (low urgency, local dev unaffected)
-4. Role collapse (§1) + QA discussion backend (§12) — **first backend task**, foundational for everything after
-5. Content ownership (§2) + Publishing/review workflow (§3) + content labeling (§4)
+4. ~~Role collapse (§1) + QA discussion backend (§12)~~ — **backend done + manually verified**
+5. ~~Content ownership (§2) + Publishing/review workflow (§3) + content labeling (§4)~~ — **§2+§3 backend done** (§4 labeling still open)
 6. AI course-generation quality deep-dive (§8) — before or alongside BYOK, it's the core differentiator
 7. BYOK AI generation system (§5)
 8. Notifications system (§7)
@@ -210,6 +219,12 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 - **2026-09-21 — §1 backend + §12 backend shipped:** role collapse + QA discussion backend implemented, `tsc` clean, backend jest 236/242 (the 6 failures in progress/quiz/ai-generate specs are pre-existing on clean HEAD, verified via stash). Migrations `1787900000000-RoleCollapseToDeveloper` + `1787910000000-QaDiscussionModel` not yet run against a live DB (no DB in this environment) — run `typeorm:migration:run` in dev before frontend work. Frontend still references old roles/routes — intentionally untouched until frontend phase.
 - **2026-09-21 — QA visibility hole fixed:** reads gated concepts but QA list/ask/answer did not — a developer could ask on a pending draft they couldn't see. Fixed in `QaService` via `checkConceptVisible` on all three entry points (404, no leak). Rule going forward: no endpoint may touch a concept's discussion without passing the visibility check.
 - **2026-09-21 — §3 specified:** private-by-default concepts, whole-roadmap submit (soft 3×3 minimums), per-concept approve/reject + compiled response, resubmit rejected-only, module publish = all concepts approved + admin publish click, roadmap publish = ≥3 published modules.
+- **2026-09-21 — §2+§3 backend shipped:** roadmap `review_status` lifecycle (migration `PublishingWorkflow`); submit/review/publish/reject-roadmap/unpublish endpoints; per-concept approve restricted to submitted roadmaps; module-approved is derived display only (no module click — corrected per user); attach gate enforces same-author reuse (strict, no bypass); visibility predicate extended to approved + published-roadmap placement everywhere incl. QA. Concept-approve on non-submitted work now `400`s (test-guide 1.8 flow replaced by submit-first).
+- **2026-09-21 — Submit guards hardened per manual testing:** 3 modules × 3 concepts is now a hard `400` on the author at submit (was soft warnings); publish drops the module-count re-check (submit guarantees it). Rejected concepts still block publish. Deferred: published-edit → re-review → republish flow + author-delete permissions (design first).
+- **2026-09-22 — Published-edit flow designed (not built):** targeted block on invariant-breaking removals (not a freeze); re-review via queue covers published placements (no resubmit needed for single-concept fixes); titles stay live; delete-concept blocked while attached; delete-module auto-detaches; delete-roadmap detaches all. Author-delete permissions still open.
+- **2026-09-22 — Published-edit model backend shipped (migration `PublishedEditModel`):** concept `draft_content` staging for significant live edits (small edits live, titles always live); detach blocked on published roadmaps (append-only); unpublish request→approve/deny with 30-day public countdown (lazy expiry flip, no cron); scheduled admin deletion + purge endpoint; concept-delete blocked while attached; admin approve promotes drafts, draft-reject keeps live + reason; review queue covers published placements. Deletion-notification payload contract saved for §7 (no infra yet).
+- **2026-09-24 — Draft leak fixed:** `draftContent` rode the spread entity into reader responses (`findConceptById`, `findAllConcepts`, roadmap reads). Stripped for non-author non-admin everywhere; review response carries `hasPendingDraft` instead.
+- **2026-09-24 — Countdown abort added:** author-cancel and admin-deny now also work on an approved (not yet elapsed) unpublish countdown, clearing status + date. Previously nothing could stop it post-approval.
 - **2026-09-21 — QA refinements from manual testing:** author/admin answers auto-verify on arrival (their own verify step would be pointless); question edit-lock applies to ANY answer (editing under an AI reply strands a stale answer); answers stay editable. Test guide `backend/write-tests-for-me.md` updated to match.
 - **2026-09-21 — Working agreement:** implement strictly one feature at a time on user instruction only; test/verify each before moving on. This doc is the reference across sessions and models.
 

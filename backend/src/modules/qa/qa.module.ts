@@ -3,13 +3,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Question } from './entities/question.entity';
 import { Answer } from './entities/answer.entity';
 import { Concept } from '../content/entities/concept.entity';
+import { ModuleConcept } from '../content/entities/module-concept.entity';
 import { AiGenerateModule } from '../ai-generate/ai-generate.module';
 import { QaService } from './qa.service';
 import { QaController } from './qa.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Question, Answer, Concept]),
+    TypeOrmModule.forFeature([Question, Answer, Concept, ModuleConcept]),
     AiGenerateModule,
   ],
 

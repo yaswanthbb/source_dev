@@ -6,10 +6,12 @@ import { QaService } from './qa.service';
 import { Question } from './entities/question.entity';
 import { Answer } from './entities/answer.entity';
 import { Concept } from '../content/entities/concept.entity';
+import { ModuleConcept } from '../content/entities/module-concept.entity';
 import { AiGenerateService } from '../ai-generate/ai-generate.service';
 
 import { UserRole } from '../../common/enums/user-role.enum';
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
 
 import {
   createMockRepository,
@@ -22,6 +24,7 @@ describe('QaService', () => {
   let questionRepo: MockRepository;
   let answerRepo: MockRepository;
   let conceptRepo: MockRepository;
+  let moduleConceptRepo: MockRepository;
   let aiService: { generateQaAnswer: jest.Mock };
 
   const asker = makeUser({ role: UserRole.DEVELOPER }); // id: user-1
@@ -49,6 +52,10 @@ describe('QaService', () => {
           provide: getRepositoryToken(Concept),
           useValue: createMockRepository(),
         },
+        {
+          provide: getRepositoryToken(ModuleConcept),
+          useValue: createMockRepository(),
+        },
         { provide: AiGenerateService, useValue: aiService },
       ],
     }).compile();
@@ -57,6 +64,12 @@ describe('QaService', () => {
     questionRepo = module.get(getRepositoryToken(Question));
     answerRepo = module.get(getRepositoryToken(Answer));
     conceptRepo = module.get(getRepositoryToken(Concept));
+    moduleConceptRepo = module.get(getRepositoryToken(ModuleConcept));
+    // Default: every concept sits in a published roadmap (visible).
+    // Invisibility tests override this with [].
+    moduleConceptRepo.find.mockResolvedValue([
+      { module: { roadmap: { reviewStatus: RoadmapReviewStatus.PUBLISHED } } },
+    ]);
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -81,6 +94,7 @@ describe('QaService', () => {
           reviewStatus: ConceptReviewStatus.PENDING,
         }),
       );
+      moduleConceptRepo.find.mockResolvedValue([]);
 
       await expect(
         service.createQuestion('c1', asker, dto),
@@ -251,6 +265,7 @@ describe('QaService', () => {
           reviewStatus: ConceptReviewStatus.PENDING,
         }),
       );
+      moduleConceptRepo.find.mockResolvedValue([]);
 
       await expect(
         service.getQuestionsForConcept('c1', otherDeveloper),
@@ -343,6 +358,7 @@ describe('QaService', () => {
           reviewStatus: ConceptReviewStatus.PENDING,
         }),
       });
+      moduleConceptRepo.find.mockResolvedValue([]);
 
       await expect(
         service.createAnswer('q1', otherDeveloper, dto),

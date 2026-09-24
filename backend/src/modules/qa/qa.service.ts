@@ -8,8 +8,9 @@ import { Repository } from 'typeorm';
 import { Question } from './entities/question.entity';
 import { Answer } from './entities/answer.entity';
 import { Concept } from '../content/entities/concept.entity';
+import { ModuleConcept } from '../content/entities/module-concept.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+import { canSeeConcept } from '../content/utils/visibility.util';
 import { User } from '../users/entities/user.entity';
 import { AiGenerateService } from '../ai-generate/ai-generate.service';
 import { CreateQaQuestionDto } from './dto/create-qa-question.dto';
@@ -26,6 +27,8 @@ export class QaService {
     private readonly answerRepository: Repository<Answer>,
     @InjectRepository(Concept)
     private readonly conceptRepository: Repository<Concept>,
+    @InjectRepository(ModuleConcept)
+    private readonly moduleConceptRepository: Repository<ModuleConcept>,
     private readonly aiGenerateService: AiGenerateService,
   ) {}
 
@@ -45,18 +48,30 @@ export class QaService {
   }
 
   /**
-   * Discussion visibility mirrors concept visibility: if you cannot see the
-   * concept ( someone else's pending draft ), you cannot list, ask, or answer
-   * on it either. 404 (not 403) so pending drafts are not leaked.
+   * Discussion visibility mirrors concept visibility (§2/§3): if you cannot
+   * see the concept ( someone else's draft, or an approved concept in an
+   * unpublished roadmap ), you cannot list, ask, or answer on it either.
+   * 404 (not 403) so unpublished work is not leaked.
    */
-  private checkConceptVisible(
+  private async checkConceptVisible(
     concept: Concept,
     user: Omit<User, 'passwordHash'>,
-  ): void {
-    if (concept.reviewStatus === ConceptReviewStatus.APPROVED) return;
-    if (user.role === UserRole.ADMIN) return;
-    if (concept.authorId !== null && concept.authorId === user.id) return;
-    throw new NotFoundException('Concept not found');
+  ): Promise<void> {
+    const placements = await this.moduleConceptRepository.find({
+      where: { conceptId: concept.id },
+      relations: ['module', 'module.roadmap'],
+    });
+    if (
+      !canSeeConcept(
+        concept,
+        placements.map((mc) => ({
+          roadmapReviewStatus: mc.module?.roadmap?.reviewStatus ?? null,
+        })),
+        user,
+      )
+    ) {
+      throw new NotFoundException('Concept not found');
+    }
   }
 
   /**
@@ -95,7 +110,7 @@ export class QaService {
     if (!concept) {
       throw new NotFoundException('Concept not found');
     }
-    this.checkConceptVisible(concept, user);
+    await this.checkConceptVisible(concept, user);
 
     const question = this.questionRepository.create({
       conceptId,
@@ -139,7 +154,7 @@ export class QaService {
       throw new NotFoundException('Concept not found');
     }
     if (user) {
-      this.checkConceptVisible(concept, user);
+      await this.checkConceptVisible(concept, user);
     }
 
     const questions = await this.questionRepository.find({
@@ -253,7 +268,7 @@ export class QaService {
     if (!question.concept) {
       throw new NotFoundException('Concept not found');
     }
-    this.checkConceptVisible(question.concept, user);
+    await this.checkConceptVisible(question.concept, user);
 
     // Discussion model (§12): any authenticated developer may answer.
     // Authoritative answers are verified on arrival: the concept's author
