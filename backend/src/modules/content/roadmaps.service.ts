@@ -21,10 +21,12 @@ import { AttachConceptDto } from './dto/attach-concept.dto';
 import { UpdateModuleConceptDto } from './dto/update-module-concept.dto';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { User } from '../users/entities/user.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
 import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
 import { RoadmapUnpublishStatus } from '../../common/enums/roadmap-unpublish-status.enum';
+import { NotificationType } from '../../common/enums/notification-type.enum';
 import { canSeeConcept, canSeeRoadmap, isUnpublishDue } from './utils/visibility.util';
 import {
   conceptOriginLabel,
@@ -48,6 +50,7 @@ export class RoadmapsService {
     private readonly moduleConceptPrerequisiteRepository: Repository<ModuleConceptPrerequisite>,
     @InjectRepository(McqQuestion)
     private readonly mcqQuestionRepository: Repository<McqQuestion>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async checkContentCreator(
@@ -345,6 +348,7 @@ export class RoadmapsService {
   async deleteRoadmap(
     id: string,
     user: Omit<User, 'passwordHash'>,
+    reason?: string,
   ): Promise<void> {
     if (user.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Only administrators can delete roadmaps');
@@ -353,6 +357,23 @@ export class RoadmapsService {
     if (!roadmap) {
       throw new NotFoundException('Roadmap not found');
     }
+
+    const authorId = roadmap.createdById;
+    const title = roadmap.title;
+    await this.notificationsService.safeNotify(
+      authorId && authorId !== user.id ? authorId : null,
+      NotificationType.ROADMAP_DELETED,
+      {
+        what: 'roadmap',
+        whatId: id,
+        title,
+        removedBy: user.name ?? user.id,
+        removedAt: new Date().toISOString(),
+        reason: reason?.trim() || 'Removed by platform moderation.',
+        effectiveAt: null,
+      },
+    );
+
     await this.roadmapRepository.remove(roadmap);
   }
 
@@ -440,7 +461,19 @@ export class RoadmapsService {
     roadmap.rejectionReason = null;
     roadmap.reviewedByUserId = null;
     roadmap.reviewedAt = null;
-    return this.roadmapRepository.save(roadmap);
+    const saved = await this.roadmapRepository.save(roadmap);
+
+    await this.notificationsService.notifyAdmins(
+      NotificationType.ROADMAP_SUBMITTED,
+      {
+        roadmapId: roadmap.id,
+        roadmapTitle: roadmap.title,
+        submittedBy: user.id,
+      },
+      user.id,
+    );
+
+    return saved;
   }
 
   /**
@@ -546,7 +579,23 @@ export class RoadmapsService {
     roadmap.rejectionReason = null;
     roadmap.reviewedByUserId = admin.id;
     roadmap.reviewedAt = new Date();
-    return this.roadmapRepository.save(roadmap);
+    const published = await this.roadmapRepository.save(roadmap);
+
+    await this.notificationsService.safeNotify(
+      roadmap.createdById && roadmap.createdById !== admin.id
+        ? roadmap.createdById
+        : null,
+      NotificationType.ROADMAP_PUBLISHED,
+      {
+        roadmapId: roadmap.id,
+        roadmapTitle: roadmap.title,
+        reviewStatus: RoadmapReviewStatus.PUBLISHED,
+        reviewedBy: admin.name ?? admin.id,
+        reviewedAt: new Date().toISOString(),
+      },
+    );
+
+    return published;
   }
 
   /**
@@ -572,13 +621,30 @@ export class RoadmapsService {
     roadmap.rejectionReason = reason;
     roadmap.reviewedByUserId = admin.id;
     roadmap.reviewedAt = new Date();
-    return this.roadmapRepository.save(roadmap);
+    const rejected = await this.roadmapRepository.save(roadmap);
+
+    await this.notificationsService.safeNotify(
+      roadmap.createdById && roadmap.createdById !== admin.id
+        ? roadmap.createdById
+        : null,
+      NotificationType.ROADMAP_REJECTED,
+      {
+        roadmapId: roadmap.id,
+        roadmapTitle: roadmap.title,
+        reviewStatus: RoadmapReviewStatus.DRAFT,
+        reason,
+        reviewedBy: admin.name ?? admin.id,
+        reviewedAt: new Date().toISOString(),
+      },
+    );
+
+    return rejected;
   }
 
   /** Takedown: published roadmap goes back to draft, approvals intact. */
   async unpublishRoadmap(
     id: string,
-    _admin: Omit<User, 'passwordHash'>,
+    admin: Omit<User, 'passwordHash'>,
   ): Promise<Roadmap> {
     const roadmap = await this.roadmapRepository.findOne({ where: { id } });
     if (!roadmap) {
@@ -589,7 +655,22 @@ export class RoadmapsService {
     }
 
     roadmap.reviewStatus = RoadmapReviewStatus.DRAFT;
-    return this.roadmapRepository.save(roadmap);
+    const unpublished = await this.roadmapRepository.save(roadmap);
+
+    await this.notificationsService.safeNotify(
+      roadmap.createdById && roadmap.createdById !== admin.id
+        ? roadmap.createdById
+        : null,
+      NotificationType.ROADMAP_UNPUBLISHED,
+      {
+        roadmapId: roadmap.id,
+        roadmapTitle: roadmap.title,
+        removedBy: admin.name ?? admin.id,
+        removedAt: new Date().toISOString(),
+      },
+    );
+
+    return unpublished;
   }
 
   // --- §3.8 published-edit model: unpublish request flow ---
@@ -648,7 +729,23 @@ export class RoadmapsService {
     roadmap.unpublishEffectiveAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
     roadmap.reviewedByUserId = admin.id;
     roadmap.reviewedAt = new Date();
-    return this.roadmapRepository.save(roadmap);
+    const approved = await this.roadmapRepository.save(roadmap);
+
+    await this.notificationsService.safeNotify(
+      roadmap.createdById && roadmap.createdById !== admin.id
+        ? roadmap.createdById
+        : null,
+      NotificationType.ROADMAP_UNPUBLISH_APPROVED,
+      {
+        roadmapId: roadmap.id,
+        roadmapTitle: roadmap.title,
+        reviewedBy: admin.name ?? admin.id,
+        reviewedAt: new Date().toISOString(),
+        effectiveAt: roadmap.unpublishEffectiveAt.toISOString(),
+      },
+    );
+
+    return approved;
   }
 
   /** Admin denies takedown: request closed, roadmap stays published. */
@@ -702,7 +799,25 @@ export class RoadmapsService {
     roadmap.deleteEffectiveAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
     roadmap.reviewedByUserId = admin.id;
     roadmap.reviewedAt = new Date();
-    return this.roadmapRepository.save(roadmap);
+    const scheduled = await this.roadmapRepository.save(roadmap);
+
+    await this.notificationsService.safeNotify(
+      roadmap.createdById && roadmap.createdById !== admin.id
+        ? roadmap.createdById
+        : null,
+      NotificationType.ROADMAP_DELETED,
+      {
+        what: 'roadmap',
+        whatId: roadmap.id,
+        title: roadmap.title,
+        removedBy: admin.name ?? admin.id,
+        removedAt: new Date().toISOString(),
+        reason: 'Removed by platform moderation.',
+        effectiveAt: roadmap.deleteEffectiveAt.toISOString(),
+      },
+    );
+
+    return scheduled;
   }
 
   /** Admin cancels a scheduled moderation deletion. */

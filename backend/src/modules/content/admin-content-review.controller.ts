@@ -29,6 +29,8 @@ import { ConceptReviewStatus } from '../../common/enums/concept-review-status.en
 import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
 import { RejectConceptDto } from './dto/reject-concept.dto';
 import { RoadmapsService } from './roadmaps.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../../common/enums/notification-type.enum';
 
 @ApiTags('Admin Content Review')
 @ApiBearerAuth('bearer-auth')
@@ -44,6 +46,7 @@ export class AdminContentReviewController {
     @InjectRepository(McqQuestion)
     private readonly mcqQuestionRepository: Repository<McqQuestion>,
     private readonly roadmapsService: RoadmapsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -242,7 +245,23 @@ export class AdminContentReviewController {
     concept.reviewedByUserId = admin.id;
     concept.reviewedAt = new Date();
 
-    return this.conceptRepository.save(concept);
+    const approved = await this.conceptRepository.save(concept);
+
+    await this.notificationsService.safeNotify(
+      concept.authorId && concept.authorId !== admin.id
+        ? concept.authorId
+        : null,
+      NotificationType.CONCEPT_APPROVED,
+      {
+        conceptId: concept.id,
+        conceptTitle: concept.title,
+        reviewStatus: ConceptReviewStatus.APPROVED,
+        reviewedBy: admin.name ?? admin.id,
+        reviewedAt: new Date().toISOString(),
+      },
+    );
+
+    return approved;
   }
 
   @Patch(':conceptId/reject')
@@ -280,7 +299,24 @@ export class AdminContentReviewController {
     concept.reviewedByUserId = admin.id;
     concept.reviewedAt = new Date();
 
-    return this.conceptRepository.save(concept);
+    const rejected = await this.conceptRepository.save(concept);
+
+    await this.notificationsService.safeNotify(
+      concept.authorId && concept.authorId !== admin.id
+        ? concept.authorId
+        : null,
+      NotificationType.CONCEPT_REJECTED,
+      {
+        conceptId: concept.id,
+        conceptTitle: concept.title,
+        reviewStatus: concept.reviewStatus,
+        reason: dto.reason,
+        reviewedBy: admin.name ?? admin.id,
+        reviewedAt: new Date().toISOString(),
+      },
+    );
+
+    return rejected;
   }
 
   @Patch('roadmaps/:id/publish')

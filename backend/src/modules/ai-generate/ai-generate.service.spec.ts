@@ -14,17 +14,61 @@ import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { RoadmapsService } from '../content/roadmaps.service';
 import { ConceptsService } from '../content/concepts.service';
 import { QuizService } from '../quiz/quiz.service';
+import { AiKeysService } from './ai-keys.service';
+import { AiProviderClients } from './ai-provider-clients';
+import { AiProvider } from '../../common/enums/ai-provider.enum';
+import { UserRole } from '../../common/enums/user-role.enum';
 
 import {
   createMockRepository,
   MockRepository,
 } from '../../common/testing/mock-repository';
+import { makeUser } from '../../common/testing/factories';
 
 describe('AiGenerateService', () => {
   let service: AiGenerateService;
   let logRepo: MockRepository;
+  let configGet: jest.Mock;
+  let keysService: {
+    getDefaultKey: jest.Mock;
+    getKeyById: jest.Mock;
+    decryptForUse: jest.Mock;
+  };
+  let clients: {
+    complete: jest.Mock;
+    listModels: jest.Mock;
+    configuredDefaultModel: jest.Mock;
+  };
+
+  const developer = makeUser({ id: 'dev-1', role: UserRole.DEVELOPER });
+  const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
+
+  const freeCreds = {
+    provider: AiProvider.NVIDIA,
+    apiKey: 'platform-key',
+    model: 'meta/llama-3.1-70b-instruct',
+    keyId: null,
+    tier: 'free',
+    limit: 5,
+    unlimited: false,
+  } as const;
 
   beforeEach(async () => {
+    configGet = jest.fn();
+    keysService = {
+      getDefaultKey: jest.fn(),
+      getKeyById: jest.fn(),
+      decryptForUse: jest.fn(),
+    };
+    clients = {
+      complete: jest.fn(),
+      listModels: jest.fn(),
+      configuredDefaultModel: jest.fn(
+        (p: string) =>
+          p === 'gemini' ? 'gemini-2.0-flash' : 'meta/llama-3.1-70b-instruct',
+      ),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AiGenerateService,
@@ -56,10 +100,12 @@ describe('AiGenerateService', () => {
           provide: getRepositoryToken(McqQuestion),
           useValue: createMockRepository(),
         },
-        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: ConfigService, useValue: { get: configGet } },
         { provide: RoadmapsService, useValue: {} },
         { provide: ConceptsService, useValue: {} },
         { provide: QuizService, useValue: {} },
+        { provide: AiKeysService, useValue: keysService },
+        { provide: AiProviderClients, useValue: clients },
       ],
     }).compile();
 
@@ -167,51 +213,227 @@ describe('AiGenerateService', () => {
     });
   });
 
-  describe('checkRateLimit', () => {
+  describe('checkRateLimit — per-bucket quotas (§5)', () => {
     beforeEach(() => {
       jest.useFakeTimers().setSystemTime(new Date('2026-08-25T12:00:00.000Z'));
     });
 
-    it('returns the remaining quota when under the daily limit', async () => {
-      logRepo.count.mockResolvedValue(5);
+    const logRows = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `log-${i}`,
+        generatedAt: new Date('2026-08-25T10:00:00.000Z'),
+      }));
 
-      await expect(service.checkRateLimit('u1', 1)).resolves.toEqual({
-        remaining: 15,
-      });
-    });
+    it('counts the free bucket (5/day) against unkeyed logs only', async () => {
+      logRepo.find.mockResolvedValue(logRows(3));
 
-    it('throws a 429 once the daily limit is reached', async () => {
-      logRepo.count.mockResolvedValue(20);
-
-      const err = await service.checkRateLimit('u1', 1).catch((e) => e);
-
-      expect(err).toBeInstanceOf(HttpException);
-      expect(err.getStatus()).toBe(429);
-      expect((err.getResponse() as any).message).toContain(
-        'Daily AI generation limit reached',
+      await expect(
+        service.checkRateLimit('u1', 1, 'UTC', { ...freeCreds } as any),
+      ).resolves.toEqual({ remaining: 2, limit: 5, unlimited: false });
+      expect(logRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'u1',
+            providerKeyId: expect.anything(),
+          }),
+        }),
       );
     });
 
-    it('rejects a batch that cannot fit in the remaining quota', async () => {
-      logRepo.count.mockResolvedValue(18); // remaining 2
+    it('throws a unified 429 pointing at BYOK on the free tier', async () => {
+      logRepo.find.mockResolvedValue(logRows(5));
 
-      const err = await service.checkRateLimit('u1', 3).catch((e) => e);
+      const err = await service
+        .checkRateLimit('u1', 1, 'UTC', { ...freeCreds } as any)
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(HttpException);
+      expect(err.getStatus()).toBe(429);
+      expect((err.getResponse() as any).message).toContain('own key');
+    });
+
+    it('counts each own-key bucket separately with its own cap', async () => {
+      logRepo.find.mockResolvedValue(logRows(19));
+      const ownCreds = {
+        ...freeCreds,
+        keyId: 'key-1',
+        tier: 'own-key',
+        limit: 20,
+      };
+
+      await expect(
+        service.checkRateLimit('u1', 1, 'UTC', ownCreds as any),
+      ).resolves.toEqual({ remaining: 1, limit: 20, unlimited: false });
+    });
+
+    it('points at the cap (max 50) when an own-key bucket is exhausted', async () => {
+      logRepo.find.mockResolvedValue(logRows(20));
+      const ownCreds = {
+        ...freeCreds,
+        keyId: 'key-1',
+        tier: 'own-key',
+        limit: 20,
+      };
+
+      const err = await service
+        .checkRateLimit('u1', 1, 'UTC', ownCreds as any)
+        .catch((e) => e);
+
+      expect(err.getStatus()).toBe(429);
+      expect((err.getResponse() as any).message).toContain('max 50');
+    });
+
+    it('rejects a batch that cannot fit in the remaining quota', async () => {
+      logRepo.find.mockResolvedValue(logRows(4)); // remaining 1
+
+      const err = await service
+        .checkRateLimit('u1', 3, 'UTC', { ...freeCreds } as any)
+        .catch((e) => e);
 
       expect(err).toBeInstanceOf(HttpException);
       expect(err.getStatus()).toBe(429);
       expect((err.getResponse() as any).message).toContain('batch operation');
     });
 
-    it('scopes the usage count to the requesting user', async () => {
-      logRepo.count.mockResolvedValue(0);
+    it('skips checks entirely for unlimited (admin) credentials', async () => {
+      await expect(
+        service.checkRateLimit('admin-1', 100, 'UTC', {
+          ...freeCreds,
+          tier: 'admin',
+          unlimited: true,
+        } as any),
+      ).resolves.toEqual({ remaining: -1, limit: -1, unlimited: true });
+      expect(logRepo.find).not.toHaveBeenCalled();
+    });
+  });
 
-      await service.checkRateLimit('u1', 1);
-
-      expect(logRepo.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ userId: 'u1' }),
-        }),
+  describe('resolveCredentials (§5)', () => {
+    beforeEach(() => {
+      configGet.mockImplementation((key: string) =>
+        key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
       );
+      keysService.getDefaultKey.mockResolvedValue(null);
+      clients.listModels.mockResolvedValue({ models: ['m1'], live: true });
+    });
+
+    it('resolves the free NVIDIA tier when no default key exists', async () => {
+      const creds = await service.resolveCredentials(developer as any);
+
+      expect(creds).toMatchObject({
+        provider: AiProvider.NVIDIA,
+        keyId: null,
+        tier: 'free',
+        limit: 5,
+        unlimited: false,
+      });
+    });
+
+    it('rejects Gemini on the free tier (BYOK-only)', async () => {
+      await expect(
+        service.resolveCredentials(developer as any, {
+          provider: AiProvider.GEMINI,
+        }),
+      ).rejects.toThrow('own key only');
+    });
+
+    it('uses the default key and validates the requested model live', async () => {
+      keysService.getDefaultKey.mockResolvedValue({
+        id: 'key-1',
+        provider: AiProvider.NVIDIA,
+        dailyLimit: 20,
+      });
+      keysService.decryptForUse.mockReturnValue('user-key');
+      clients.listModels.mockResolvedValue({ models: ['m1', 'm2'], live: true });
+
+      const creds = await service.resolveCredentials(developer as any, {
+        model: 'm2',
+      });
+
+      expect(creds).toMatchObject({
+        keyId: 'key-1',
+        tier: 'own-key',
+        limit: 20,
+        model: 'm2',
+      });
+      expect(clients.listModels).toHaveBeenCalledWith(
+        AiProvider.NVIDIA,
+        'user-key',
+      );
+    });
+
+    it('rejects a provider that conflicts with the default key', async () => {
+      keysService.getDefaultKey.mockResolvedValue({
+        id: 'key-1',
+        provider: AiProvider.NVIDIA,
+        dailyLimit: 20,
+      });
+
+      await expect(
+        service.resolveCredentials(developer as any, {
+          provider: AiProvider.GEMINI,
+        }),
+      ).rejects.toThrow('does not match your default');
+    });
+
+    it('rejects an unknown model', async () => {
+      keysService.getDefaultKey.mockResolvedValue({
+        id: 'key-1',
+        provider: AiProvider.NVIDIA,
+        dailyLimit: 20,
+      });
+      keysService.decryptForUse.mockReturnValue('user-key');
+      clients.listModels.mockResolvedValue({ models: ['m1'], live: true });
+
+      await expect(
+        service.resolveCredentials(developer as any, { model: 'nope' }),
+      ).rejects.toThrow('Unknown model');
+    });
+
+    it('prefers request model, then the key default, then provider default', async () => {
+      keysService.getDefaultKey.mockResolvedValue({
+        id: 'key-1',
+        provider: AiProvider.NVIDIA,
+        dailyLimit: 20,
+        defaultModel: 'key-default',
+      });
+      keysService.decryptForUse.mockReturnValue('user-key');
+      clients.listModels.mockResolvedValue({
+        models: ['key-default', 'other'],
+        live: true,
+      });
+
+      const viaKey = await service.resolveCredentials(developer as any);
+      expect(viaKey.model).toBe('key-default');
+
+      const viaRequest = await service.resolveCredentials(developer as any, {
+        model: 'other',
+      });
+      expect(viaRequest.model).toBe('other');
+    });
+
+    it('resolves admins as unlimited (default key when set)', async () => {
+      keysService.getDefaultKey.mockResolvedValue({
+        id: 'key-9',
+        provider: AiProvider.GEMINI,
+        dailyLimit: 50,
+      });
+      keysService.decryptForUse.mockReturnValue('admin-key');
+
+      const creds = await service.resolveCredentials(admin as any);
+
+      expect(creds).toMatchObject({
+        provider: AiProvider.GEMINI,
+        tier: 'admin',
+        unlimited: true,
+      });
+    });
+
+    it('fails when the platform key is missing and no default exists', async () => {
+      configGet.mockReturnValue(undefined);
+
+      await expect(
+        service.resolveCredentials(developer as any),
+      ).rejects.toThrow('not configured');
     });
   });
 });

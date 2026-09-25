@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   Logger,
   OnApplicationBootstrap,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -18,11 +19,14 @@ import {
   AiGenerationJobFailedItem,
   AiGenerationJobResultSummary,
 } from './entities/ai-generation-job.entity';
+import { AiProviderKey } from './entities/ai-provider-key.entity';
 import { AiGenerationType } from '../../common/enums/ai-generation-type.enum';
 import {
   AiGenerationJobType,
   AiGenerationJobStatus,
 } from '../../common/enums/ai-generation-job.enum';
+import { AiProvider } from '../../common/enums/ai-provider.enum';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { ConceptDifficulty } from '../../common/enums/concept-difficulty.enum';
 import {
   addCivilDays,
@@ -56,6 +60,13 @@ import {
   GenerateConceptContentDto,
   GenerateConceptMcqsDto,
 } from './dto/ai-generate.dto';
+import {
+  AiProviderClients,
+  CompletionOptions,
+  defaultModelFor,
+  providerFailure,
+} from './ai-provider-clients';
+import { AiKeysService } from './ai-keys.service';
 
 interface ParsedMcqOption {
   optionText?: string;
@@ -67,7 +78,32 @@ interface ParsedMcqQuestion {
   options?: ParsedMcqOption[];
 }
 
-const DAILY_LIMIT = 20;
+const FREE_DAILY_LIMIT = 5;
+const OWN_KEY_DEFAULT_LIMIT = 20;
+
+export type AiQuotaTier = 'free' | 'own-key' | 'admin';
+
+/**
+ * Credentials snapshot resolved once per operation (§5): which provider,
+ * whose key (memory-only plaintext), which model, and which quota bucket.
+ * keyId null = platform free tier. Threaded through detached job runners so
+ * a job always uses the key it started with.
+ */
+export interface ResolvedAiCredentials {
+  provider: AiProvider;
+  apiKey: string;
+  model: string;
+  keyId: string | null;
+  tier: AiQuotaTier;
+  limit: number;
+  unlimited: boolean;
+}
+
+export interface AiQuotaStatus {
+  remaining: number;
+  limit: number;
+  unlimited: boolean;
+}
 
 @Injectable()
 export class AiGenerateService implements OnApplicationBootstrap {
@@ -92,6 +128,8 @@ export class AiGenerateService implements OnApplicationBootstrap {
     private readonly roadmapsService: RoadmapsService,
     private readonly conceptsService: ConceptsService,
     private readonly quizService: QuizService,
+    private readonly keysService: AiKeysService,
+    private readonly clients: AiProviderClients,
   ) {}
 
   /**
@@ -121,8 +159,159 @@ export class AiGenerateService implements OnApplicationBootstrap {
   }
 
   /**
-   * Check if the user has reached their daily limit for "today" in *their*
-   * timezone.
+   * Resolve which credentials an operation runs with (§5):
+   * - Admin: unlimited; default key when set, else the platform NVIDIA key.
+   * - Developer with a default key: that key's provider (a conflicting
+   *   `provider` request is rejected); caller model validated live.
+   * - Developer without one: platform free tier (NVIDIA only, 5/day).
+   *   Gemini is BYOK-only.
+   */
+  async resolveCredentials(
+    user: User,
+    opts?: { provider?: AiProvider; model?: string },
+  ): Promise<ResolvedAiCredentials> {
+    const isAdmin = user.role === UserRole.ADMIN;
+    const defaultKey = await this.keysService.getDefaultKey(user.id);
+
+    let provider = opts?.provider;
+    let key: AiProviderKey | null = null;
+    if (defaultKey) {
+      if (provider && provider !== defaultKey.provider) {
+        throw new BadRequestException(
+          `Requested provider does not match your default ${defaultKey.provider} key. Change your default key to switch providers.`,
+        );
+      }
+      provider = defaultKey.provider;
+      key = defaultKey;
+    } else {
+      provider ??= AiProvider.NVIDIA;
+      if (provider === AiProvider.GEMINI) {
+        throw new BadRequestException(
+          'Gemini is available with your own key only. Add a Gemini API key to use it.',
+        );
+      }
+    }
+
+    const requestedModel = opts?.model?.trim() || undefined;
+    // Priority: per-call model → key's saved default → provider default.
+    const model =
+      requestedModel ||
+      key?.defaultModel ||
+      this.clients.configuredDefaultModel(provider);
+
+    let apiKey: string;
+    if (key) {
+      apiKey = this.keysService.decryptForUse(key);
+      if (requestedModel) {
+        await this.assertKnownModel(provider, apiKey, requestedModel);
+      }
+    } else {
+      const platformKey = this.configService
+        .get<string>('NVIDIA_API_KEY')
+        ?.trim();
+      if (!platformKey) {
+        throw new ServiceUnavailableException(
+          'The shared AI service is not configured right now. Please wait until tomorrow, or add your own key to keep generating.',
+        );
+      }
+      apiKey = platformKey;
+    }
+
+    if (isAdmin) {
+      return {
+        provider,
+        apiKey,
+        model,
+        keyId: key?.id ?? null,
+        tier: 'admin',
+        limit: -1,
+        unlimited: true,
+      };
+    }
+    if (key) {
+      return {
+        provider,
+        apiKey,
+        model,
+        keyId: key.id,
+        tier: 'own-key',
+        limit: key.dailyLimit || OWN_KEY_DEFAULT_LIMIT,
+        unlimited: false,
+      };
+    }
+    return {
+      provider,
+      apiKey,
+      model,
+      keyId: null,
+      tier: 'free',
+      limit: FREE_DAILY_LIMIT,
+      unlimited: false,
+    };
+  }
+
+  /** Rebuild credentials for a detached job run from its stored snapshot. */
+  private async credentialsForJob(
+    job: AiGenerationJob,
+  ): Promise<ResolvedAiCredentials> {
+    const provider = job.provider ?? AiProvider.NVIDIA;
+    const model = job.model || this.clients.configuredDefaultModel(provider);
+
+    if (!job.providerKeyId) {
+      const platformKey = this.configService
+        .get<string>('NVIDIA_API_KEY')
+        ?.trim();
+      if (!platformKey) {
+        throw new ServiceUnavailableException(
+          'The shared AI service is not configured right now. Please wait until tomorrow, or add your own key to keep generating.',
+        );
+      }
+      return {
+        provider,
+        apiKey: platformKey,
+        model,
+        keyId: null,
+        tier: 'free',
+        limit: FREE_DAILY_LIMIT,
+        unlimited: false,
+      };
+    }
+
+    const key = await this.keysService.getKeyById(job.providerKeyId);
+    if (!key) {
+      throw new BadRequestException(
+        'The API key this job started with no longer exists.',
+      );
+    }
+    return {
+      provider: key.provider,
+      apiKey: this.keysService.decryptForUse(key),
+      model: model || key.defaultModel || this.clients.configuredDefaultModel(key.provider),
+      keyId: key.id,
+      tier: 'own-key',
+      limit: key.dailyLimit || OWN_KEY_DEFAULT_LIMIT,
+      unlimited: false,
+    };
+  }
+
+  private async assertKnownModel(
+    provider: AiProvider,
+    apiKey: string,
+    model: string,
+  ): Promise<void> {
+    const { models } = await this.clients.listModels(provider, apiKey);
+    if (!models.includes(model)) {
+      throw new BadRequestException(
+        `Unknown model "${model}" for this provider. Pick one from the live model list.`,
+      );
+    }
+  }
+
+  /**
+   * Per-bucket daily quota in the caller's own timezone (see original note
+   * about UTC boundaries below). Free tier and each own-key get their own
+   * bucket; admins skip checks entirely. Every limit-hit shows the same
+   * wait-or-switch prompt (§5).
    *
    * On a UTC day boundary an instructor in Asia/Kolkata saw their quota reset
    * at 05:30 local rather than at midnight, so the last few hours of their
@@ -134,7 +323,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
     userId: string,
     requiredSlots = 1,
     timezone?: string | null,
-  ): Promise<{ remaining: number }> {
+    creds?: ResolvedAiCredentials,
+  ): Promise<AiQuotaStatus> {
+    if (creds?.unlimited) {
+      return { remaining: -1, limit: -1, unlimited: true };
+    }
+    const limit = creds?.limit ?? FREE_DAILY_LIMIT;
+    const keyId = creds?.keyId ?? null;
     const zone = resolveZone(timezone);
     const todayStr = todayIn(zone);
 
@@ -149,6 +344,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
       where: {
         userId,
         generatedAt: MoreThanOrEqual(windowStart),
+        providerKeyId: keyId ?? IsNull(),
       },
       select: { id: true, generatedAt: true },
     });
@@ -157,38 +353,44 @@ export class AiGenerateService implements OnApplicationBootstrap {
       (row) => civilDateIn(zone, new Date(row.generatedAt)) === todayStr,
     ).length;
 
-    const remaining = Math.max(0, DAILY_LIMIT - count);
+    const remaining = Math.max(0, limit - count);
 
     if (remaining < requiredSlots) {
+      const help =
+        creds?.tier === 'own-key'
+          ? "You have used today's allowance for this key. Please wait until tomorrow, raise this key's cap (max 50), or switch keys."
+          : "You have used today's free allowance (5 generations per day). Please wait until tomorrow, or add your own key to keep generating.";
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message:
             requiredSlots > 1
-              ? `At least ${requiredSlots} AI generations remaining are required for this batch operation. You have ${remaining}/${DAILY_LIMIT} remaining today.`
-              : `Daily AI generation limit reached (${DAILY_LIMIT} generations per day). Your quota resets at midnight in your own timezone.`,
+              ? `At least ${requiredSlots} AI generations remaining are required for this batch operation. ${help}`
+              : `Daily AI generation limit reached. ${help}`,
           error: 'Too Many Requests',
           remaining,
-          limit: DAILY_LIMIT,
+          limit,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
-    return { remaining };
+    return { remaining, limit, unlimited: false };
   }
 
   /**
-   * Record a generation event in the log
+   * Record a generation event in the log (per-bucket attribution via keyId)
    */
   async logGeneration(
     userId: string,
     type: AiGenerationType,
+    keyId?: string | null,
   ): Promise<AiGenerationLog> {
     const log = this.aiGenerationLogRepository.create({
       userId,
       generationType: type,
       generatedAt: new Date(),
+      providerKeyId: keyId ?? null,
     });
     return this.aiGenerationLogRepository.save(log);
   }
@@ -208,88 +410,33 @@ export class AiGenerateService implements OnApplicationBootstrap {
   }
 
   /**
-   * Executes a non-streaming completion request against NVIDIA NIM API
+   * Single dispatch for every completion in the module (§5): runs against
+   * the resolved provider/key/model and cleans output exactly like the old
+   * NVIDIA-only path did.
    */
-  async generateNvidiaCompletion(
+  async complete(
+    creds: ResolvedAiCredentials,
     systemPrompt: string,
     userPrompt: string,
-    options?: {
-      maxTokens?: number;
-      temperature?: number;
-      responseFormat?: { type: 'json_object' | 'text' };
-    },
+    options?: CompletionOptions,
     signal?: AbortSignal,
   ): Promise<string> {
-    const apiKey = this.configService.get<string>('NVIDIA_API_KEY')?.trim();
-    const apiUrl =
-      this.configService.get<string>('NVIDIA_API_URL')?.trim() ||
-      'https://integrate.api.nvidia.com/v1/chat/completions';
-    const modelId =
-      this.configService.get<string>('NVIDIA_MODEL_ID')?.trim() ||
-      'meta/llama-3.1-70b-instruct';
-
-    if (!apiKey) {
-      throw new InternalServerErrorException(
-        'NVIDIA API key (NVIDIA_API_KEY) is not configured on the server.',
-      );
-    }
-
-    const maxTokens = options?.maxTokens ?? 2048;
-    const temperature = options?.temperature ?? 0.6;
-
-    const requestBody: Record<string, unknown> = {
-      model: modelId,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      stream: false,
-      temperature,
-      top_p: 0.9,
-      max_tokens: maxTokens,
-    };
-
-    if (options?.responseFormat) {
-      requestBody.response_format = options.responseFormat;
-    }
-
-    let response: globalThis.Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal,
-      });
-    } catch (err: unknown) {
-      const error = err as Error;
-      this.logger.error(`Failed to reach NVIDIA NIM API: ${error.message}`);
-      throw new HttpException(
-        `Unable to reach NVIDIA NIM API: ${error.message}`,
-        HttpStatus.BAD_GATEWAY,
-      );
-    }
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      this.logger.error(
-        `NVIDIA NIM API error HTTP ${response.status}: ${errorBody}`,
-      );
-      throw new HttpException(
-        `NVIDIA NIM API Error (${response.status}): ${errorBody}`,
-        HttpStatus.BAD_GATEWAY,
-      );
-    }
-
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const rawContent = data.choices?.[0]?.message?.content || '';
-    return this.cleanModelOutput(rawContent);
+    const raw = await this.clients.complete(
+      creds.provider,
+      creds.apiKey,
+      creds.model,
+      systemPrompt,
+      userPrompt,
+      options,
+      signal,
+    );
+    return this.cleanModelOutput(raw);
   }
+
+  /**
+   * Pre-repairs malformed JSON containing unescaped backslashes (e.g. Windows paths)
+   * or unescaped double quotes inside key/value strings.
+   */
 
   /**
    * Pre-repairs malformed JSON containing unescaped backslashes (e.g. Windows paths)
@@ -454,12 +601,17 @@ export class AiGenerateService implements OnApplicationBootstrap {
     jobType: AiGenerationJobType,
     targetId: string,
     user: User,
+    opts?: { provider?: AiProvider; model?: string },
   ): Promise<{ jobId: string }> {
+    // 0. Resolve credentials (tier, key, provider, model) — throws 400/503.
+    const creds = await this.resolveCredentials(user, opts);
+
     // 1. Validate target + capacity + quota (throws 404 / 403 / 400 / 429)
     const { targetLabel } = await this.validateJobStart(
       jobType,
       targetId,
       user,
+      creds,
     );
 
     // 2. Reject if a generation is already pending/running for this target
@@ -480,7 +632,8 @@ export class AiGenerateService implements OnApplicationBootstrap {
       );
     }
 
-    // 3. Create the job row
+    // 3. Create the job row (key snapshot drives the deletion lock +
+    // detached credential rebuild)
     const job = await this.aiGenerationJobRepository.save(
       this.aiGenerationJobRepository.create({
         requestedByUserId: user.id,
@@ -489,11 +642,14 @@ export class AiGenerateService implements OnApplicationBootstrap {
         status: AiGenerationJobStatus.PENDING,
         progressCurrent: 0,
         progressTotal: 0,
+        provider: creds.provider,
+        model: creds.model,
+        providerKeyId: creds.keyId,
       }),
     );
 
     // 4. Fire-and-forget: run the generation without awaiting the HTTP response
-    void this.executeJob(job.id, jobType, targetId, user, targetLabel).catch(
+    void this.executeJob(job.id, jobType, targetId, user, targetLabel, creds).catch(
       (err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.error(
@@ -513,6 +669,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     jobType: AiGenerationJobType,
     targetId: string,
     user: User,
+    creds: ResolvedAiCredentials,
   ): Promise<{ targetLabel: string }> {
     if (jobType === AiGenerationJobType.ROADMAP_MODULES) {
       const roadmap = await this.roadmapRepository.findOne({
@@ -529,7 +686,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
           'Roadmap module limit reached (6/6). Cannot generate more modules.',
         );
       }
-      await this.checkRateLimit(user.id, 1, user.timezone);
+      await this.checkRateLimit(user.id, 1, user.timezone, creds);
       return { targetLabel: roadmap.title };
     }
 
@@ -557,10 +714,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
       }
       const remainingSlots = 6 - existingConceptTitles.length;
       // 1 title-list call + up to remainingSlots content calls
-      await this.checkRateLimit(user.id, remainingSlots + 1, user.timezone);
+      await this.checkRateLimit(user.id, remainingSlots + 1, user.timezone, creds);
     } else {
       // MODULE_MCQS
-      await this.checkRateLimit(user.id, 1, user.timezone);
+      await this.checkRateLimit(user.id, 1, user.timezone, creds);
     }
 
     return { targetLabel: moduleEntity.title };
@@ -577,12 +734,22 @@ export class AiGenerateService implements OnApplicationBootstrap {
     targetId: string,
     user: User,
     targetLabel: string,
+    creds?: ResolvedAiCredentials,
   ): Promise<void> {
     await this.aiGenerationJobRepository.update(jobId, {
       status: AiGenerationJobStatus.RUNNING,
     });
 
     try {
+      // Detached runs rebuild credentials from the job's snapshot so the job
+      // always uses the key it started with, even if the default changed.
+      if (!creds) {
+        const job = await this.aiGenerationJobRepository.findOne({
+          where: { id: jobId },
+        });
+        if (!job) throw new Error(`Job ${jobId} not found.`);
+        creds = await this.credentialsForJob(job);
+      }
       let summary: AiGenerationJobResultSummary;
       switch (jobType) {
         case AiGenerationJobType.ROADMAP_MODULES:
@@ -591,6 +758,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             targetId,
             user,
             targetLabel,
+            creds,
           );
           break;
         case AiGenerationJobType.MODULE_CONCEPTS:
@@ -599,6 +767,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             targetId,
             user,
             targetLabel,
+            creds,
           );
           break;
         case AiGenerationJobType.MODULE_MCQS:
@@ -607,6 +776,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             targetId,
             user,
             targetLabel,
+            creds,
           );
           break;
         default:
@@ -638,6 +808,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
               progressCurrent: 0,
               progressTotal: summary.failedItems.length,
               retryOfJobId: jobId,
+              // Retry inherits the original's credentials snapshot.
+              provider: creds.provider,
+              model: creds.model,
+              providerKeyId: creds.keyId,
             }),
           );
 
@@ -654,6 +828,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             user,
             targetLabel,
             summary,
+            creds,
           ).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             this.logger.error(
@@ -692,12 +867,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
     user: User,
     targetLabel: string,
     originalSummary: AiGenerationJobResultSummary,
+    creds?: ResolvedAiCredentials,
   ): Promise<void> {
     await this.aiGenerationJobRepository.update(retryJobId, {
       status: AiGenerationJobStatus.RUNNING,
     });
 
     try {
+      if (!creds) {
+        const retryJob = await this.aiGenerationJobRepository.findOne({
+          where: { id: retryJobId },
+        });
+        if (!retryJob) throw new Error(`Job ${retryJobId} not found.`);
+        creds = await this.credentialsForJob(retryJob);
+      }
       const failedTitles = originalSummary.failedItems.map((f) => f.title);
 
       let retrySummary: AiGenerationJobResultSummary;
@@ -709,6 +892,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             user,
             targetLabel,
             failedTitles,
+            creds,
           );
           break;
         case AiGenerationJobType.MODULE_CONCEPTS:
@@ -718,6 +902,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             user,
             targetLabel,
             failedTitles,
+            creds,
           );
           break;
         case AiGenerationJobType.MODULE_MCQS:
@@ -727,6 +912,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             user,
             targetLabel,
             failedTitles,
+            creds,
           );
           break;
         default:
@@ -858,6 +1044,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     roadmapId: string,
     user: User,
     targetLabel: string,
+    creds: ResolvedAiCredentials,
   ): Promise<AiGenerationJobResultSummary> {
     const roadmap = await this.roadmapRepository.findOne({
       where: { id: roadmapId },
@@ -878,13 +1065,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
       remainingCount,
     );
 
-    const responseText = await this.generateNvidiaCompletion(
+    const responseText = await this.complete(creds,
       ROADMAP_MODULES_SYSTEM_PROMPT,
       userPrompt,
       { maxTokens: 400, temperature: 0.5 },
     );
 
-    await this.logGeneration(user.id, AiGenerationType.ROADMAP_MODULES);
+    await this.logGeneration(user.id, AiGenerationType.ROADMAP_MODULES, creds.keyId);
 
     const parsedTitles = this.parseStringArray(responseText);
     const moduleTitles = parsedTitles.slice(0, remainingCount);
@@ -942,6 +1129,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     moduleId: string,
     user: User,
     targetLabel: string,
+    creds: ResolvedAiCredentials,
   ): Promise<AiGenerationJobResultSummary> {
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id: moduleId },
@@ -981,13 +1169,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
       targetCount: remainingSlots,
     });
 
-    const titlesResponse = await this.generateNvidiaCompletion(
+    const titlesResponse = await this.complete(creds,
       MODULE_CONCEPTS_SYSTEM_PROMPT,
       userPrompt,
       { maxTokens: 400, temperature: 0.5 },
     );
 
-    await this.logGeneration(user.id, AiGenerationType.MODULE_CONCEPTS);
+    await this.logGeneration(user.id, AiGenerationType.MODULE_CONCEPTS, creds.keyId);
 
     const parsedTitles = this.parseStringArray(titlesResponse);
     const conceptTitles = parsedTitles.slice(0, remainingSlots);
@@ -1015,7 +1203,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
 
       // Check quota before each individual content call
       try {
-        await this.checkRateLimit(user.id, 1, user.timezone);
+        await this.checkRateLimit(user.id, 1, user.timezone, creds);
       } catch {
         skippedCount = conceptTitles.length - processed;
         break;
@@ -1031,13 +1219,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
           siblingConceptTitles: cumulativeSiblingTitles,
         });
 
-        const generatedContent = await this.generateNvidiaCompletion(
+        const generatedContent = await this.complete(creds,
           CONCEPT_CONTENT_SYSTEM_PROMPT,
           contentPrompt,
           { maxTokens: 3000, temperature: 0.6 },
         );
 
-        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT);
+        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId);
 
         // Validate any links generated in the markdown before persisting
         const sanitizedContent =
@@ -1089,6 +1277,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     moduleId: string,
     user: User,
     targetLabel: string,
+    creds: ResolvedAiCredentials,
   ): Promise<AiGenerationJobResultSummary> {
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id: moduleId },
@@ -1148,7 +1337,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     for (const concept of conceptsNeedingMcqs) {
       // Check quota before each concept MCQ generation
       try {
-        await this.checkRateLimit(user.id, 1, user.timezone);
+        await this.checkRateLimit(user.id, 1, user.timezone, creds);
       } catch {
         skippedCount = conceptsNeedingMcqs.length - processed;
         break;
@@ -1167,7 +1356,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
         while (attempt < maxAttempts && !parsedQuestions) {
           attempt++;
           try {
-            const responseText = await this.generateNvidiaCompletion(
+            const responseText = await this.complete(creds,
               CONCEPT_MCQ_SYSTEM_PROMPT,
               userPrompt,
               {
@@ -1178,7 +1367,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             );
 
             if (attempt === 1) {
-              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
+              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS, creds.keyId);
             }
 
             parsedQuestions = this.parseMcqQuestions(
@@ -1285,6 +1474,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     user: User,
     targetLabel: string,
     titles: string[],
+    creds: ResolvedAiCredentials,
   ): Promise<AiGenerationJobResultSummary> {
     const roadmap = await this.roadmapRepository.findOne({
       where: { id: roadmapId },
@@ -1347,6 +1537,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     user: User,
     targetLabel: string,
     titles: string[],
+    creds: ResolvedAiCredentials,
   ): Promise<AiGenerationJobResultSummary> {
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id: moduleId },
@@ -1380,7 +1571,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
 
       // Check quota before each individual content call (same as the first run).
       try {
-        await this.checkRateLimit(user.id, 1, user.timezone);
+        await this.checkRateLimit(user.id, 1, user.timezone, creds);
       } catch {
         skippedCount += titlesToRetry.length - processed;
         break;
@@ -1396,13 +1587,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
           siblingConceptTitles: cumulativeSiblingTitles,
         });
 
-        const generatedContent = await this.generateNvidiaCompletion(
+        const generatedContent = await this.complete(creds,
           CONCEPT_CONTENT_SYSTEM_PROMPT,
           contentPrompt,
           { maxTokens: 3000, temperature: 0.6 },
         );
 
-        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT);
+        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId);
 
         const sanitizedContent =
           await this.validateAndSanitizeConceptLinks(generatedContent);
@@ -1453,6 +1644,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     user: User,
     targetLabel: string,
     conceptTitles: string[],
+    creds: ResolvedAiCredentials,
   ): Promise<AiGenerationJobResultSummary> {
     const moduleEntity = await this.moduleRepository.findOne({
       where: { id: moduleId },
@@ -1518,7 +1710,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     for (const concept of conceptsNeedingMcqs) {
       // Check quota before each concept MCQ generation.
       try {
-        await this.checkRateLimit(user.id, 1, user.timezone);
+        await this.checkRateLimit(user.id, 1, user.timezone, creds);
       } catch {
         skippedCount = conceptsNeedingMcqs.length - processed;
         break;
@@ -1537,7 +1729,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
         while (attempt < maxAttempts && !parsedQuestions) {
           attempt++;
           try {
-            const responseText = await this.generateNvidiaCompletion(
+            const responseText = await this.complete(creds,
               CONCEPT_MCQ_SYSTEM_PROMPT,
               userPrompt,
               {
@@ -1548,7 +1740,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             );
 
             if (attempt === 1) {
-              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
+              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS, creds.keyId);
             }
 
             parsedQuestions = this.parseMcqQuestions(
@@ -1651,18 +1843,22 @@ export class AiGenerateService implements OnApplicationBootstrap {
     dto: GenerateConceptContentDto,
     user: User,
   ): Promise<{ content: string }> {
-    await this.checkRateLimit(user.id, 1, user.timezone);
+    const creds = await this.resolveCredentials(user, {
+      provider: dto.provider,
+      model: dto.model,
+    });
+    await this.checkRateLimit(user.id, 1, user.timezone, creds);
 
     const systemPrompt = CONCEPT_CONTENT_SYSTEM_PROMPT;
     const userPrompt = buildConceptContentUserPrompt(dto);
 
-    const rawContent = await this.generateNvidiaCompletion(
+    const rawContent = await this.complete(creds,
       systemPrompt,
       userPrompt,
       { maxTokens: 3000, temperature: 0.6 },
     );
 
-    await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT);
+    await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId);
 
     const content = await this.validateAndSanitizeConceptLinks(rawContent);
 
@@ -1676,7 +1872,11 @@ export class AiGenerateService implements OnApplicationBootstrap {
     dto: GenerateConceptMcqsDto,
     user: User,
   ): Promise<{ rawText: string }> {
-    await this.checkRateLimit(user.id, 1, user.timezone);
+    const creds = await this.resolveCredentials(user, {
+      provider: dto.provider,
+      model: dto.model,
+    });
+    await this.checkRateLimit(user.id, 1, user.timezone, creds);
 
     const systemPrompt = CONCEPT_MCQ_SYSTEM_PROMPT;
     const userPrompt = buildConceptMcqUserPrompt(dto.title, dto.content);
@@ -1689,7 +1889,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     while (attempt < maxAttempts && !parsedQuestions) {
       attempt++;
       try {
-        lastResponseText = await this.generateNvidiaCompletion(
+        lastResponseText = await this.complete(creds,
           systemPrompt,
           userPrompt,
           {
@@ -1700,7 +1900,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
         );
 
         if (attempt === 1) {
-          await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS);
+          await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS, creds.keyId);
         }
 
         parsedQuestions = this.parseMcqQuestions(lastResponseText, dto.title);
@@ -1735,7 +1935,8 @@ export class AiGenerateService implements OnApplicationBootstrap {
     questionBody: string,
     user: User,
   ): Promise<string> {
-    await this.checkRateLimit(user.id, 1, user.timezone);
+    const creds = await this.resolveCredentials(user);
+    await this.checkRateLimit(user.id, 1, user.timezone, creds);
 
     const systemPrompt = QA_ANSWER_SYSTEM_PROMPT;
     const userPrompt = buildQaAnswerUserPrompt(
@@ -1744,13 +1945,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
       questionBody,
     );
 
-    const answer = await this.generateNvidiaCompletion(
+    const answer = await this.complete(creds,
       systemPrompt,
       userPrompt,
       { maxTokens: 1500, temperature: 0.5 },
     );
 
-    await this.logGeneration(user.id, AiGenerationType.QA_ANSWER);
+    await this.logGeneration(user.id, AiGenerationType.QA_ANSWER, creds.keyId);
 
     return answer;
   }

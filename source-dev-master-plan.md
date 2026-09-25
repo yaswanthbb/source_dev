@@ -90,26 +90,28 @@ When a Developer wants a roadmap to go public:
 
 ## 5. AI Generation — BYOK (Bring Your Own Key) redesign
 
-**Status: not yet built.**
+**Status: ✅ BACKEND DONE 2026-09-24** (migration `AiByokKeys`; providers NVIDIA + Gemini; decisions 2026-09-24 below supersede the older draft).
 
 **Why:** the platform is free, unfunded, single-dev. A shared platform API key cannot realistically support real usage at scale.
 
-**Free tier (platform's own key):**
-- **5 generations/day per Developer**, deliberately low.
-- **Admin (you) has no daily limit at all.**
+**Free tier (platform's NVIDIA key only):**
+- **5 generations/day per Developer.**
+- **Admin has no daily limit at all** (checks skipped, `-1` sentinel + `unlimited` flag in quota responses).
+- Gemini is **BYOK-only** — no platform Gemini key.
 
 **Bring-your-own-key:**
-- A Developer can store **up to 2 of their own provider API keys** at a time, editable and deletable/re-creatable.
-- **Security requirement (non-negotiable):** keys encrypted at rest, decrypted only server-side at call time, never round-tripped back to the frontend.
-- **Multiple providers supported**, with each provider's available model list **auto-fetched live** (reference pattern: LibreChat's `apiKey: "user_provided"` + `fetch: true`).
-- **Currently only NVIDIA NIM is integrated platform-side.** Gemini removed long ago; an attempted OpenAI/ChatGPT integration was scrapped mid-build. BYOK should be built provider-agnostic.
-- Own-key usage: 20/day self-imposed cap, raisable up to 50/day max behind a simple "are you sure?" confirmation.
+- A Developer stores **up to 2 keys** (any mix of NVIDIA/Gemini), first one auto-default. Label/cap editable; key material re-creatable via delete + create.
+- **One default key** drives all generations (no per-call key picker). Absent default = free tier.
+- **Security (non-negotiable, implemented):** AES-256-GCM envelope (`AiKeyCryptoService`), `AI_KEYS_ENCRYPTION_SECRET` 32-byte hex (production refuses to boot without it; dev uses an ephemeral key + warning), decrypted only server-side at call time, list/read endpoints return metadata only (id, provider, label, last-4 hint, default, cap, timestamps).
+- **Providers:** NVIDIA NIM (OpenAI-compatible chat) + Gemini (`generateContent` REST). Model list per provider **auto-fetched live** (`GET /ai-providers/:provider/models`, optional `?keyId=`), curated fallback with `live:false`. Callers may pass `model`, validated server-side against the live list.
+- Own-key quota: **separate daily bucket per key** (default cap 20, settable **1–50 freely, no confirmation step** — decided simplification of the old "are you sure" draft).
+- Jobs snapshot provider+model+key at creation; detached runners rebuild from the snapshot (immune to default-key changes mid-flight).
 
 **Key lifecycle edge cases:**
-- A key currently in use by a running AI generation job is **locked from deletion** — tooltip explaining why.
-- Deleting a key that isn't mid-job falls back to the free platform tier automatically.
+- A key driving a pending/running job is **locked from deletion** (`400` with reason).
+- Deleting the default (or having none) falls back to the free tier automatically.
 
-**Limit-hit / failure behavior:** free-tier limit, own-key limit, high traffic, or provider error — all show the same prompt: wait until tomorrow, or add/switch to their own key.
+**Limit-hit / failure behavior:** free-tier limit, own-key limit, high traffic, or provider error — unified prompt: wait until tomorrow, or add/switch to their own key. Auth failures (401/403) instead say the key was rejected (check/replace).
 
 ---
 
@@ -200,7 +202,7 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 4. ✅ ~~Role collapse (§1) + QA discussion backend (§12)~~ — **backend done + manually verified**
 5. ✅ ~~Content ownership (§2) + Publishing/review workflow (§3) + content labeling (§4)~~ — **backend done**
 6. AI course-generation quality deep-dive (§8) — before or alongside BYOK, it's the core differentiator
-7. BYOK AI generation system (§5)
+7. ✅ ~~BYOK AI generation system (§5)~~ — **backend done**
 8. Notifications system (§7)
 9. Articles feature (§6) — depends on notifications
 
@@ -225,6 +227,9 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 - **2026-09-24 — Draft leak fixed:** `draftContent` rode the spread entity into reader responses (`findConceptById`, `findAllConcepts`, roadmap reads). Stripped for non-author non-admin everywhere; review response carries `hasPendingDraft` instead.
 - **2026-09-24 — Countdown abort added:** author-cancel and admin-deny now also work on an approved (not yet elapsed) unpublish countdown, clearing status + date. Previously nothing could stop it post-approval.
 - **2026-09-24 — §4 backend shipped (no migration):** three-state origin labels computed bottom-up at read time (`origin-label.util`, unit-tested); `originLabel` on concept/roadmap/module reads + review response; `?label=` filters on both list endpoints; empties unlabeled and excluded from filtered results.
+- **2026-09-24 — §5 backend shipped (migration `AiByokKeys`, providers NVIDIA + Gemini):** default-key setting (not per-call picker); per-key quota buckets (free 5/day, own-key default 20, settable 1–50 with NO confirm step — decided); Gemini BYOK-only (no platform key); caller model choice validated against live lists; AES-256-GCM custody with boot refusal in prod without secret; in-use deletion lock; jobs snapshot credentials; unified wait-or-switch messages; admin unlimited. Fixed 4 of the 6 pre-existing spec failures as drive-by (ai-generate quota specs rewritten; progress/quiz failures remain, untouched).
+- **2026-09-24 — Provider error mapping hardened (from live 410):** model-gone responses (NVIDIA 404/410, Gemini 404) now name the model and point at the live list instead of the generic wait-or-switch prompt; restored pre-BYOK `NVIDIA_MODEL_ID`/`NVIDIA_API_URL` operator overrides for the default model.
+- **2026-09-24 — Per-key default model + pre-save lookup:** `POST /ai-providers/:provider/models/lookup` verifies an unsaved key and returns its live list (dropdown source, never stored); keys carry a validated `defaultModel`; resolution priority is per-call model → key default → provider default.
 - **2026-09-21 — QA refinements from manual testing:** author/admin answers auto-verify on arrival (their own verify step would be pointless); question edit-lock applies to ANY answer (editing under an AI reply strands a stale answer); answers stay editable. Test guide `backend/write-tests-for-me.md` updated to match.
 - **2026-09-21 — Working agreement:** implement strictly one feature at a time on user instruction only; test/verify each before moving on. This doc is the reference across sessions and models.
 

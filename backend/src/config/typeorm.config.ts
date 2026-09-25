@@ -31,6 +31,7 @@ import { AccountDeletionRequest } from '../modules/users/entities/account-deleti
 import { ReviewItem } from '../modules/review/entities/review-item.entity';
 import { AiGenerationLog } from '../modules/ai-generate/entities/ai-generation-log.entity';
 import { AiGenerationJob } from '../modules/ai-generate/entities/ai-generation-job.entity';
+import { AiProviderKey } from '../modules/ai-generate/entities/ai-provider-key.entity';
 import { PasswordResetOtp } from '../modules/auth/entities/password-reset-otp.entity';
 
 export const entities = [
@@ -56,6 +57,7 @@ export const entities = [
   ReviewItem,
   AiGenerationLog,
   AiGenerationJob,
+  AiProviderKey,
   PasswordResetOtp,
 ];
 

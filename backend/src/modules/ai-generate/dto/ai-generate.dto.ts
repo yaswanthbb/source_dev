@@ -4,10 +4,30 @@ import {
   IsOptional,
   IsArray,
   IsUUID,
+  IsEnum,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AiProvider } from '../../../common/enums/ai-provider.enum';
 
-export class GenerateRoadmapModulesDto {
+export class AiGenerationOptions {
+  @ApiPropertyOptional({
+    enum: AiProvider,
+    description:
+      'Provider to run with (must match your default key when one is set; free tier is NVIDIA only)',
+  })
+  @IsOptional()
+  @IsEnum(AiProvider)
+  provider?: AiProvider;
+
+  @ApiPropertyOptional({
+    description: 'Model id, validated against the live model list',
+  })
+  @IsOptional()
+  @IsString()
+  model?: string;
+}
+
+export class GenerateRoadmapModulesDto extends AiGenerationOptions {
   @ApiProperty({
     description: 'ID of the roadmap to generate modules for',
     example: 'd9b2d63d-a233-4f9e-bbd8-4d519b7d8e20',
@@ -17,7 +37,7 @@ export class GenerateRoadmapModulesDto {
   roadmapId: string;
 }
 
-export class GenerateModuleConceptsDto {
+export class GenerateModuleConceptsDto extends AiGenerationOptions {
   @ApiProperty({
     description: 'ID of the module to generate concepts for',
     example: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
@@ -27,7 +47,7 @@ export class GenerateModuleConceptsDto {
   moduleId: string;
 }
 
-export class GenerateModuleMcqsDto {
+export class GenerateModuleMcqsDto extends AiGenerationOptions {
   @ApiProperty({
     description: 'ID of the module whose concepts need MCQs',
     example: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
@@ -37,7 +57,7 @@ export class GenerateModuleMcqsDto {
   moduleId: string;
 }
 
-export class GenerateConceptContentDto {
+export class GenerateConceptContentDto extends AiGenerationOptions {
   @ApiProperty({
     description: 'Title of the concept article to generate',
     example: 'Raft Consensus Algorithm: Leader Election & Log Replication',
@@ -92,7 +112,7 @@ export class GenerateConceptContentDto {
   siblingConceptTitles?: string[];
 }
 
-export class GenerateConceptMcqsDto {
+export class GenerateConceptMcqsDto extends AiGenerationOptions {
   @ApiProperty({
     description: 'Title of the concept for assessment MCQ generation',
     example: 'Database Isolation Levels & Concurrency Control',

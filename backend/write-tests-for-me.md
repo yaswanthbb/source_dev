@@ -275,4 +275,47 @@ Prerequisite: `$CONCEPT` published via 1.9 (authored by `A`, visible to all).
 
 ### 5.1 Developer can check quota
 - **Endpoint:** `GET /ai-generate/quota` (as `B`)
-- **Expected:** `200`, `{ remaining, limit }` (no approval-gate `403`).
+- **Expected:** `200`, `{ remaining, limit, unlimited: false, tier: "free", provider: "nvidia" }` (no approval-gate `403`).
+
+---
+
+## 6. BYOK (§5) — needs `AI_KEYS_ENCRYPTION_SECRET` set + migration run
+
+Set a real key first (dev boots without it but stored keys won't survive restart):
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# → paste into backend/.env as AI_KEYS_ENCRYPTION_SECRET=<hex>, restart backend
+```
+
+### 6.1 Store keys (max 2, first auto-default)
+- **Endpoint:** `POST /ai-keys` (as `B`) + `{ "provider": "nvidia", "apiKey": "<real NVIDIA key>", "label": "mine" }`
+- **Expected:** `201` metadata only (`keyHint` last-4, `isDefault: true`) — response contains **no** secret field. A dead key → `400`.
+- Repeat with a Gemini key → `201`, `isDefault: false`.
+- Third key → `400` (max 2).
+- **Endpoint:** `GET /ai-keys` (as `B`) — **Expected:** both entries, no ciphertext anywhere.
+
+### 6.2 Default + cap
+- **Endpoint:** `PATCH /ai-keys/<gemini-id>` + `{ "isDefault": true, "dailyLimit": 50 }` (as `B`)
+- **Expected:** `200`, gemini now default, cap 50, no confirmation round-trip.
+
+### 6.2b Model dropdown flow (pre-save lookup + per-key default)
+- Picking a model for a key not yet saved: `POST /ai-providers/gemini/models/lookup` + `{ "apiKey": "<typed key>" }` — **Expected:** `200` live list (nothing stored); dead key → `400`.
+- Save with a pick: `POST /ai-keys` + `{ "provider": "gemini", "apiKey": "<key>", "defaultModel": "<one from the list>" }` — **Expected:** `201`, metadata echoes `defaultModel`. Unknown pick → `400`.
+- Change later: `PATCH /ai-keys/<id>` + `{ "defaultModel": "<other listed model>" }` — validated against the live list via the stored key; `null` clears back to provider default.
+- Priority check: generate with explicit `"model"` (uses it) vs without (uses the key default).
+
+### 6.3 Providers + live models
+- **Endpoint:** `GET /ai-providers` — **Expected:** nvidia (`byokOnly: false`), gemini (`byokOnly: true`), defaults.
+- **Endpoint:** `GET /ai-providers/gemini/models?keyId=<gemini-id>` (as `B`) — **Expected:** live list (`live: true`).
+- **Endpoint:** `GET /ai-providers/gemini/models` without key — **Expected:** curated list, `live: false`.
+
+### 6.4 Free tier is 5/day, own key uses its bucket
+- Fresh `B` (no keys): burn 5 one-shot generations (`POST /ai-generate/concept-mcqs` + `{ "title": "X" }`) → 6th returns `429` mentioning own key.
+- With default key: `GET /ai-generate/quota` shows `tier: "own-key"`, `limit` = key cap.
+- As `ADMIN`: `GET /ai-generate/quota` → `unlimited: true` (generate freely, no 429s).
+
+### 6.5 gemini without a key is rejected
+- Fresh user, `POST /ai-generate/concept-content` + `{ "title": "X", "provider": "gemini" }` — **Expected:** `400` (BYOK-only).
+
+### 6.6 In-use deletion lock
+- Start a job (`POST /ai-generate/module-concepts` + `{ "moduleId": "<id>" }`) as `B` (default key set), then `DELETE /ai-keys/<default-id>` while pending/running — **Expected:** `400` (in use). After completion → `200`, quota falls back to free tier.

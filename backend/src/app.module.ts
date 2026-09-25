@@ -12,6 +12,7 @@ import { QaModule } from './modules/qa/qa.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { DeveloperAnalyticsModule } from './modules/developer-analytics/developer-analytics.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReviewModule } from './modules/review/review.module';
 import { AiGenerateModule } from './modules/ai-generate/ai-generate.module';
 import { AppController } from './app.controller';
@@ -35,6 +36,7 @@ import { AppService } from './app.service';
     GamificationModule,
     AnalyticsModule,
     DeveloperAnalyticsModule,
+    NotificationsModule,
     ReviewModule,
     AiGenerateModule,
   ],

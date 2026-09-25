@@ -11,6 +11,7 @@ import { RoadmapsController } from './roadmaps.controller';
 import { ConceptsService } from './concepts.service';
 import { ConceptsController } from './concepts.controller';
 import { AdminContentReviewController } from './admin-content-review.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AdminContentReviewController } from './admin-content-review.controller'
       ModuleConceptPrerequisite,
       McqQuestion,
     ]),
+    NotificationsModule,
   ],
   controllers: [
     RoadmapsController,
