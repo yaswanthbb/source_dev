@@ -18,6 +18,8 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
 import { RoadmapReviewStatus } from '../../common/enums/roadmap-review-status.enum';
 import { RoadmapUnpublishStatus } from '../../common/enums/roadmap-unpublish-status.enum';
+import { NotificationType } from '../../common/enums/notification-type.enum';
+import { NotificationsService } from '../notifications/notifications.service';
 
 import {
   createMockRepository,
@@ -34,6 +36,7 @@ describe('RoadmapsService', () => {
   let moduleConceptRepo: MockRepository;
   let prereqRepo: MockRepository;
   let mcqRepo: MockRepository;
+  let notifications: { notifyAdmins: jest.Mock; safeNotify: jest.Mock };
 
   const owner = makeUser({ id: 'author-1', role: UserRole.DEVELOPER });
   const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
@@ -50,6 +53,7 @@ describe('RoadmapsService', () => {
   });
 
   beforeEach(async () => {
+    notifications = { notifyAdmins: jest.fn(), safeNotify: jest.fn() };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RoadmapsService,
@@ -77,6 +81,7 @@ describe('RoadmapsService', () => {
           provide: getRepositoryToken(McqQuestion),
           useValue: createMockRepository(),
         },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 
@@ -399,6 +404,11 @@ describe('RoadmapsService', () => {
       expect(roadmapRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ reviewStatus: RoadmapReviewStatus.SUBMITTED }),
       );
+      expect(notifications.notifyAdmins).toHaveBeenCalledWith(
+        NotificationType.ROADMAP_SUBMITTED,
+        expect.objectContaining({ roadmapId: 'r1' }),
+        'author-1',
+      );
     });
 
     it('blocks fewer than 3 modules', async () => {
@@ -494,6 +504,35 @@ describe('RoadmapsService', () => {
       const result = await service.publishRoadmap('r1', admin);
 
       expect(result.reviewStatus).toBe(RoadmapReviewStatus.PUBLISHED);
+    });
+
+    it('notifies the author on publish and reject (not on self-actions)', async () => {
+      roadmapRepo.findOne.mockResolvedValue({
+        ...approvedTree(3),
+        createdById: 'author-1',
+      });
+
+      await service.publishRoadmap('r1', admin);
+
+      expect(notifications.safeNotify).toHaveBeenCalledWith(
+        'author-1',
+        NotificationType.ROADMAP_PUBLISHED,
+        expect.objectContaining({ roadmapId: 'r1' }),
+      );
+
+      roadmapRepo.findOne.mockResolvedValue({
+        id: 'r1',
+        createdById: 'author-1',
+        reviewStatus: RoadmapReviewStatus.SUBMITTED,
+      });
+
+      await service.rejectRoadmap('r1', admin, 'spam');
+
+      expect(notifications.safeNotify).toHaveBeenCalledWith(
+        'author-1',
+        NotificationType.ROADMAP_REJECTED,
+        expect.objectContaining({ reason: 'spam' }),
+      );
     });
 
     it('blocks on pending concepts', async () => {

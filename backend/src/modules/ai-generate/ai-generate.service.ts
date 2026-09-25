@@ -67,6 +67,8 @@ import {
   providerFailure,
 } from './ai-provider-clients';
 import { AiKeysService } from './ai-keys.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../../common/enums/notification-type.enum';
 
 interface ParsedMcqOption {
   optionText?: string;
@@ -130,6 +132,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     private readonly quizService: QuizService,
     private readonly keysService: AiKeysService,
     private readonly clients: AiProviderClients,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -797,6 +800,22 @@ export class AiGenerateService implements OnApplicationBootstrap {
       // Auto-retry (exactly once): if the completed job left some failed items,
       // spawn a BRAND-NEW job that re-attempts ONLY those items. The retry is
       // itself a job row (retryOfJobId set) and can never spawn a further retry.
+      // Notification goes out only for terminal outcomes: clean completions
+      // here, everything else on the retry's final result below.
+      if (summary.failedItems.length === 0) {
+        await this.notificationsService.safeNotify(
+          user.id,
+          NotificationType.AI_JOB_COMPLETED,
+          {
+            jobId,
+            jobType,
+            targetLabel,
+            status: AiGenerationJobStatus.COMPLETED,
+            createdCount: summary.createdCount,
+            failedCount: summary.failedCount,
+          },
+        );
+      }
       if (summary.failedItems.length > 0) {
         try {
           const retryJob = await this.aiGenerationJobRepository.save(
@@ -842,6 +861,18 @@ export class AiGenerateService implements OnApplicationBootstrap {
           const msg =
             retryErr instanceof Error ? retryErr.message : String(retryErr);
           this.logger.error(`Failed to spawn retry for job ${jobId}: ${msg}`);
+          await this.notificationsService.safeNotify(
+            user.id,
+            NotificationType.AI_JOB_COMPLETED,
+            {
+              jobId,
+              jobType,
+              targetLabel,
+              status: AiGenerationJobStatus.COMPLETED,
+              createdCount: summary.createdCount,
+              failedCount: summary.failedCount,
+            },
+          );
         }
       }
     } catch (err: unknown) {
@@ -851,6 +882,17 @@ export class AiGenerateService implements OnApplicationBootstrap {
         status: AiGenerationJobStatus.FAILED,
         errorMessage: msg,
       });
+      await this.notificationsService.safeNotify(
+        user.id,
+        NotificationType.AI_JOB_FAILED,
+        {
+          jobId,
+          jobType,
+          targetLabel,
+          status: AiGenerationJobStatus.FAILED,
+          errorMessage: msg,
+        },
+      );
     }
   }
 
@@ -942,6 +984,18 @@ export class AiGenerateService implements OnApplicationBootstrap {
         ),
         progressCurrent: retrySummary.createdCount + retrySummary.failedCount,
       });
+      await this.notificationsService.safeNotify(
+        user.id,
+        NotificationType.AI_JOB_COMPLETED,
+        {
+          jobId: retryJobId,
+          jobType,
+          targetLabel,
+          status: AiGenerationJobStatus.COMPLETED,
+          createdCount: finalSummary.createdCount,
+          failedCount: finalSummary.failedCount,
+        },
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Retry job ${retryJobId} failed: ${msg}`);
@@ -949,6 +1003,17 @@ export class AiGenerateService implements OnApplicationBootstrap {
         status: AiGenerationJobStatus.FAILED,
         errorMessage: msg,
       });
+      await this.notificationsService.safeNotify(
+        user.id,
+        NotificationType.AI_JOB_FAILED,
+        {
+          jobId: retryJobId,
+          jobType,
+          targetLabel,
+          status: AiGenerationJobStatus.FAILED,
+          errorMessage: msg,
+        },
+      );
     }
   }
 

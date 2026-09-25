@@ -16,6 +16,7 @@ import { ConceptsService } from '../content/concepts.service';
 import { QuizService } from '../quiz/quiz.service';
 import { AiKeysService } from './ai-keys.service';
 import { AiProviderClients } from './ai-provider-clients';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AiProvider } from '../../common/enums/ai-provider.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 
@@ -106,6 +107,10 @@ describe('AiGenerateService', () => {
         { provide: QuizService, useValue: {} },
         { provide: AiKeysService, useValue: keysService },
         { provide: AiProviderClients, useValue: clients },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn(), safeNotify: jest.fn() },
+        },
       ],
     }).compile();
 

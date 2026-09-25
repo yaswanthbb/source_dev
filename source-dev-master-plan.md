@@ -129,9 +129,15 @@ When a Developer wants a roadmap to go public:
 
 ## 7. Notifications (new, general-purpose system)
 
-**Status: not yet built.**
+**Status: ✅ BACKEND DONE 2026-09-25** (migration `Notifications`; `ARTICLE_DELETED` defined, emitted when §6 lands).
 
-Build as a proper general-purpose notification entity from the start (type + payload + read-state). Planned types: content published, content rejected (with reason), article deleted (with reason), background AI generation job completed, room for more later. Needs a filter by notification type in the UI.
+General-purpose entity from the start: recipient + `NotificationType` enum + jsonb payload + read-state (`isRead`/`readAt`). Reader endpoints: `GET /notifications` (`?type=` filter per plan, `?unreadOnly=`), `GET /notifications/unread-count` (bell badge), `PATCH /notifications/:id/read` (owner-scoped), `POST /notifications/read-all`.
+
+Emitted now (all via never-throwing `notify`/`safeNotify`/`notifyAdmins` so bells can't break operations):
+- Submit → all admins (`roadmap_submitted`, author excluded from own fan-out).
+- Publish / roadmap-reject / concept approve / concept reject → author (reasons + reviewer stamps included; self-actions skipped).
+- Unpublish approved / immediate takedown / scheduled + immediate roadmap delete → author with the §3.8 deletion contract payload (what, id, title, who, when, specific reason, effective date where applicable).
+- AI job terminal outcomes → requester (`ai_job_completed` on clean finish and retry finals, `ai_job_failed` on failures; no double-notify when a retry takes over).
 
 ---
 
@@ -203,7 +209,7 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 5. ✅ ~~Content ownership (§2) + Publishing/review workflow (§3) + content labeling (§4)~~ — **backend done**
 6. AI course-generation quality deep-dive (§8) — before or alongside BYOK, it's the core differentiator
 7. ✅ ~~BYOK AI generation system (§5)~~ — **backend done**
-8. Notifications system (§7)
+8. ✅ ~~Notifications system (§7)~~ — **backend done**
 9. Articles feature (§6) — depends on notifications
 
 **Frontend phase (only after backend above is done):**
@@ -230,6 +236,7 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 - **2026-09-24 — §5 backend shipped (migration `AiByokKeys`, providers NVIDIA + Gemini):** default-key setting (not per-call picker); per-key quota buckets (free 5/day, own-key default 20, settable 1–50 with NO confirm step — decided); Gemini BYOK-only (no platform key); caller model choice validated against live lists; AES-256-GCM custody with boot refusal in prod without secret; in-use deletion lock; jobs snapshot credentials; unified wait-or-switch messages; admin unlimited. Fixed 4 of the 6 pre-existing spec failures as drive-by (ai-generate quota specs rewritten; progress/quiz failures remain, untouched).
 - **2026-09-24 — Provider error mapping hardened (from live 410):** model-gone responses (NVIDIA 404/410, Gemini 404) now name the model and point at the live list instead of the generic wait-or-switch prompt; restored pre-BYOK `NVIDIA_MODEL_ID`/`NVIDIA_API_URL` operator overrides for the default model.
 - **2026-09-24 — Per-key default model + pre-save lookup:** `POST /ai-providers/:provider/models/lookup` verifies an unsaved key and returns its live list (dropdown source, never stored); keys carry a validated `defaultModel`; resolution priority is per-call model → key default → provider default.
+- **2026-09-25 — §7 backend shipped (migration `Notifications`):** general-purpose entity (recipient + type enum + jsonb payload + read-state); reader endpoints with `?type=` filter, unread-count badge, owner-scoped read/read-all; emitters for submit (admins), publish/reject/approve (authors, self-actions skipped), unpublish + deletions (full §3.8 contract payload), AI job terminal outcomes (no double-notify across retries); all emission never-throwing. `ARTICLE_DELETED` reserved for §6.
 - **2026-09-21 — QA refinements from manual testing:** author/admin answers auto-verify on arrival (their own verify step would be pointless); question edit-lock applies to ANY answer (editing under an AI reply strands a stale answer); answers stay editable. Test guide `backend/write-tests-for-me.md` updated to match.
 - **2026-09-21 — Working agreement:** implement strictly one feature at a time on user instruction only; test/verify each before moving on. This doc is the reference across sessions and models.
 

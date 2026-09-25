@@ -319,3 +319,28 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ### 6.6 In-use deletion lock
 - Start a job (`POST /ai-generate/module-concepts` + `{ "moduleId": "<id>" }`) as `B` (default key set), then `DELETE /ai-keys/<default-id>` while pending/running — **Expected:** `400` (in use). After completion → `200`, quota falls back to free tier.
+
+---
+
+## 7. Notifications (§7) — needs migration run
+
+### 7.1 Bell badge + list + filter
+- Trigger: submit any roadmap (as `A`) → **Endpoint:** `GET /notifications/unread-count` (as `ADMIN`) — **Expected:** `200 { unread: ≥1 }`.
+- **Endpoint:** `GET /notifications` (as `ADMIN`) — **Expected:** newest-first, includes `roadmap_submitted` with `{ roadmapId, roadmapTitle, submittedBy }`.
+- **Endpoint:** `GET /notifications?type=roadmap_submitted` (as `ADMIN`) — only that type.
+- **Endpoint:** `GET /notifications?unreadOnly=true` — only unread.
+- **Endpoint:** `GET /notifications?type=bogus` — **Expected:** `400`.
+
+### 7.2 Author decisions carry reasons
+- Approve/reject a concept (as `ADMIN`) → `GET /notifications` (as `A`) shows `concept_approved` / `concept_rejected` (rejection includes `reason`, reviewer, timestamp).
+- Publish/reject the roadmap → `roadmap_published` / `roadmap_rejected` (reason) for `A`.
+- No self-noise: actions on your own content as `ADMIN` produce no notification to yourself.
+
+### 7.3 Read state
+- **Endpoint:** `PATCH /notifications/<id>/read` (as owner) — **Expected:** `200`, `isRead: true`, `readAt` set. Another user's id → `404`.
+- **Endpoint:** `POST /notifications/read-all` — **Expected:** `{ marked: N }`, badge count drops to 0.
+
+### 7.4 Moderation + AI jobs
+- Schedule roadmap deletion (as `ADMIN`) → author gets `roadmap_deleted` with `{ what, whatId, title, removedBy, removedAt, reason, effectiveAt }`.
+- Approve unpublish → `roadmap_unpublish_approved` with `effectiveAt`.
+- Finish any AI job → requester gets `ai_job_completed` (counts included); fail one → `ai_job_failed` (error included). One notification per terminal outcome — no double when a retry takes over.
