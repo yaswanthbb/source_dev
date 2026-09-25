@@ -344,3 +344,22 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 - Schedule roadmap deletion (as `ADMIN`) → author gets `roadmap_deleted` with `{ what, whatId, title, removedBy, removedAt, reason, effectiveAt }`.
 - Approve unpublish → `roadmap_unpublish_approved` with `effectiveAt`.
 - Finish any AI job → requester gets `ai_job_completed` (counts included); fail one → `ai_job_failed` (error included). One notification per terminal outcome — no double when a retry takes over.
+
+---
+
+## 8. Articles (§6) — needs migration run
+
+### 8.1 Public reads, no login (drop the token and try)
+- **Endpoint:** `GET /articles` (no `Authorization` header)
+- **Expected:** `200` array, newest first — works logged out (growth funnel).
+- **Endpoint:** `GET /articles?search=closure` (no auth) — filters by title.
+- **Endpoint:** `GET /articles/<id>` (no auth) — **Expected:** `200` with author + links.
+
+### 8.2 Immediate publish + edit by author
+- **Endpoint:** `POST /articles` (as `B`) + `{ "title": "Why Closures Clicked", "content": "Hand-written body.", "roadmapId": "$ROADMAP", "conceptId": "$CONCEPT" }`
+- **Expected:** `201`, live immediately (read it back logged out). Bad link id → `400`.
+- **Endpoint:** `PATCH /articles/<id>` (as `B`, title change) — new slug; (as `A`) — `403`.
+
+### 8.3 Deletion paths
+- **Endpoint:** `DELETE /articles/<id>` (as `B`, own) — **Expected:** `200`, no notification created.
+- Recreate, then **Endpoint:** `DELETE /articles/admin/<id>` (as `ADMIN`) + `{ "reason": "Plagiarised." }` — **Expected:** `200`; author (`B`) gets `article_deleted` with `{ what: "article", title, removedBy, removedAt, reason }`. Missing reason → `400`.

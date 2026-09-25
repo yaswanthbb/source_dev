@@ -117,13 +117,12 @@ When a Developer wants a roadmap to go public:
 
 ## 6. Articles (new feature)
 
-**Status: not yet built.**
+**Status: ✅ BACKEND DONE 2026-09-25** (migration `Articles`; `ARTICLE_DELETED` now emitted).
 
-- **Fully public, no login required.** Intended as a public discovery/growth funnel.
-- **Must be strictly hand-written — never AI-generated.**
-- **Publish immediately, no pre-review gate** (matches dev.to/Medium's actual pattern — confirmed via research).
-- **Optional relationship to Roadmaps/Concepts:** can link to a roadmap/concept as "further reading."
-- **Admin deletion:** in-app delete action requiring a reason, delivered to the author via the notification system (§7).
+- **Fully public:** `GET /articles` + `GET /articles/:id` are `@Public()` — no login required. Newest-first, optional title search.
+- **Hand-written by construction:** no AI-generation path exists for articles (no endpoint, no flag). Create/publish is one step, immediate, no review gate.
+- **Further reading:** nullable `roadmapId`/`conceptId` links (existence-validated, `null` clears, target deletions `SET NULL`). Targets keep their own visibility rules when opened.
+- **Deletion:** author deletes own silently; `DELETE /articles/admin/:id` (admin) requires a specific reason, delivered via `ARTICLE_DELETED` with the §3.8 contract payload (self-actions skipped).
 
 ---
 
@@ -210,7 +209,7 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 6. AI course-generation quality deep-dive (§8) — before or alongside BYOK, it's the core differentiator
 7. ✅ ~~BYOK AI generation system (§5)~~ — **backend done**
 8. ✅ ~~Notifications system (§7)~~ — **backend done**
-9. Articles feature (§6) — depends on notifications
+9. ✅ ~~Articles feature (§6)~~ — **backend done**
 
 **Frontend phase (only after backend above is done):**
 10. Developer frontend (terminal-styled authoring screens + student→developer CLI rename/migration) — first
@@ -237,6 +236,7 @@ Explicitly parked. Earlier draft had this as "next up" — superseded: building 
 - **2026-09-24 — Provider error mapping hardened (from live 410):** model-gone responses (NVIDIA 404/410, Gemini 404) now name the model and point at the live list instead of the generic wait-or-switch prompt; restored pre-BYOK `NVIDIA_MODEL_ID`/`NVIDIA_API_URL` operator overrides for the default model.
 - **2026-09-24 — Per-key default model + pre-save lookup:** `POST /ai-providers/:provider/models/lookup` verifies an unsaved key and returns its live list (dropdown source, never stored); keys carry a validated `defaultModel`; resolution priority is per-call model → key default → provider default.
 - **2026-09-25 — §7 backend shipped (migration `Notifications`):** general-purpose entity (recipient + type enum + jsonb payload + read-state); reader endpoints with `?type=` filter, unread-count badge, owner-scoped read/read-all; emitters for submit (admins), publish/reject/approve (authors, self-actions skipped), unpublish + deletions (full §3.8 contract payload), AI job terminal outcomes (no double-notify across retries); all emission never-throwing. `ARTICLE_DELETED` reserved for §6.
+- **2026-09-25 — §6 backend shipped (migration `Articles`):** public reads (no login), immediate publish, hand-written by construction (no AI path), nullable further-reading links with SET NULL semantics, author silent delete, admin reasoned delete emitting `ARTICLE_DELETED`.
 - **2026-09-21 — QA refinements from manual testing:** author/admin answers auto-verify on arrival (their own verify step would be pointless); question edit-lock applies to ANY answer (editing under an AI reply strands a stale answer); answers stay editable. Test guide `backend/write-tests-for-me.md` updated to match.
 - **2026-09-21 — Working agreement:** implement strictly one feature at a time on user instruction only; test/verify each before moving on. This doc is the reference across sessions and models.
 
