@@ -21,7 +21,8 @@
     "typeorm:migration:generate": "node -r dotenv/config node_modules/.bin/typeorm-ts-node-commonjs migration:generate -d src/config/typeorm.config.ts",
     "typeorm:migration:run": "node -r dotenv/config node_modules/.bin/typeorm-ts-node-commonjs migration:run -d src/config/typeorm.config.ts",
     "typeorm:migration:run:prod": "typeorm migration:run -d dist/config/typeorm.config.js",
-    "typeorm:migration:revert": "node -r dotenv/config node_modules/.bin/typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts"
+    "typeorm:migration:revert": "node -r dotenv/config node_modules/.bin/typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
+    "research:seed": "node -r dotenv/config -r ts-node/register src/modules/ai-generate/research-seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -385,3 +385,19 @@ Set `COURSE_ENGINE_ENABLED=true` on the backend before these (flag off = legacy 
 
 ### 9.3 Internal stages cost no quota
 - Burn to 1 remaining, run one single-shot compile — **Expected:** succeeds (draft = the 1 slot); `SELECT count(*) FROM ai_generation_logs WHERE internal = false` grew by exactly 1 while several `internal = true` rows were recorded.
+
+---
+
+## 10. Research ingestion / RAG (§8) — needs migration run (`ResearchIngestion`)
+
+Set `COURSE_ENGINE_ENABLED=true` and run `npm run research:seed` first (needs `NVIDIA_API_KEY`; safe to re-run — unchanged URLs skip).
+
+### 10.1 Seed lands in the corpus
+- SQL: `SELECT title, license, source_type FROM course_sources;` — one row: MDN Closures, `CC-BY-SA`, `reference`. `SELECT count(*) FROM course_source_chunks;` — small N (>0), each with `embedding` set and `token_count` ≈ chars/4.
+
+### 10.2 License gate
+- There is no public endpoint yet (operator-only); exercise via seed path or a quick script against `CourseResearchService.ingestSource` with `license: "all-rights-reserved"` — **Expected:** `400` (not ingestible), no fetch attempted, no rows written.
+
+### 10.3 Brief flows into scoped compiles
+- **Endpoint:** `POST /ai-generate/concept-content` + `{ "title": "What is a closure", "roadmapId": "<id>" }` — **Expected:** `200 { content }`; `concept_compilations.stages` contains a `research` entry with `detail.mode: "augmented"` and non-empty `sourceIds`.
+- Empty the corpus (`DELETE FROM course_source_chunks; DELETE FROM course_sources;`) and repeat — **Expected:** same `200`, research stage `skipped: "empty corpus"`, no brief, output shape unchanged.

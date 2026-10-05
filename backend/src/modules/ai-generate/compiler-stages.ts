@@ -68,7 +68,7 @@ function stageFailure(stage: string, detail: string): HttpException {
 function asStringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   if (!value.every((v) => typeof v === 'string')) return null;
-  return value as string[];
+  return value;
 }
 
 /** Strict outline parse: every field present with the right shape. */
@@ -84,7 +84,10 @@ export function parseOutline(raw: string): ConceptOutline {
   }
   const objectives = asStringArray(parsed['objectives']);
   if (!objectives || objectives.length === 0) {
-    throw stageFailure('outline', '"objectives" must be a non-empty string array.');
+    throw stageFailure(
+      'outline',
+      '"objectives" must be a non-empty string array.',
+    );
   }
   if (!Array.isArray(parsed['key_terms'])) {
     throw stageFailure('outline', '"key_terms" must be an array.');
@@ -123,8 +126,11 @@ export function parseOutline(raw: string): ConceptOutline {
     throw stageFailure('outline', '"lesson_shape" must be an object.');
   }
   for (const key of LESSON_SHAPE_KEYS) {
-    if (typeof shape[key] !== 'string' || !(shape[key] as string).trim()) {
-      throw stageFailure('outline', `lesson_shape."${key}" must be a non-empty string.`);
+    if (typeof shape[key] !== 'string' || !shape[key].trim()) {
+      throw stageFailure(
+        'outline',
+        `lesson_shape."${key}" must be a non-empty string.`,
+      );
     }
   }
   if (
@@ -136,11 +142,17 @@ export function parseOutline(raw: string): ConceptOutline {
       `"difficulty" must be one of: ${DIFFICULTIES.join(', ')}.`,
     );
   }
-  if (parsed['research_brief'] !== null && parsed['research_brief'] !== undefined) {
-    throw stageFailure('outline', '"research_brief" must be null (RAG fills it later).');
+  if (
+    parsed['research_brief'] !== null &&
+    parsed['research_brief'] !== undefined
+  ) {
+    throw stageFailure(
+      'outline',
+      '"research_brief" must be null (RAG fills it later).',
+    );
   }
   return {
-    title: parsed['title'] as string,
+    title: parsed['title'],
     objectives,
     key_terms: keyTerms,
     builds_on: buildsOn,
@@ -149,7 +161,7 @@ export function parseOutline(raw: string): ConceptOutline {
     lesson_shape: Object.fromEntries(
       LESSON_SHAPE_KEYS.map((k) => [k, (shape[k] as string).trim()]),
     ) as unknown as ConceptLessonShape,
-    difficulty: parsed['difficulty'] as string,
+    difficulty: parsed['difficulty'],
   };
 }
 
@@ -179,7 +191,10 @@ export function objectivesWithoutBloomVerb(objectives: string[]): string[] {
     'discuss',
   ];
   return objectives.filter((objective) => {
-    const firstWords = objective.toLowerCase().split(/[^a-z]+/).slice(0, 3);
+    const firstWords = objective
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .slice(0, 3);
     return !firstWords.some((word) => verbs.includes(word));
   });
 }
@@ -221,8 +236,37 @@ export function parseFactcheck(raw: string): FactcheckResult {
     );
   }
   return {
-    consistent: parsed['consistent'] as boolean,
+    consistent: parsed['consistent'],
     outline_drift: drift,
     term_issues: termIssues,
+  };
+}
+
+export interface ResearchBrief {
+  brief: string;
+  key_points: string[];
+}
+
+/**
+ * Strict private-brief parse. Malformed briefs degrade (caller records a
+ * warning and continues without one) — research never fails a concept.
+ */
+export function parseResearchBrief(raw: string): ResearchBrief {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw stageFailure('research', 'response is not valid JSON.');
+  }
+  if (typeof parsed['brief'] !== 'string' || !parsed['brief'].trim()) {
+    throw stageFailure('research', '"brief" must be a non-empty string.');
+  }
+  const keyPoints = asStringArray(parsed['key_points']);
+  if (!keyPoints) {
+    throw stageFailure('research', '"key_points" must be a string array.');
+  }
+  return {
+    brief: parsed['brief'].trim(),
+    key_points: keyPoints,
   };
 }

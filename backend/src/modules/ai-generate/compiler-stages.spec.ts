@@ -3,6 +3,7 @@ import {
   parseCritique,
   parseFactcheck,
   parseOutline,
+  parseResearchBrief,
 } from './compiler-stages';
 
 const SHAPE = {
@@ -18,7 +19,9 @@ function outlineJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     title: 'Branches',
     objectives: ['Explain what a branch pointer is', 'Create a branch'],
-    key_terms: [{ term: 'branch', definition: 'A movable pointer to a commit.' }],
+    key_terms: [
+      { term: 'branch', definition: 'A movable pointer to a commit.' },
+    ],
     builds_on: [],
     recall_hooks: ['commits'],
     lesson_shape: SHAPE,
@@ -48,7 +51,9 @@ describe('compiler stage contracts (§8)', () => {
     it('rejects garbage JSON, missing keys, and bad difficulty', () => {
       expect(() => parseOutline('not json')).toThrow();
       expect(() => parseOutline(outlineJson({ objectives: [] }))).toThrow();
-      expect(() => parseOutline(outlineJson({ difficulty: 'expert' }))).toThrow();
+      expect(() =>
+        parseOutline(outlineJson({ difficulty: 'expert' })),
+      ).toThrow();
       expect(() =>
         parseOutline(outlineJson({ key_terms: [{ term: 'x' }] })),
       ).toThrow();
@@ -101,8 +106,26 @@ describe('compiler stage contracts (§8)', () => {
       expect(() => parseFactcheck('garbage')).toThrow();
       expect(() =>
         parseFactcheck(
-          JSON.stringify({ consistent: 'yes', outline_drift: [], term_issues: [] }),
+          JSON.stringify({
+            consistent: 'yes',
+            outline_drift: [],
+            term_issues: [],
+          }),
         ),
+      ).toThrow();
+    });
+  });
+
+  describe('parseResearchBrief', () => {
+    it('accepts the private-brief shape and rejects the rest', () => {
+      expect(
+        parseResearchBrief(
+          JSON.stringify({ brief: 'Use closures.', key_points: ['a'] }),
+        ),
+      ).toEqual({ brief: 'Use closures.', key_points: ['a'] });
+      expect(() => parseResearchBrief('garbage')).toThrow();
+      expect(() =>
+        parseResearchBrief(JSON.stringify({ brief: '  ', key_points: [] })),
       ).toThrow();
     });
   });

@@ -64,6 +64,8 @@ import {
   buildCritiqueUserPrompt,
   CONCEPT_REVISE_SYSTEM_PROMPT,
   buildReviseUserPrompt,
+  CONCEPT_RESEARCH_SYSTEM_PROMPT,
+  buildResearchBriefUserPrompt,
 } from './constants/prompts';
 import {
   ConceptOutline,
@@ -71,7 +73,13 @@ import {
   parseCritique,
   parseFactcheck,
   parseOutline,
+  parseResearchBrief,
 } from './compiler-stages';
+import {
+  RESEARCH_GROUNDING_MODE,
+  CourseResearchService,
+} from './course-research.service';
+import { verbatimOverlap } from './research-text.util';
 
 import {
   GenerateConceptContentDto,
@@ -166,6 +174,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     private readonly promptRegistry: AiPromptRegistry,
     private readonly courseContext: CourseContextBuilder,
     private readonly courseContexts: CourseContextService,
+    private readonly courseResearch: CourseResearchService,
     @InjectRepository(ConceptCompilation)
     private readonly compilationRepository: Repository<ConceptCompilation>,
     @InjectRepository(CourseConceptCard)
@@ -2276,7 +2285,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
    * (jobId, title); cards/terms/edges downstream are upserts; only failed
    * titles (nothing published) ever re-run.
    */
-  private static readonly COMPILER_STAGES_PER_CONCEPT = 6;
+  private static readonly COMPILER_STAGES_PER_CONCEPT = 7;
 
   /** Stage multiplier for job progress math (0 = legacy per-concept bumps). */
   private compilerStageCount(jobType: AiGenerationJobType): number {
@@ -2375,7 +2384,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     const warnings: string[] = [];
     const trace: Array<Record<string, unknown>> = [];
     let done = 0;
-    const note = async (stage: string, ok: boolean, detail?: string) => {
+    const note = async (stage: string, ok: boolean, detail?: unknown) => {
       trace.push({ stage, ok, detail: detail ?? null });
       done += 1;
       if (input.onStage) await input.onStage(done, total);
@@ -2499,6 +2508,94 @@ export class AiGenerateService implements OnApplicationBootstrap {
       }
       await note('outline', true);
 
+      // Stage 1.5: research (internal) — "AI reads sources and reports to
+      // itself" before drafting. Degrades to brief=null on empty corpus,
+      // missing keys, or any failure: never fails a concept. Provenance
+      // (source ids) lands in the compilation trace, never user-facing.
+      let researchBrief: string | null = null;
+      let researchChunkTexts: string[] = [];
+      try {
+        const retrieved = await this.courseResearch.retrieveForOutline(
+          input.roadmapId,
+          {
+            terms: outline.key_terms.map((k) => `${k.term}: ${k.definition}`),
+            objectives: outline.objectives,
+          },
+          creds.provider === AiProvider.NVIDIA ? creds.apiKey : undefined,
+        );
+        if (retrieved.chunks.length > 0) {
+          const titles = new Map<string, string>();
+          for (const chunk of retrieved.chunks) {
+            if (!titles.has(chunk.sourceId)) {
+              const source = await this.courseResearch.findSource(chunk.sourceId);
+              titles.set(chunk.sourceId, source?.title ?? chunk.sourceId);
+            }
+          }
+          const sysResearch = await this.systemFor(
+            AiGenerationType.CONCEPT_CONTENT,
+            CONCEPT_RESEARCH_SYSTEM_PROMPT,
+          );
+          const researchParams = this.routeParams('concept_research', {
+            maxTokens: 800,
+            temperature: 0.3,
+          });
+          const briefRaw = await this.complete(
+            creds,
+            sysResearch.text,
+            buildResearchBriefUserPrompt({
+              queries: [
+                ...outline.key_terms.map((k) => k.term),
+                ...outline.objectives,
+              ],
+              chunks: retrieved.chunks.map((c) => ({
+                sourceTitle: titles.get(c.sourceId) ?? c.sourceId,
+                content: c.content,
+              })),
+            }),
+            { ...researchParams, responseFormat: { type: 'json_object' } },
+            'concept_research',
+            undefined,
+            true,
+          );
+          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
+            model: briefRaw.model,
+            provider: creds.provider,
+            promptVersion: sysResearch.version,
+            tokensIn: briefRaw.tokensIn,
+            tokensOut: briefRaw.tokensOut,
+            latencyMs: briefRaw.latencyMs,
+            internal: briefRaw.internal,
+          });
+          try {
+            researchBrief = parseResearchBrief(briefRaw.text).brief;
+          } catch {
+            warnings.push('Research brief malformed; continuing without it.');
+            researchBrief = null;
+          }
+          researchChunkTexts = retrieved.chunks.map((c) => c.content);
+          await note('research', true, {
+            mode: RESEARCH_GROUNDING_MODE,
+            sourceIds: retrieved.sourceIds,
+            chunkIds: retrieved.chunks.map((c) => c.id),
+            briefChars: researchBrief?.length ?? 0,
+          });
+        } else {
+          await note('research', true, {
+            mode: RESEARCH_GROUNDING_MODE,
+            sourceIds: [],
+            chunkIds: [],
+            briefChars: 0,
+            skipped: 'empty corpus',
+          });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        warnings.push(`Research unavailable (${msg}); continuing without a brief.`);
+        researchBrief = null;
+        researchChunkTexts = [];
+        await note('research', false, msg);
+      }
+
       // Stage 2: draft (the single billable call per concept).
       // Context hydration never fails the concept — without it we still
       // have the outline, so draft from that alone.
@@ -2528,6 +2625,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
         buildDraftUserPrompt({
           outlineJson: JSON.stringify(outline),
           contextBlock: contextBlockText,
+          researchBrief: researchBrief ?? undefined,
         }),
         { ...draftParams },
         'concept_draft',
@@ -2543,6 +2641,49 @@ export class AiGenerateService implements OnApplicationBootstrap {
       });
       let current = draftRaw.text;
       await note('draft', true);
+
+      // Copyright guard: verbatim 8-gram overlap vs retrieved chunks above
+      // threshold → warning + regenerate once with a paraphrase instruction,
+      // then publish with a warning regardless. Skipped with no chunks.
+      if (researchChunkTexts.length > 0) {
+        const overlap = verbatimOverlap(current, researchChunkTexts);
+        if (overlap.triggered) {
+          warnings.push(
+            `Verbatim overlap ${(overlap.ratio * 100).toFixed(1)}% vs sources (${overlap.hits} passages); regenerated once.`,
+          );
+          const paraphraseRaw = await this.complete(
+            creds,
+            sysDraft.text,
+            buildReviseUserPrompt({
+              draftContent: current,
+              blockingIssues: [
+                'Paraphrase passages that closely mirror the retrieved sources into your own words; keep every fact, example, and section intact.',
+              ],
+              factcheckFindings: [],
+            }),
+            { ...draftParams },
+            'concept_draft',
+            undefined,
+            true,
+          );
+          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
+            model: paraphraseRaw.model,
+            provider: creds.provider,
+            promptVersion: sysDraft.version,
+            tokensIn: paraphraseRaw.tokensIn,
+            tokensOut: paraphraseRaw.tokensOut,
+            latencyMs: paraphraseRaw.latencyMs,
+            internal: paraphraseRaw.internal,
+          });
+          current = paraphraseRaw.text;
+          const recheck = verbatimOverlap(current, researchChunkTexts);
+          if (recheck.triggered) {
+            warnings.push(
+              `Verbatim overlap persists after regeneration (${(recheck.ratio * 100).toFixed(1)}%); published with warning.`,
+            );
+          }
+        }
+      }
 
       // Stage 3: fact-check (internal) — outline fidelity + registry terms.
       // Findings feed the revise must-fix list; a malformed fact-check
@@ -2562,6 +2703,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
           outlineJson: JSON.stringify(outline),
           draftContent: current,
           registryTerms: await this.registryTermsText(input.roadmapId),
+          researchBrief: researchBrief ?? undefined,
         }),
         { ...factParams, responseFormat: { type: 'json_object' } },
         'concept_factcheck',

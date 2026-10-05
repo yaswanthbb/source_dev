@@ -20,6 +20,7 @@ import { AiProviderClients } from './ai-provider-clients';
 import { AiPromptRegistry } from './ai-prompt-registry.service';
 import { CourseContextBuilder } from './course-context-builder.service';
 import { CourseContextService } from './course-context.service';
+import { CourseResearchService } from './course-research.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UserRole } from '../../common/enums/user-role.enum';
 import {
@@ -63,6 +64,7 @@ describe('ConceptCompiler (§8 course compiler)', () => {
   let conceptsService: { createConcept: jest.Mock };
   let roadmapsService: { attachConceptToModule: jest.Mock };
   let contextBuilder: { build: jest.Mock };
+  let research: { retrieveForOutline: jest.Mock; findSource: jest.Mock };
 
   const developer = makeUser({ id: 'dev-1', role: UserRole.DEVELOPER });
   const creds = {
@@ -89,17 +91,18 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     creds,
   } as any;
 
-  function stagePayloads(overrides: {
-    outline?: unknown;
-    draft?: string;
-    factcheck?: unknown;
-    critique?: unknown;
-    revise?: string;
-  } = {}) {
+  function stagePayloads(
+    overrides: {
+      outline?: unknown;
+      draft?: string;
+      factcheck?: unknown;
+      critique?: unknown;
+      revise?: string;
+      brief?: unknown;
+    } = {},
+  ) {
     const outline =
-      overrides.outline !== undefined
-        ? overrides.outline
-        : OUTLINE;
+      overrides.outline !== undefined ? overrides.outline : OUTLINE;
     const draft = overrides.draft ?? '# Branches\n\nContent here.';
     const factcheck = overrides.factcheck ?? {
       consistent: true,
@@ -111,6 +114,10 @@ describe('ConceptCompiler (§8 course compiler)', () => {
       suggestions: ['add an example'],
     };
     const revise = overrides.revise ?? '# Branches\n\nRevised content.';
+    const brief = overrides.brief ?? {
+      brief: 'Branches are movable pointers.',
+      key_points: ['pointer'],
+    };
     clients.complete.mockImplementation(
       async (
         _provider: string,
@@ -133,6 +140,7 @@ describe('ConceptCompiler (§8 course compiler)', () => {
           return text(draft);
         }
         if (userPrompt.includes('fact-check JSON')) return text(factcheck);
+        if (userPrompt.includes('brief JSON')) return text(brief);
         if (userPrompt.includes('critique JSON')) return text(critique);
         if (userPrompt.includes('Must-fix')) return text(revise);
         return text('fallback');
@@ -167,36 +175,84 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     contextBuilder = {
       build: jest.fn(async () => ({
         block: '',
-        stats: { termsUsed: 0, cardsUsed: 0, edgesUsed: 0, chars: 0, truncated: false },
+        stats: {
+          termsUsed: 0,
+          cardsUsed: 0,
+          edgesUsed: 0,
+          chars: 0,
+          truncated: false,
+        },
       })),
+    };
+    research = {
+      retrieveForOutline: jest.fn(async () => ({ chunks: [], sourceIds: [] })),
+      findSource: jest.fn(async () => null),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AiGenerateService,
-        { provide: getRepositoryToken(AiGenerationLog), useValue: createMockRepository() },
-        { provide: getRepositoryToken(AiGenerationJob), useValue: createMockRepository() },
-        { provide: getRepositoryToken(Roadmap), useValue: createMockRepository() },
-        { provide: getRepositoryToken(ModuleEntity), useValue: createMockRepository() },
-        { provide: getRepositoryToken(Concept), useValue: createMockRepository() },
-        { provide: getRepositoryToken(ModuleConcept), useValue: createMockRepository() },
-        { provide: getRepositoryToken(McqQuestion), useValue: createMockRepository() },
-        { provide: getRepositoryToken(ConceptCompilation), useValue: createMockRepository() },
-        { provide: getRepositoryToken(CourseConceptCard), useValue: createMockRepository() },
-        { provide: getRepositoryToken(CourseTerm), useValue: createMockRepository() },
+        {
+          provide: getRepositoryToken(AiGenerationLog),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(AiGenerationJob),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(Roadmap),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(ModuleEntity),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(Concept),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(ModuleConcept),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(McqQuestion),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(ConceptCompilation),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(CourseConceptCard),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(CourseTerm),
+          useValue: createMockRepository(),
+        },
         { provide: ConfigService, useValue: { get: configGet } },
         { provide: RoadmapsService, useValue: roadmapsService },
         { provide: ConceptsService, useValue: conceptsService },
         { provide: QuizService, useValue: {} },
         {
           provide: AiKeysService,
-          useValue: { getDefaultKey: jest.fn(), getKeyById: jest.fn(), decryptForUse: jest.fn() },
+          useValue: {
+            getDefaultKey: jest.fn(),
+            getKeyById: jest.fn(),
+            decryptForUse: jest.fn(),
+          },
         },
         { provide: AiProviderClients, useValue: clients },
         { provide: AiPromptRegistry, useValue: registry },
-        { provide: NotificationsService, useValue: { notify: jest.fn(), safeNotify: jest.fn() } },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn(), safeNotify: jest.fn() },
+        },
         { provide: CourseContextBuilder, useValue: contextBuilder },
         { provide: CourseContextService, useValue: contexts },
+        { provide: CourseResearchService, useValue: research },
       ],
     }).compile();
 
@@ -254,10 +310,13 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     expect(logRepo.save).toHaveBeenCalled();
     // Compilation trace persisted as succeeded.
     const lastSave =
-      compilationRepo.save.mock.calls[compilationRepo.save.mock.calls.length - 1][0];
+      compilationRepo.save.mock.calls[
+        compilationRepo.save.mock.calls.length - 1
+      ][0];
     expect(lastSave.status).toBe('succeeded');
     expect(lastSave.stages.map((s: any) => s.stage)).toEqual([
       'outline',
+      'research',
       'draft',
       'fact-check',
       'critique-revise',
@@ -280,10 +339,14 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     );
     expect(reviseCalls).toHaveLength(2);
     expect(critiqueCalls).toHaveLength(3);
-    expect(out.warnings.some((w) => w.includes('Unresolved blocking issue'))).toBe(true);
+    expect(
+      out.warnings.some((w) => w.includes('Unresolved blocking issue')),
+    ).toBe(true);
     expect(out.conceptId).toBe('c-new');
     const lastSave =
-      compilationRepo.save.mock.calls[compilationRepo.save.mock.calls.length - 1][0];
+      compilationRepo.save.mock.calls[
+        compilationRepo.save.mock.calls.length - 1
+      ][0];
     expect(lastSave.status).toBe('succeeded_with_warnings');
   });
 
@@ -295,7 +358,9 @@ describe('ConceptCompiler (§8 course compiler)', () => {
       'unknown concept id "ghost-id"',
     );
     const lastSave =
-      compilationRepo.save.mock.calls[compilationRepo.save.mock.calls.length - 1][0];
+      compilationRepo.save.mock.calls[
+        compilationRepo.save.mock.calls.length - 1
+      ][0];
     expect(lastSave.status).toBe('failed');
     expect(conceptsService.createConcept).not.toHaveBeenCalled();
   });
@@ -342,12 +407,120 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     });
 
     const out = await service.generateSingleConceptContent(
-      { title: 'Branches' } as any,
-      developer as any,
+      { title: 'Branches' },
+      developer,
     );
     expect(out).toEqual({ content: 'legacy article' });
     expect(clients.complete).toHaveBeenCalledTimes(1);
     const userPrompt = clients.complete.mock.calls[0][4];
     expect(userPrompt).not.toContain('Produce the outline JSON');
+  });
+
+  describe('research stage', () => {
+    const chunk = (content: string) => ({
+      id: `chunk-${content.length}`,
+      sourceId: 's-mdn',
+      content,
+    });
+
+    function draftOf(callIndex: number): string {
+      const calls = clients.complete.mock.calls.filter((call) =>
+        String(call[4]).includes('Approved Outline (realize every section)'),
+      );
+      return String(calls[callIndex][4]);
+    }
+
+    it('feeds the brief into draft + fact-check and records provenance', async () => {
+      stagePayloads();
+      research.retrieveForOutline.mockResolvedValue({
+        chunks: [
+          chunk('A closure bundles a function with its lexical environment.'),
+        ],
+        sourceIds: ['s-mdn'],
+      });
+      research.findSource.mockResolvedValue({ title: 'MDN Closures' });
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(out.warnings).toEqual([]);
+      expect(draftOf(0)).toContain('Branches are movable pointers.');
+      const factcheckCall = clients.complete.mock.calls.find((call) =>
+        String(call[4]).includes('fact-check JSON'),
+      );
+      expect(String(factcheckCall[4])).toContain(
+        'Branches are movable pointers.',
+      );
+      const lastSave =
+        compilationRepo.save.mock.calls[
+          compilationRepo.save.mock.calls.length - 1
+        ][0];
+      const researchTrace = lastSave.stages.find(
+        (s: any) => s.stage === 'research',
+      );
+      expect(researchTrace.ok).toBe(true);
+      expect(researchTrace.detail.sourceIds).toEqual(['s-mdn']);
+      expect(researchTrace.detail.mode).toBe('augmented');
+    });
+
+    it('degrades gracefully when retrieval fails (brief null, pipeline completes)', async () => {
+      stagePayloads();
+      research.retrieveForOutline.mockRejectedValue(
+        new Error('embeddings down'),
+      );
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(out.content).toContain('# Branches');
+      expect(out.warnings.some((w) => w.includes('Research unavailable'))).toBe(
+        true,
+      );
+      expect(draftOf(0)).not.toContain('Private Research Brief');
+      const lastSave =
+        compilationRepo.save.mock.calls[
+          compilationRepo.save.mock.calls.length - 1
+        ][0];
+      expect(lastSave.status).toBe('succeeded_with_warnings');
+    });
+
+    it('verbatim overlap warns and regenerates exactly once', async () => {
+      const lifted = Array.from({ length: 30 }, (_, i) => `lifted${i}`).join(
+        ' ',
+      );
+      const filler = Array.from({ length: 400 }, (_, i) => `filler${i}`).join(
+        ' ',
+      );
+      stagePayloads({ draft: `# Branches\n\n${filler} ${lifted}` });
+      research.retrieveForOutline.mockResolvedValue({
+        chunks: [chunk(`intro ${lifted} outro`)],
+        sourceIds: ['s-mdn'],
+      });
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(out.warnings.some((w) => w.includes('Verbatim overlap'))).toBe(
+        true,
+      );
+      const regenCalls = clients.complete.mock.calls.filter((call) =>
+        String(call[4]).includes('Paraphrase passages'),
+      );
+      expect(regenCalls).toHaveLength(1);
+      // The regenerated (clean) draft is what publishes.
+      expect(out.content).toContain('# Branches');
+    });
+
+    it('research telemetry is internal — the draft keeps the single slot', async () => {
+      stagePayloads();
+      research.retrieveForOutline.mockResolvedValue({
+        chunks: [chunk('Some grounded fact about branches.')],
+        sourceIds: ['s-mdn'],
+      });
+
+      await service.compileConcept(baseInput);
+
+      const metas = logRepo.save.mock.calls.map((call) => call[0]);
+      expect(metas.length).toBeGreaterThan(1);
+      const billable = metas.filter((m) => m.internal !== true);
+      expect(billable).toHaveLength(1);
+    });
   });
 });

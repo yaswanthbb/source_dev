@@ -28,6 +28,7 @@ export interface ProviderMeta {
 
 const NVIDIA_DEFAULT_MODEL = 'meta/llama-3.1-70b-instruct';
 const GEMINI_DEFAULT_MODEL = 'gemini-3.6-flash';
+const NVIDIA_DEFAULT_EMBEDDING_MODEL = 'nvidia/nv-embedqa-e5-v5';
 
 const CURATED_MODELS: Record<AiProvider, string[]> = {
   [AiProvider.NVIDIA]: [
@@ -61,6 +62,18 @@ export function defaultModelFor(provider: AiProvider): string {
   return provider === AiProvider.GEMINI
     ? GEMINI_DEFAULT_MODEL
     : NVIDIA_DEFAULT_MODEL;
+}
+
+/**
+ * §8 research embeddings run on NVIDIA (OpenAI-compatible embeddings API).
+ * Model is env-overridable; the curated default lives here with the other
+ * provider defaults — no model literals in routing or service code.
+ */
+export function defaultEmbeddingModel(provider: AiProvider): string {
+  if (provider !== AiProvider.NVIDIA) {
+    throw providerFailure(provider, 'embeddings run on NVIDIA only');
+  }
+  return NVIDIA_DEFAULT_EMBEDDING_MODEL;
 }
 
 export function curatedModelsFor(provider: AiProvider): string[] {
@@ -167,6 +180,95 @@ export class AiProviderClients {
           options,
           signal,
         );
+  }
+
+  /**
+   * Embedding model: NVIDIA_EMBEDDING_MODEL_ID when set, else the curated
+   * default. Mirrors configuredDefaultModel for the research path.
+   */
+  configuredEmbeddingModel(): string {
+    return (
+      this.configService.get<string>('NVIDIA_EMBEDDING_MODEL_ID')?.trim() ||
+      NVIDIA_DEFAULT_EMBEDDING_MODEL
+    );
+  }
+
+  /**
+   * §8 research embeddings (NVIDIA OpenAI-compatible API). One call embeds
+   * a batch of texts; returns vectors in input order. Never billed to user
+   * quota — ingestion and research are operator/compile-time work.
+   */
+  async embed(
+    apiKey: string,
+    model: string,
+    inputs: string[],
+  ): Promise<number[][]> {
+    if (inputs.length === 0) return [];
+    const apiUrl =
+      this.configService.get<string>('NVIDIA_EMBEDDINGS_API_URL')?.trim() ||
+      'https://integrate.api.nvidia.com/v1/embeddings';
+    let response: globalThis.Response;
+    try {
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model, input: inputs }),
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to reach NVIDIA embeddings API: ${msg}`);
+      throw providerFailure(AiProvider.NVIDIA, msg);
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      this.logger.error(
+        `NVIDIA embeddings API error HTTP ${response.status}: ${errorBody}`,
+      );
+      if (isAuthFailure(response.status)) {
+        throw invalidKeyError(AiProvider.NVIDIA);
+      }
+      if (response.status === 429) {
+        throw providerFailure(AiProvider.NVIDIA, 'rate limited', 429);
+      }
+      if (response.status === 404 || response.status === 410) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.BAD_GATEWAY,
+            message: `Embedding model "${model}" is not available on NVIDIA NIM (HTTP ${response.status} — likely retired).`,
+            error: 'Bad Gateway',
+            code: 'MODEL_RETIRED',
+          },
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
+      throw providerFailure(AiProvider.NVIDIA, `HTTP ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      data?: Array<{ embedding?: unknown; index?: unknown }>;
+    };
+    const rows = [...(data.data ?? [])].sort(
+      (a, b) => Number(a.index ?? 0) - Number(b.index ?? 0),
+    );
+    if (rows.length !== inputs.length) {
+      throw providerFailure(
+        AiProvider.NVIDIA,
+        `embedding count mismatch (got ${rows.length} for ${inputs.length})`,
+      );
+    }
+    return rows.map((row) => {
+      if (
+        !Array.isArray(row.embedding) ||
+        !row.embedding.every((v) => typeof v === 'number')
+      ) {
+        throw providerFailure(AiProvider.NVIDIA, 'malformed embedding vector');
+      }
+      return row.embedding as number[];
+    });
   }
 
   private async nvidiaCompletion(

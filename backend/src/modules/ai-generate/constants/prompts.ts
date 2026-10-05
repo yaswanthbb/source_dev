@@ -268,8 +268,14 @@ export function buildDraftUserPrompt(input: {
   outlineJson: string;
   contextBlock?: string;
   personaLines?: string;
+  researchBrief?: string;
 }): string {
   const parts = [`Approved Outline (realize every section):\n"""\n${input.outlineJson}\n"""`];
+  if (input.researchBrief) {
+    parts.push(
+      `Private Research Brief (ground the article where relevant; NEVER copy passages verbatim — synthesize in your own words):\n"""\n${input.researchBrief.slice(0, 4000)}\n"""`,
+    );
+  }
   if (input.contextBlock) {
     parts.push(`Curriculum Context:\n${input.contextBlock}`);
   }
@@ -298,13 +304,20 @@ export function buildFactcheckUserPrompt(input: {
   outlineJson: string;
   draftContent: string;
   registryTerms: string;
+  researchBrief?: string;
 }): string {
-  return [
+  const parts = [
     `Approved Outline:\n"""\n${input.outlineJson}\n"""`,
     `Draft Article:\n"""\n${input.draftContent.slice(0, 8000)}\n"""`,
     `Term Registry (canonical definitions):\n${input.registryTerms}`,
-    'Check the draft against the outline and registry. Output ONLY the fact-check JSON.',
-  ].join('\n\n');
+  ];
+  if (input.researchBrief) {
+    parts.push(
+      `Private Research Brief (flag draft claims that contradict it):\n"""\n${input.researchBrief.slice(0, 4000)}\n"""`,
+    );
+  }
+  parts.push('Check the draft against the outline and registry. Output ONLY the fact-check JSON.');
+  return parts.join('\n\n');
 }
 
 export const CONCEPT_CRITIQUE_SYSTEM_PROMPT = `You are a senior pedagogy judge reviewing a concept article for a developer learning platform.
@@ -351,5 +364,41 @@ export function buildReviseUserPrompt(input: {
     `Current Draft:\n"""\n${input.draftContent.slice(0, 8000)}\n"""`,
     `Must-fix list (address every item):\n${fixList.map((f) => `- ${f}`).join('\n')}`,
     'Output ONLY the full revised article in Markdown.',
+  ].join('\n\n');
+}
+
+// ---------------------------------------------------------------------------
+// §8 research (RAG) prompts. The brief is PRIVATE — it informs the draft and
+// fact-check but is never user-facing (it lives in the compilation trace).
+// Augmented grounding: sources where relevant, model knowledge otherwise.
+// ---------------------------------------------------------------------------
+
+export const CONCEPT_RESEARCH_SYSTEM_PROMPT = `You are a research assistant reporting privately to a curriculum author. You have retrieved excerpts from lawfully licensed sources (public-domain, CC-BY/SA, OER, or explicitly licensed).
+
+Output MUST be a strictly valid JSON object with exactly this shape:
+{
+  "brief": "2-4 paragraphs synthesizing what the drafter must know: precise definitions, canonical examples, common misconceptions, and what to emphasize for the stated objectives",
+  "key_points": ["atomic facts or framings the draft should use"]
+}
+
+Rules:
+1. This brief is PRIVATE scaffolding, never published. Synthesize and compress — do NOT copy passages at length. Short quoted phrases (under ~10 words) only where precision demands it.
+2. Augmented grounding: lead with the retrieved excerpts where they speak to the queries; fill gaps with established knowledge, and mark uncertain claims as such.
+3. Every key_point must trace to either a retrieved excerpt or well-established knowledge — no speculation.
+4. STRICTLY FORBIDDEN: Markdown formatting, code fences, explanations, or notes. Output ONLY the raw JSON object.`;
+
+export function buildResearchBriefUserPrompt(input: {
+  queries: string[];
+  chunks: Array<{ sourceTitle: string; content: string }>;
+}): string {
+  return [
+    `Research queries:\n${input.queries.map((q) => `- ${q}`).join('\n')}`,
+    `Retrieved excerpts (licensed sources):\n${input.chunks
+      .map(
+        (c, i) =>
+          `[${i + 1}] ${c.sourceTitle}:\n"""\n${c.content.slice(0, 2000)}\n"""`,
+      )
+      .join('\n\n')}`,
+    'Synthesize the private research brief. Output ONLY the brief JSON.',
   ].join('\n\n');
 }

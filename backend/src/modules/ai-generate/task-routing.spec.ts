@@ -10,7 +10,7 @@ import {
 import { isModelRetiredError } from './ai-provider-clients';
 
 describe('task routing table (§8 per-task routing)', () => {
-  it('covers all ten task keys (paths + compiler pipeline stages)', () => {
+  it('covers all eleven task keys (paths + compiler + research stages)', () => {
     expect([...COURSE_TASK_KEYS].sort()).toEqual(
       [
         'roadmap_titles',
@@ -20,6 +20,7 @@ describe('task routing table (§8 per-task routing)', () => {
         'concept_factcheck',
         'concept_critique',
         'concept_style',
+        'concept_research',
         'module_mcqs',
         'single_concept_mcqs',
         'qa_answer',
@@ -34,6 +35,7 @@ describe('task routing table (§8 per-task routing)', () => {
       'module_mcqs',
       'single_concept_mcqs',
       'qa_answer',
+      'concept_research',
     ] as const) {
       expect(taskRouteFor(key).tier).toBe('fast');
     }

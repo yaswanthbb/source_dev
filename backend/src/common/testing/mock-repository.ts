@@ -19,6 +19,8 @@ export interface MockRepository {
   delete: jest.Mock;
   remove: jest.Mock;
   createQueryBuilder: jest.Mock;
+  /** Raw SQL (repository.query) — used by the research pgvector path. */
+  query: jest.Mock;
 }
 
 /**
@@ -41,6 +43,7 @@ export function createMockRepository(): MockRepository {
     delete: jest.fn(),
     remove: jest.fn((entity) => entity),
     createQueryBuilder: jest.fn(),
+    query: jest.fn(),
   };
 }
 

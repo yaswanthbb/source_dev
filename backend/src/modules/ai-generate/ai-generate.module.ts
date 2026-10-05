@@ -9,6 +9,8 @@ import { CourseTerm } from './entities/course-term.entity';
 import { CourseConceptCard } from './entities/course-concept-card.entity';
 import { CourseConceptEdge } from './entities/course-concept-edge.entity';
 import { ConceptCompilation } from './entities/concept-compilation.entity';
+import { CourseSource } from './entities/course-source.entity';
+import { CourseSourceChunk } from './entities/course-source-chunk.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../content/entities/module.entity';
 import { Concept } from '../content/entities/concept.entity';
@@ -23,6 +25,7 @@ import { AiKeysService } from './ai-keys.service';
 import { AiPromptRegistry } from './ai-prompt-registry.service';
 import { CourseContextService } from './course-context.service';
 import { CourseContextBuilder } from './course-context-builder.service';
+import { CourseResearchService } from './course-research.service';
 import { AiKeysController } from './ai-keys.controller';
 import { AiKeyCryptoService } from './ai-key-crypto.service';
 import { AiProviderClients } from './ai-provider-clients';
@@ -38,6 +41,8 @@ import { AiProviderClients } from './ai-provider-clients';
       CourseConceptCard,
       CourseConceptEdge,
       ConceptCompilation,
+      CourseSource,
+      CourseSourceChunk,
       Roadmap,
       ModuleEntity,
       Concept,
@@ -58,7 +63,8 @@ import { AiProviderClients } from './ai-provider-clients';
     AiPromptRegistry,
     CourseContextService,
     CourseContextBuilder,
+    CourseResearchService,
   ],
-  exports: [AiGenerateService, AiKeysService, CourseContextService, CourseContextBuilder],
+  exports: [AiGenerateService, AiKeysService, CourseContextService, CourseContextBuilder, CourseResearchService],
 })
 export class AiGenerateModule {}

@@ -20,6 +20,7 @@ export type CourseTaskKey =
   | 'concept_factcheck'
   | 'concept_critique'
   | 'concept_style'
+  | 'concept_research'
   | 'module_mcqs'
   | 'single_concept_mcqs'
   | 'qa_answer';
@@ -57,6 +58,8 @@ export const TASK_ROUTES: Record<CourseTaskKey, TaskRoute> = {
   // Verification and judgment → strongest available.
   concept_factcheck: { tier: 'strong', maxTokens: 1500, temperature: 0.3 },
   concept_critique: { tier: 'strong', maxTokens: 2000, temperature: 0.3 },
+  // Private research briefs are grounded extraction → cheap/fast.
+  concept_research: { tier: 'fast', maxTokens: 800, temperature: 0.3 },
   concept_style: { tier: 'strong', maxTokens: 2000, temperature: 0.5 },
 };
 

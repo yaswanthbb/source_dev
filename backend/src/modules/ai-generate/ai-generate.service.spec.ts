@@ -19,6 +19,7 @@ import { AiProviderClients } from './ai-provider-clients';
 import { AiPromptRegistry } from './ai-prompt-registry.service';
 import { CourseContextBuilder } from './course-context-builder.service';
 import { CourseContextService } from './course-context.service';
+import { CourseResearchService } from './course-research.service';
 import { ConceptCompilation } from './entities/concept-compilation.entity';
 import { CourseConceptCard } from './entities/course-concept-card.entity';
 import { CourseTerm } from './entities/course-term.entity';
@@ -47,6 +48,7 @@ describe('AiGenerateService', () => {
     configuredDefaultModel: jest.Mock;
   };
   let courseContext: { build: jest.Mock };
+  let courseResearch: { retrieveForOutline: jest.Mock; findSource: jest.Mock };
 
   const developer = makeUser({ id: 'dev-1', role: UserRole.DEVELOPER });
   const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
@@ -77,6 +79,10 @@ describe('AiGenerateService', () => {
       ),
     };
     courseContext = { build: jest.fn() };
+    courseResearch = {
+      retrieveForOutline: jest.fn(async () => ({ chunks: [], sourceIds: [] })),
+      findSource: jest.fn(async () => null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -124,6 +130,7 @@ describe('AiGenerateService', () => {
           useValue: { notify: jest.fn(), safeNotify: jest.fn() },
         },
         { provide: CourseContextBuilder, useValue: courseContext },
+        { provide: CourseResearchService, useValue: courseResearch },
         {
           provide: CourseContextService,
           useValue: {
