@@ -150,7 +150,7 @@ export function useTerminalSession(
   initialCommand?: string,
   commands?: CommandSpec[],
 ) {
-  const list = commands ?? commandsFor(user.role === "admin" ? "admin" : "developer", []);
+  const list = commands ?? commandsFor("developer");
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isDark, setTheme } = useTheme();

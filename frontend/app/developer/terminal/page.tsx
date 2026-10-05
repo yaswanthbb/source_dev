@@ -38,5 +38,7 @@ export default async function DeveloperTerminalPage({
   searchParams: Promise<{ view?: string; concept?: string; roadmap?: string }>;
 }) {
   const params = await searchParams;
-  return <TerminalWorkspace initialCommand={openingCommand(params)} />;
+  // The view decides the registry, never the user role: an admin in the
+  // developer shell gets the full developer set (ls, authoring, QA board).
+  return <TerminalWorkspace commandsRole="developer" initialCommand={openingCommand(params)} />;
 }

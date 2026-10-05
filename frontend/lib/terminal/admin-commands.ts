@@ -117,14 +117,6 @@ interface DeletionRequest {
   createdAt: string;
 }
 
-interface NotificationItem {
-  id: string;
-  type: string;
-  payload?: Record<string, unknown>;
-  createdAt: string;
-  isRead: boolean;
-}
-
 interface ArticleItem {
   id: string;
   title: string;
@@ -234,7 +226,18 @@ const review: CommandSpec = {
         io.print(`review show: ${errText(e)}`, "err");
         return;
       }
-      const c = items.find((x) => x.id === id || x.id.startsWith(id));
+      const exact = items.find((x) => x.id === id);
+      const hits = exact
+        ? [exact]
+        : items.filter((x) => x.id.toLowerCase().startsWith(id.toLowerCase()));
+      if (hits.length > 1) {
+        io.print(
+          `review show: "${id}" matches ${hits.length} queued concepts. Type more characters of the id.`,
+          "err",
+        );
+        return;
+      }
+      const c = hits[0];
       if (!c) {
         io.print(`review show: ${id} is not in the queue`, "err");
         return;
