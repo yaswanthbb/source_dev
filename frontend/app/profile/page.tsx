@@ -17,7 +17,6 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
-  Briefcase,
   Shield,
   UploadCloud,
   Clock,
@@ -104,14 +103,9 @@ export default function ProfilePage() {
     enabled: isAuthenticated === true,
   });
 
-  const role = profileUser?.role || 'student';
-  const isInstructorOrAdmin = role === 'instructor' || role === 'admin';
+  const role = profileUser?.role || 'developer';
   const dashboardHref =
-    role === 'admin'
-      ? '/admin/dashboard'
-      : role === 'instructor'
-      ? '/instructor/dashboard'
-      : '/student/dashboard';
+    role === 'admin' ? '/admin/dashboard' : '/developer/dashboard';
 
   // -------------------------------------------------------------------------
   // CONSOLIDATED PROFILE STATE (Picture + Basic Info + Bio)
@@ -120,7 +114,6 @@ export default function ProfilePage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [imageSizeKb, setImageSizeKb] = useState<number | null>(null);
-  const [bioText, setBioText] = useState('');
 
   const {
     register: registerBasic,
@@ -143,9 +136,6 @@ export default function ProfilePage() {
         timezone: profileUser.timezone || 'UTC',
       });
       setPreviewImage(profileUser.profilePicture || null);
-      if (profileUser.instructorProfile?.bio !== undefined) {
-        setBioText(profileUser.instructorProfile.bio || '');
-      }
     }
   }, [profileUser, resetBasic]);
 
@@ -213,23 +203,15 @@ export default function ProfilePage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Single Consolidated Save Mutation (Profile Picture + Name + Timezone + Instructor Bio)
+  // Single Consolidated Save Mutation (Profile Picture + Name + Timezone)
   const saveProfileMutation = useMutation({
     mutationFn: async (data: BasicInfoFormData) => {
-      // 1. Update basic profile info & profile picture
+      // Update basic profile info & profile picture
       const userRes = await apiClient.patch<User>('/users/me', {
         name: data.name,
         timezone: data.timezone,
         profilePicture: previewImage,
       });
-
-      // 2. If instructor or admin, update bio
-      if (isInstructorOrAdmin) {
-        await apiClient.patch<{ message: string; bio: string | null }>(
-          '/users/me/instructor-bio',
-          { bio: bioText },
-        );
-      }
 
       return userRes.data;
     },
@@ -342,11 +324,7 @@ export default function ProfilePage() {
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <span
-            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-              role === 'instructor'
-                ? 'bg-amber-tint text-amber border border-amber/30'
-                : 'bg-accent-tint text-accent border border-accent/20'
-            }`}
+            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-accent-tint text-accent border border-accent/20"
           >
             {role}
           </span>
@@ -579,48 +557,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Card 3: Instructor Bio (Only rendered for Instructor / Admin) */}
-          {isInstructorOrAdmin && (
-            <div className="p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs space-y-6">
-              <div className="flex items-center gap-2.5 pb-4 border-b border-border/60">
-                <div className="w-8 h-8 rounded-xl bg-accent-tint text-accent flex items-center justify-center">
-                  <Briefcase className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold font-display text-text-primary">
-                    Instructor Biography
-                  </h2>
-                  <p className="text-xs text-text-secondary">
-                    Displayed on roadmaps and author profiles across the platform.
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label
-                    htmlFor="bio"
-                    className="block text-xs font-semibold text-text-primary uppercase tracking-wider"
-                  >
-                    About You
-                  </label>
-                  <span className="text-[11px] text-text-secondary">
-                    {bioText.length} / 2000 characters
-                  </span>
-                </div>
-                <textarea
-                  id="bio"
-                  rows={4}
-                  maxLength={2000}
-                  value={bioText}
-                  onChange={(e) => setBioText(e.target.value)}
-                  placeholder="Share your technical experience, industry background, and what students will learn from your roadmaps..."
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-bg text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-sm transition-all"
-                />
-              </div>
-            </div>
-          )}
-
           {/* Single Consolidated "Save Profile" Button */}
           <div className="flex justify-end pt-2">
             <button
@@ -642,6 +578,22 @@ export default function ProfilePage() {
             </button>
           </div>
         </form>
+
+        {/* AI provider keys (BYOK) */}
+        <Link
+          href="/developer/keys"
+          className="p-6 sm:p-8 rounded-2xl bg-surface border border-border shadow-xs flex items-center justify-between gap-4 hover:border-accent/40 transition-colors cursor-pointer"
+        >
+          <div>
+            <h2 className="text-base sm:text-lg font-bold font-display text-text-primary">
+              AI Provider Keys
+            </h2>
+            <p className="text-xs text-text-secondary">
+              Bring your own NVIDIA / Gemini keys, pick models, raise the daily cap.
+            </p>
+          </div>
+          <span className="text-xs font-bold text-accent shrink-0">MANAGE ➔</span>
+        </Link>
 
         {/* =================================================================== */}
         {/* SECTION: CONNECTED ACCOUNTS / SIGN-IN METHOD */}

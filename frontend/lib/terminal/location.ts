@@ -238,11 +238,11 @@ export function isReadable(loc: Location): boolean {
 // depth, so the deep GUI pages can claim real segments later without this
 // having to be unpicked.
 
-export const TERMINAL_ROUTE = "/student/terminal";
+export const TERMINAL_ROUTE = "/developer/terminal";
 export const ADMIN_TERMINAL_ROUTE = "/admin/terminal";
 export const PATH_PARAM = "path";
 
-export type Role = "student" | "instructor" | "admin";
+export type Role = "developer" | "admin";
 
 function terminalRouteFor(role?: Role): string {
   return role === "admin" ? ADMIN_TERMINAL_ROUTE : TERMINAL_ROUTE;
@@ -295,11 +295,10 @@ export function hasGuiPage(loc: Location): boolean {
  *  the user was actually on. */
 export function guiFallback(loc: Location, role?: Role): string {
   if (role === "admin") return "/admin/dashboard";
-  if (role === "instructor") return "/instructor/dashboard";
-  // Students: the dashboard is the nearest thing to "inside the curriculum"
+  // Developers: the dashboard is the nearest thing to "inside the curriculum"
   // that has a page, and it is where continue/resume already lives.
   void loc;
-  return "/student/dashboard";
+  return "/developer/dashboard";
 }
 
 // ─── Persistence ────────────────────────────────────────────────────────────

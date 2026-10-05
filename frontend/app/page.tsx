@@ -15,7 +15,7 @@ export default function RootPage() {
     const token = getToken();
     if (token) {
       setIsRedirecting(true);
-      router.replace('/student/dashboard');
+      router.replace('/developer/dashboard');
     }
   }, [router]);
 

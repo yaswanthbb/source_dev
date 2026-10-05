@@ -207,10 +207,9 @@ test("only the root has a GUI page in this build", () => {
 });
 
 test("guiFallback lands on a real page per role", () => {
-  assert.equal(L.guiFallback(ALL[3], "student"), "/student/dashboard");
+  assert.equal(L.guiFallback(ALL[3], "developer"), "/developer/dashboard");
   assert.equal(L.guiFallback(ALL[3], "admin"), "/admin/dashboard");
-  assert.equal(L.guiFallback(ALL[3], "instructor"), "/instructor/dashboard");
-  assert.equal(L.guiFallback(ALL[3]), "/student/dashboard");
+  assert.equal(L.guiFallback(ALL[3]), "/developer/dashboard");
 });
 
 test("the projection is lossy, which is why it must not be written back", () => {
@@ -219,7 +218,7 @@ test("the projection is lossy, which is why it must not be written back", () => 
   // all three of these would become the dashboard and the concept would be
   // lost. The provider therefore leaves lastLocation untouched on a GUI
   // switch — see the round-trip test below.
-  const projected = new Set(ALL.map((loc) => L.guiFallback(loc, "student")));
+  const projected = new Set(ALL.map((loc) => L.guiFallback(loc, "developer")));
   assert.equal(projected.size, 1);
 });
 
@@ -229,8 +228,8 @@ test("a mode round-trip through GUI preserves the exact concept", () => {
   const wasAt = ALL[3];
 
   const stored = L.serializeLocation(wasAt);
-  const shown = L.guiFallback(wasAt, "student"); // what GUI renders
-  assert.equal(shown, "/student/dashboard");
+  const shown = L.guiFallback(wasAt, "developer"); // what GUI renders
+  assert.equal(shown, "/developer/dashboard");
 
   // Switching back reads the stored value, not the projection.
   const restored = L.deserializeLocation(stored);
@@ -242,14 +241,14 @@ test("a mode round-trip through GUI preserves the exact concept", () => {
 
 test("CLI routes round-trip through the path parameter", () => {
   for (const loc of ALL) {
-    const url = L.toCliRoute(loc, "student");
+    const url = L.toCliRoute(loc, "developer");
     const param = new URL(url, "http://x").searchParams.get(L.PATH_PARAM);
     assert.deepEqual(L.fromCliParam(param), loc);
   }
 });
 
 test("root is the bare terminal route, with no noise in the address bar", () => {
-  assert.equal(L.toCliRoute(L.ROOT, "student"), "/student/terminal");
+  assert.equal(L.toCliRoute(L.ROOT, "developer"), "/developer/terminal");
   assert.equal(L.toCliRoute(L.ROOT, "admin"), "/admin/terminal");
   assert.deepEqual(L.fromCliParam(null), L.ROOT);
   assert.deepEqual(L.fromCliParam(""), L.ROOT);
@@ -257,7 +256,7 @@ test("root is the bare terminal route, with no noise in the address bar", () => 
 
 test("admin gets the admin terminal route at every depth", () => {
   assert.match(L.toCliRoute(ALL[3], "admin"), /^\/admin\/terminal\?/);
-  assert.match(L.toCliRoute(ALL[3], "student"), /^\/student\/terminal\?/);
+  assert.match(L.toCliRoute(ALL[3], "developer"), /^\/developer\/terminal\?/);
 });
 
 test("a malformed path parameter is reported, not silently rooted", () => {

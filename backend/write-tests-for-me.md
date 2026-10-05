@@ -269,6 +269,11 @@ Prerequisite: `$CONCEPT` published via 1.9 (authored by `A`, visible to all).
 - **Expected:** `200`, all entries `isAiGenerated: true`.
 - **Endpoint:** `GET /roadmaps?label=bogus` — **Expected:** `400`.
 
+### 4.3 Shell browsers (as `B` in `/developer/terminal`)
+- `ls -l` shows `{ai}` / `{hand}` / `{partial}` tags beside titles.
+- `ls --label ai` lists only AI-origin entries at the current level; bogus value errors naming the three labels.
+- Opening a lesson shows the `origin:` line in its header.
+
 ---
 
 ## 5. AI-generate guard (§1)

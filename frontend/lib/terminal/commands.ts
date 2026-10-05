@@ -13,6 +13,7 @@
 import { LEARNING_COMMANDS } from "./learning-commands";
 import { FS_COMMANDS } from "./fs-commands";
 import { isAbortError } from "./request";
+import { completeAdminValues } from "./admin-complete";
 import { stuck, recordHistory, fetchText, clearCurrentConcept } from "./output";
 import type { Location } from "./location";
 import { childKindOf, resolvePath } from "./location";
@@ -164,6 +165,9 @@ export interface CommandCtx {
   confirmLogout?: () => Promise<boolean>;
   navigate?: (path: string) => void;
   refreshLearning?: () => Promise<void>;
+  /** The registry this run resolves against — set by `runCommand` from the
+   *  active shell's list, so `help`/`man` document the shell you are in. */
+  commands?: CommandSpec[];
 }
 
 export interface CommandSpec {
@@ -191,6 +195,9 @@ export interface CommandSpec {
    *  asserts every entry in `COMMAND_LIST` has one. */
   help: CommandHelp;
   run: (ctx: CommandCtx) => void | Promise<void>;
+  /** Shells this command belongs to. Absent means both. Admin-only and
+   *  developer-only entries are composed per role by `commandsFor`. */
+  role?: "developer" | "admin";
 }
 
 // ─── Help rendering ─────────────────────────────────────────────────────────
@@ -344,10 +351,10 @@ const help: CommandSpec = {
     args: [{ name: "[command]", text: "Print this command's help instead of the list" }],
     examples: ["help", "help ls", "help quiz", "ls --help"],
   },
-  run: ({ args, io }) => {
+  run: ({ args, io, commands }) => {
     const [target] = args;
     if (target) {
-      const spec = resolve(target);
+      const spec = resolve(target, commands);
       if (!spec) {
         io.print(`help: no such command: ${target}`, "err");
         stuck(io, "", "Run {help} with no arguments to see the full list.");
@@ -358,11 +365,12 @@ const help: CommandSpec = {
     }
 
     io.print("AVAILABLE COMMANDS", "head");
-    const groups = [...new Set(COMMAND_LIST.map((s) => s.group))];
+    const list = commands ?? COMMAND_LIST;
+    const groups = [...new Set(list.map((s) => s.group))];
     for (const group of groups) {
       io.print("");
       io.print(`  ${group}/`, "dim");
-      for (const spec of COMMAND_LIST.filter((s) => s.group === group)) {
+      for (const spec of list.filter((s) => s.group === group)) {
         io.print(`    ${spec.usage.padEnd(28)} ${spec.summary}`);
       }
     }
@@ -776,6 +784,104 @@ const logoutCmd: CommandSpec = {
   },
 };
 
+// ─── Notifications (both shells) ───────────────────────────────────────────
+// The bell lives here, not in either role file: developers and admins read
+// the same endpoints, and one implementation cannot drift from itself.
+
+interface BellItem {
+  id: string;
+  type: string;
+  payload?: Record<string, unknown>;
+  createdAt: string;
+  isRead: boolean;
+}
+
+function bellTitle(n: BellItem): string {
+  const p = n.payload ?? {};
+  return (
+    (p.roadmapTitle as string) ||
+    (p.conceptTitle as string) ||
+    (p.title as string) ||
+    (p.targetLabel as string) ||
+    ""
+  );
+}
+
+const notifications: CommandSpec = {
+  name: "notifications",
+  usage: "notifications [read|clear] ...",
+  summary: "read the bell",
+  group: "notify",
+  help: {
+    usage: "notifications [type] [--unread] | notifications read <id> | notifications clear",
+    description: [
+      "Newest first. Filter by type, or to unread only.",
+      "Read one or clear the bell in one move.",
+    ],
+    args: [
+      { name: "[type]", text: "e.g. roadmap_submitted, ai_job_failed" },
+      { name: "--unread", text: "Unread only" },
+      { name: "read <id>", text: "Mark one notification read" },
+      { name: "clear", text: "Mark every notification read" },
+    ],
+    examples: ["notifications", "notifications roadmap_submitted --unread", "notifications clear"],
+  },
+  run: async (ctx) => {
+    const { args, io } = ctx;
+    if (args[0] === "read") {
+      if (!args[1]) {
+        io.print("usage: notifications read <id>", "err");
+        return;
+      }
+      try {
+        await apiClient.patch(`/notifications/${args[1]}/read`);
+        io.print("[OK] marked read", "ok");
+      } catch (e) {
+        io.print(`notifications read: ${errText(e)}`, "err");
+      }
+      return;
+    }
+    if (args[0] === "clear") {
+      try {
+        const { data } = await apiClient.post<{ marked: number }>("/notifications/read-all");
+        io.print(`[OK] marked ${data.marked} read`, "ok");
+      } catch (e) {
+        io.print(`notifications clear: ${errText(e)}`, "err");
+      }
+      return;
+    }
+    let type = "";
+    let unreadOnly = false;
+    for (const a of args) {
+      if (a === "--unread") unreadOnly = true;
+      else if (!a.startsWith("-")) type = a;
+    }
+    const params = new URLSearchParams();
+    if (type) params.set("type", type);
+    if (unreadOnly) params.set("unreadOnly", "true");
+    const qs = params.toString();
+    try {
+      const [{ data: list }, { data: count }] = await Promise.all([
+        apiClient.get<BellItem[]>(`/notifications${qs ? `?${qs}` : ""}`),
+        apiClient.get<{ unread: number }>("/notifications/unread-count"),
+      ]);
+      io.print(`NOTIFICATIONS · ${count.unread} unread`, "head");
+      if (list.length === 0) {
+        io.print("nothing here", "dim");
+        return;
+      }
+      for (const n of list) {
+        const mark = n.isRead ? " " : "*";
+        io.print(` ${mark}${n.id.slice(0, 8)}  [${n.type}] ${bellTitle(n)}`);
+      }
+      io.print("", "dim");
+      io.print("notifications read <id> to mark one · notifications clear to clear", "dim");
+    } catch (e) {
+      io.print(`notifications: ${errText(e)}`, "err");
+    }
+  },
+};
+
 const theme: CommandSpec = {
   name: "theme",
   usage: "theme [dark|light]",
@@ -843,7 +949,7 @@ function factsFor(user: User | undefined, extra: FetchRow[] = []): FetchRow[] {
     ...extra,
     { label: "Shell", value: `sd-sh ${SHELL_VERSION}` },
     { label: "Terminal", value: "web console" },
-    { label: "Role", value: (user?.role ?? "student").toUpperCase() },
+    { label: "Role", value: (user?.role ?? "developer").toUpperCase() },
     { label: "Account", value: user?.email ?? "—" },
     { label: "Timezone", value: user?.timezone || "UTC" },
     { label: "Joined", value: fmtDate(user?.createdAt, user?.timezone) },
@@ -851,11 +957,11 @@ function factsFor(user: User | undefined, extra: FetchRow[] = []): FetchRow[] {
 }
 
 /** The identity line. The user half is the role because that is what the
- *  prompt says too — `student@source-dev` — and two names for the same account
+ *  prompt says too — `developer@source-dev` — and two names for the same account
  *  in the same window would be one name too many. */
 function reportFor(user: User | undefined, rows: FetchRow[]): FetchReport {
   return {
-    user: (user?.role ?? "student").toLowerCase(),
+    user: (user?.role ?? "developer").toLowerCase(),
     host: "source-dev",
     rows,
   };
@@ -954,14 +1060,14 @@ const man: CommandSpec = {
     args: [{ name: "<command>", text: "The command to document" }],
     examples: ["man ls", "man quiz", "man qa"],
   },
-  run: ({ args, io }) => {
+  run: ({ args, io, commands }) => {
     const [target] = args;
     if (!target) {
       io.print("What manual page do you want?", "err");
       stuck(io, "", "Try {man ls}, or {help} for the list of commands.");
       return;
     }
-    const spec = resolve(target);
+    const spec = resolve(target, commands);
     if (!spec) {
       io.print(`No manual entry for ${target}`, "err");
       stuck(io, "", "Run {help} to see every command that has one.");
@@ -1020,14 +1126,20 @@ const exit: CommandSpec = {
 
 // ─── Registry ───────────────────────────────────────────────────────────────
 
+/** Tag a command file's exports for one shell without touching the specs. */
+const forRole = (
+  role: "developer" | "admin",
+  specs: CommandSpec[],
+): CommandSpec[] => specs.map((s) => ({ ...s, role }));
+
 /** Display order for `help` and the hint strip. */
 export const COMMAND_LIST: CommandSpec[] = [
   help,
   man,
   // Navigation comes first because it is how everything else is reached: you
   // locate a lesson with `ls` and `cd` before you `read` or `quiz` it.
-  ...FS_COMMANDS,
-  ...LEARNING_COMMANDS,
+  ...forRole("developer", FS_COMMANDS),
+  ...forRole("developer", LEARNING_COMMANDS),
   whoami,
   profile,
   timezone,
@@ -1039,7 +1151,24 @@ export const COMMAND_LIST: CommandSpec[] = [
   clear,
   exit,
   logoutCmd,
+  notifications,
 ];
+
+/**
+ * The command set for a shell. Developers get exactly COMMAND_LIST (the
+ * developer surface, unchanged); admins get the shared shell/profile/session
+ * entries plus the admin set. Unknown roles fall back to the shared entries.
+ */
+export function commandsFor(
+  role: "developer" | "admin" | undefined,
+  adminCommands: CommandSpec[] = [],
+): CommandSpec[] {
+  if (role === "admin") {
+    const shared = COMMAND_LIST.filter((s) => s.role !== "developer");
+    return [...shared, ...adminCommands];
+  }
+  return COMMAND_LIST;
+}
 
 export const COMMANDS: Record<string, CommandSpec> = (() => {
   const map: Record<string, CommandSpec> = {};
@@ -1050,8 +1179,12 @@ export const COMMANDS: Record<string, CommandSpec> = (() => {
   return map;
 })();
 
-function resolve(name: string): CommandSpec | undefined {
-  return COMMANDS[name.toLowerCase()];
+function resolve(name: string, list: CommandSpec[] = COMMAND_LIST): CommandSpec | undefined {
+  if (list === COMMAND_LIST) return COMMANDS[name.toLowerCase()];
+  const lower = name.toLowerCase();
+  return list.find(
+    (s) => s.name.toLowerCase() === lower || (s.aliases ?? []).some((a) => a.toLowerCase() === lower),
+  );
 }
 
 // The boot mark used to live here as a `LOGO` constant — six lines of slant
@@ -1169,7 +1302,7 @@ function matchingPhrases(input: string): string[] {
 
 /** Tab-completion. Returns the completed line, or null if there is nothing
  *  unambiguous to add. */
-export function completeCommand(input: string): string | null {
+export function completeCommand(input: string, list: CommandSpec[] = COMMAND_LIST): string | null {
   const trailingSpace = /\s$/.test(input);
   const parts = tokenise(input);
 
@@ -1177,7 +1310,7 @@ export function completeCommand(input: string): string | null {
 
   // Completing the command name itself.
   if (parts.length === 1 && !trailingSpace) {
-    const matches = COMMAND_LIST.filter((s) => s.name.startsWith(parts[0]));
+    const matches = list.filter((s) => s.name.startsWith(parts[0]));
     if (matches.length === 1) return `${matches[0].name} `;
     return null;
   }
@@ -1299,9 +1432,9 @@ function completeZones(head: string, typed: string): string[] {
 /** Command names for `help` and `man`, aliases included — completing to the
  *  canonical name, so `help f⇥` becomes `help neofetch`. One argument only:
  *  past it there is nothing left to complete. */
-function completeCommandName(verb: string, typed: string): string[] {
+function completeCommandName(verb: string, typed: string, list: CommandSpec[] = COMMAND_LIST): string[] {
   const needle = typed.toLowerCase();
-  const hits = COMMAND_LIST.filter(
+  const hits = list.filter(
     (s) =>
       !s.hidden &&
       (s.name.toLowerCase().startsWith(needle) ||
@@ -1310,10 +1443,24 @@ function completeCommandName(verb: string, typed: string): string[] {
   return hits.map((s) => `${verb} ${s.name}`);
 }
 
+/** Static subcommand keywords (`roadmap submit`, `module new`) — the same
+ *  starts-then-contains shape as the catalogue completers. Exported for the
+ *  `ls --label` branch below, which completes option values the same way. */
+export function matchWords(head: string, words: string[], typed: string): string[] {
+  const needle = typed.toLowerCase();
+  const starts = words.filter((w) => w.toLowerCase().startsWith(needle));
+  const hits = (
+    starts.length
+      ? starts
+      : words.filter((w) => w.toLowerCase().includes(needle))
+  ).slice(0, 12);
+  return hits.map((w) => `${head} ${w}`);
+}
+
 /** Value completion for the argument being typed. The head is everything up
  *  to that argument, so a multi-word fragment completes whole — `qa ask sip
  *  ba⇥` becomes `qa ask "SIP Basics"`, not `qa ask sip sip-basics`. */
-export async function completeValues(input: string): Promise<string[]> {
+export async function completeValues(input: string, list: CommandSpec[] = COMMAND_LIST): Promise<string[]> {
   const trailingSpace = /\s$/.test(input);
   const parts = tokenise(input);
   if (parts.length < 1) return [];
@@ -1329,7 +1476,7 @@ export async function completeValues(input: string): Promise<string[]> {
   if (verb === "qa") {
     const after = parts.slice(1, trailingSpace ? undefined : -1);
     const [sub, ...words] = after;
-    const spec = resolve("qa");
+    const spec = resolve("qa", list);
     if (!sub || !spec?.completesAfter?.includes(sub.toLowerCase())) return [];
     const typed = [...words, ...(trailingSpace ? [] : [fragment])].join(" ");
     return completeLessons(parts.slice(0, 2).join(" "), typed);
@@ -1337,12 +1484,67 @@ export async function completeValues(input: string): Promise<string[]> {
 
   if (verb === "help" || verb === "man" || verb === "?") {
     if (operands.length !== 0) return [];
-    return completeCommandName(parts[0], fragment);
+    return completeCommandName(parts[0], fragment, list);
   }
 
   if (verb === "continue" || verb === "resume") {
     if (operands.length !== 0) return [];
     return completeRoadmaps(parts[0], fragment);
+  }
+
+  if (verb === "roadmap") {
+    const [sub, ...words] = operands;
+    if (!sub) {
+      return matchWords(parts[0], ["new", "edit", "submit", "status"], fragment);
+    }
+    if (
+      ["submit", "status", "edit"].includes(sub.toLowerCase()) &&
+      words.length === 0
+    ) {
+      return completeRoadmaps([parts[0], sub].join(" "), fragment);
+    }
+    return [];
+  }
+
+  if (verb === "module") {
+    const [sub] = operands;
+    if (!sub) return matchWords(parts[0], ["new"], fragment);
+    return [];
+  }
+
+  if (verb === "concept") {
+    const [sub] = operands;
+    if (!sub) return matchWords(parts[0], ["new"], fragment);
+    return [];
+  }
+
+  if (verb === "ls") {
+    const LABELS = ["ai", "handwritten", "partial"];
+    const prev = operands[operands.length - 1];
+    // `ls --label <TAB>`: complete the value.
+    if (prev === "--label") {
+      return matchWords([parts[0], ...operands].join(" "), LABELS, fragment);
+    }
+    // `ls --lab<TAB>`: complete the flag itself.
+    if (operands.length === 0 && fragment.startsWith("--")) {
+      return matchWords(parts[0], ["--label"], fragment);
+    }
+    return [];
+  }
+
+  if (verb === "attach" || verb === "detach") {
+    if (operands.length !== 0) return [];
+    return completeLessons(parts[0], fragment);
+  }
+
+  if (verb === "articles") {
+    return [];
+  }
+
+  if (verb === "article") {
+    const [sub] = operands;
+    if (!sub) return matchWords(parts[0], ["read", "new"], fragment);
+    return [];
   }
 
   if (verb === "timezone" || verb === "tz") {
@@ -1358,6 +1560,16 @@ export async function completeValues(input: string): Promise<string[]> {
   ) {
     return completeZones(parts.slice(0, 3).join(" "), fragment);
   }
+
+  // Admin-shell verbs (subcommand keywords, then live ids). Null means the
+  // verb is not an admin verb and completion stays empty.
+  const adminHits = await completeAdminValues(
+    verb,
+    operands,
+    fragment,
+    [parts[0], ...operands].join(" "),
+  );
+  if (adminHits) return adminHits;
 
   return [];
 }
@@ -1474,10 +1686,23 @@ export async function completePath(
 export async function completeArgument(
   input: string,
   cwd: Location,
+  list: CommandSpec[] = COMMAND_LIST,
 ): Promise<string[]> {
+  // Option values complete from their own tables, never the tree: `ls --label`
+  // wants ai/handwritten/partial, not a path that happens to start with "a".
+  // Covers both `--label <TAB>` (value missing) and `--label a<TAB>`.
+  const tokens = input.trim().split(/\s+/);
+  const last = tokens[tokens.length - 1];
+  const prev = tokens[tokens.length - 2];
+  if (
+    tokens[0]?.toLowerCase() === "ls" &&
+    (last === "--label" || prev === "--label")
+  ) {
+    return completeValues(input, list);
+  }
   const paths = await completePath(input, cwd);
   if (paths.length) return paths;
-  return completeValues(input);
+  return completeValues(input, list);
 }
 
 /** Second-level suggestions for the hint strip, so `profile set tz` and
@@ -1495,14 +1720,14 @@ export function subHints(input: string): string[] {
 
 /** Commands whose names start with the word being typed — drives the hint
  *  strip so the user never has to clear the line to remember a command. */
-export function matchCommands(input: string): CommandSpec[] {
-  const visible = COMMAND_LIST.filter((s) => !s.hidden);
+export function matchCommands(input: string, list: CommandSpec[] = COMMAND_LIST): CommandSpec[] {
+  const visible = list.filter((s) => !s.hidden);
   const first = tokenise(input)[0] ?? "";
   if (!first) return visible;
 
   // Once the name is complete and a space typed, narrow to that one command
   // so the strip turns into a usage reminder for what is being written.
-  const exact = resolve(first);
+  const exact = resolve(first, list);
   if (exact && /\s/.test(input)) return [exact];
 
   return visible.filter((s) => s.name.startsWith(first.toLowerCase()));
@@ -1512,6 +1737,7 @@ export function matchCommands(input: string): CommandSpec[] {
 export async function runCommand(
   input: string,
   base: Omit<CommandCtx, "args" | "raw">,
+  list: CommandSpec[] = COMMAND_LIST,
 ): Promise<void> {
   const raw = input.trim();
   if (!raw) return;
@@ -1527,12 +1753,12 @@ export async function runCommand(
   // A bare number is the section you just saw numbered under a lesson header.
   // `jump` says something useful when no lesson is open, so this never becomes
   // a dead end. Nothing numeric is a command, so the rewrite costs nothing.
-  const bare = /^\d+$/.test(name) && !!resolve("jump");
-  const spec = resolve(bare ? "jump" : name);
+  const bare = /^\d+$/.test(name) && !!resolve("jump", list);
+  const spec = resolve(bare ? "jump" : name, list);
 
   if (!spec) {
     base.io.print(`${name}: command not found`, "err");
-    const near = COMMAND_LIST.find(
+    const near = list.find(
       (s) => s.name.startsWith(name[0]) || s.name.includes(name),
     );
     stuck(
@@ -1554,7 +1780,7 @@ export async function runCommand(
       printHelp(base.io, spec.name, spec.help);
       return;
     }
-    await spec.run({ ...base, args, raw });
+    await spec.run({ ...base, args, raw, commands: list });
   } catch (e) {
     // An aborted request is the user pressing ^C, not a failure: the command
     // stopped because they asked it to.

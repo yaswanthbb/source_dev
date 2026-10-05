@@ -7,7 +7,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
-  UserCheck,
   Users,
   LogOut,
   User as UserIcon,
@@ -26,6 +25,7 @@ import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal'
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { MinimalTerminalLoader } from '@/components/loaders/minimal-terminal-loader';
+import '../developer/dashboard/terminal-dashboard.css';
 
 const ADMIN_NAV_ITEMS = [
   {
@@ -37,11 +37,6 @@ const ADMIN_NAV_ITEMS = [
     name: 'Content Review',
     href: '/admin/content-review',
     icon: ClipboardCheck,
-  },
-  {
-    name: 'Instructors',
-    href: '/admin/instructors',
-    icon: UserCheck,
   },
   {
     name: 'Users Directory',
@@ -127,10 +122,10 @@ export default function AdminAppShellLayout({
     router.replace('/login');
   };
 
-  // Role Guard: Redirect non-admins to /student/dashboard
+  // Role Guard: Redirect non-admins to /developer/dashboard
   useEffect(() => {
     if (user && user.role !== 'admin') {
-      router.replace('/student/dashboard');
+      router.replace('/developer/dashboard');
     }
   }, [user, router]);
 
@@ -181,6 +176,16 @@ export default function AdminAppShellLayout({
         </div>
       </div>
     );
+  }
+
+  // The terminal and the terminal-styled dashboard own their full-screen
+  // frames — no sidebar chrome around them. Guards above still apply. The
+  // sidebar remains only for the legacy GUI pages until their Phase C rebuild.
+  if (
+    pathname?.startsWith("/admin/terminal") ||
+    pathname === "/admin/dashboard"
+  ) {
+    return <>{children}</>;
   }
 
   return (

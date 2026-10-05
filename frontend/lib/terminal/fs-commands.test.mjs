@@ -83,7 +83,7 @@ const here = (name) => path.join(__dirname, name);
 
 const ROADMAPS = [
   { id: "r1", title: "VoIP Basics", slug: "voip-basics", description: null },
-  { id: "r2", title: "Networking 101", slug: "", description: null },
+  { id: "r2", title: "Networking 101", slug: "", description: null, originLabel: "ai" },
 ];
 
 const DETAIL = {
@@ -110,6 +110,7 @@ const DETAIL = {
   r2: {
     id: "r2",
     title: "Networking 101",
+    originLabel: "ai",
     modules: [
       {
         id: "m9",
@@ -118,7 +119,7 @@ const DETAIL = {
         moduleConcepts: [
           {
             orderIndex: 0,
-            concept: { id: "c9", title: "Packets", slug: "packets" },
+            concept: { id: "c9", title: "Packets", slug: "packets", originLabel: "ai" },
           },
         ],
       },
@@ -156,6 +157,7 @@ const CONCEPTS = {
   c9: {
     id: "c9",
     title: "Packets",
+    originLabel: "ai",
     content: ["# Packets", "", "A packet has a header and a payload."].join("\n"),
   },
 };
@@ -430,6 +432,33 @@ test("ls -l adds the human title beside the name, and drops the action", async (
   assert.equal(sh.lines[0].actions, undefined);
 });
 
+test("ls -l tags the origin, and --label filters to it", async () => {
+  const tagged = await shell(L.parsePath(`${NET}/basics`)).run("ls", "-l");
+  assert.match(tagged.text().join("\n"), /\{ai\}/);
+
+  const onlyAi = await shell().run("ls", "--label", "ai");
+  assert.deepEqual(onlyAi.text(), ["    networking-101/"]);
+
+  const onlyHand = await shell().run("ls", "--label", "handwritten");
+  assert.deepEqual(onlyHand.text(), [
+    "/roadmaps is empty.",
+    "Go up with cd .. or start from the top with cd ~.",
+  ]);
+});
+
+test("ls --label rejects anything but the three labels", async () => {
+  const sh = await shell().run("ls", "--label", "bogus");
+  assert.deepEqual(sh.text(), ["ls: --label wants ai, handwritten or partial"]);
+  assert.deepEqual(sh.kinds(), ["err"]);
+});
+
+test("cat still prints the raw body with no header", async () => {
+  // The origin line lives in the lesson header (continue/quiz), never in the
+  // pipeable body — concatenated lessons must stay clean.
+  const sh = await shell().run("cat", `${NET}/basics/packets`);
+  assert.deepEqual(sh.text(), [CONCEPTS.c9.content]);
+});
+
 test("ls labels each operand when there is more than one", async () => {
   const sh = await shell().run("ls", VOIP, NET);
   assert.deepEqual(sh.text(), [
@@ -447,7 +476,7 @@ test("an unknown option is reported the way a utility reports one", async () => 
   const short = await shell().run("ls", "-z");
   assert.deepEqual(short.text(), [
     "ls: invalid option -- 'z'",
-    "usage: ls [-l] [path]",
+    "usage: ls [-l] [--label ai|handwritten|partial] [path]",
   ]);
   assert.deepEqual(short.kinds(), ["err", "dim"]);
 

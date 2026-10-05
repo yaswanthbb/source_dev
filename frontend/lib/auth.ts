@@ -14,7 +14,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'student' | 'instructor' | 'admin';
+  role: 'developer' | 'admin';
   timezone?: string;
   profilePicture?: string | null;
   authProvider?: string | null;
@@ -22,21 +22,13 @@ export interface User {
   hasPassword?: boolean;
   createdAt?: string;
   preferences?: UserPreferences;
-  instructorProfile?: {
-    id?: string;
-    status?: 'pending' | 'approved' | 'rejected';
-    bio?: string | null;
-    createdAt?: string;
-    approvedAt?: string | null;
-  };
 }
 
 
 const TOKEN_KEY = 'sd_token';
 const USER_KEY = 'sd_user';
 
-/** Dispatched on this tab whenever the auth token is set or cleared, so
- *  listeners (e.g. SessionSync) can react to login/logout without a reload. */
+/** Dispatched on this tab whenever the auth token is set or cleared. */
 export const AUTH_CHANGED_EVENT = 'sd-auth-changed';
 
 const notifyAuthChanged = (): void => {

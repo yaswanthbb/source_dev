@@ -61,7 +61,7 @@ function LogoutDialog({
         </div>
         <div className="sd-dialog-body">
           <p className="sd-line" data-kind="cmd">
-            <span className="sd-prompt-user">student@source-dev</span>
+            <span className="sd-prompt-user">developer@source-dev</span>
             <span className="sd-prompt-path">:~$</span> logout
           </p>
           <p className="sd-line" data-kind="out" id="logout-description">

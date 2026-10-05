@@ -12,7 +12,9 @@ import {
   completeArgument,
   matchCommands,
   runCommand,
+  commandsFor,
   type AskOptions,
+  type CommandSpec,
   type LineKind,
   type LineSegment,
   type TerminalAction,
@@ -143,7 +145,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Rows kept small enough to scan: commands first, then completed values. */
 const MENU_ROWS = 8;
 
-export function useTerminalSession(user: User, initialCommand?: string) {
+export function useTerminalSession(
+  user: User,
+  initialCommand?: string,
+  commands?: CommandSpec[],
+) {
+  const list = commands ?? commandsFor(user.role === "admin" ? "admin" : "developer", []);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isDark, setTheme } = useTheme();
@@ -242,7 +249,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     // must offer what `in` can become, never `cd ` over what was typed.
     const commandRows = /\s/.test(value)
       ? []
-      : matchCommands(value)
+      : matchCommands(value, list)
           .slice(0, MENU_ROWS)
           .map((spec) => ({
             label: spec.name,
@@ -256,7 +263,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
     });
     const id = window.setTimeout(() => {
       void (async () => {
-        const items = await completeArgument(value, location);
+        const items = await completeArgument(value, location, list);
         if (!active.current || inputRef.current?.value !== value) return;
         setMenu((previous) => {
           if (!previous) return previous;
@@ -510,7 +517,8 @@ export function useTerminalSession(user: User, initialCommand?: string) {
           if (isCurrent()) reset();
         },
         close: () => {
-          if (isCurrent()) router.push("/student/dashboard");
+          if (isCurrent())
+            router.push(user.role === "admin" ? "/admin/dashboard" : "/developer/dashboard");
         },
         ask: (prompt, options) =>
           new Promise((resolve, reject) => {
@@ -586,7 +594,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
               queryClient.invalidateQueries({ queryKey: ["progress"] }),
             ]);
           },
-        });
+        }, list);
       } finally {
         // A command interrupted by ^C has already handed the prompt back and a
         // newer one may be running by now, so only the current run unlocks.
@@ -1000,7 +1008,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       if (event.shiftKey) return;
       // A single unambiguous verb completes at once, with no menu —
       // `quit` never needed a panel. Anything richer lists above.
-      const completed = completeCommand(cmd);
+      const completed = completeCommand(cmd, list);
       if (completed) {
         setCmd(completed);
         return;
@@ -1012,7 +1020,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       // its own arguments.
       const commandRows = /\s/.test(value)
         ? []
-        : matchCommands(value)
+        : matchCommands(value, list)
             .slice(0, MENU_ROWS)
             .map((spec) => ({
               label: spec.name,
@@ -1041,7 +1049,7 @@ export function useTerminalSession(user: User, initialCommand?: string) {
       }
       // Past the verb: the values are the whole menu.
       void (async () => {
-        const items = await completeArgument(value, location);
+        const items = await completeArgument(value, location, list);
         finish(items.slice(0, MENU_ROWS).map(toRow));
       })();
       return;

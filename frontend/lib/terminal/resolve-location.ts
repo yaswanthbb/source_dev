@@ -39,6 +39,8 @@ export interface VfsEntry {
   title: string;
   /** Concepts only — a directory has no completion state of its own. */
   status?: ConceptStatus;
+  /** §4 origin label, where the API provides one. Directories roll up. */
+  originLabel?: 'ai' | 'handwritten' | 'partial' | null;
 }
 
 /** Derive a path segment from a human title.
@@ -131,6 +133,7 @@ interface RoadmapSummary {
   title: string;
   slug: string;
   description: string | null;
+  originLabel?: 'ai' | 'handwritten' | 'partial' | null;
 }
 
 function roadmapEntries(): Promise<VfsEntry[]> {
@@ -141,6 +144,7 @@ function roadmapEntries(): Promise<VfsEntry[]> {
       name: names[index],
       id: roadmap.id,
       title: roadmap.title,
+      originLabel: roadmap.originLabel ?? null,
     }));
   });
 }
@@ -153,8 +157,7 @@ function detailOf(roadmapId: string): Promise<RoadmapDetailData> {
 }
 
 /** Concept id → status, for the markers `ls` prints. */
-function statusesOf(roadmapId: string): Promise<Map<string, ConceptStatus>> {
-  return cached(`progress:${roadmapId}`, async () => {
+function statusesOf(roadmapId: string): Promise<Map<string, ConceptStatus>> {  return cached(`progress:${roadmapId}`, async () => {
     const path = `/roadmaps/${encodeURIComponent(roadmapId)}/progress`;
     const data = (await api.get<RoadmapProgressData>(path)).data;
     const byId = new Map<string, ConceptStatus>();
@@ -174,7 +177,25 @@ async function moduleEntries(roadmapId: string): Promise<VfsEntry[]> {
     name: names[index],
     id: module.id,
     title: module.title,
+    originLabel: (module as { originLabel?: VfsEntry['originLabel'] }).originLabel ?? null,
   }));
+}
+
+/** Prefer the server-rolled label; fall back to the leaf flag when present. */
+function conceptLabelOf(concept: {
+  id: string;
+  originLabel?: string | null;
+  isAiGenerated?: boolean;
+}): VfsEntry['originLabel'] {
+  if (
+    concept.originLabel === 'ai' ||
+    concept.originLabel === 'handwritten' ||
+    concept.originLabel === 'partial'
+  )
+    return concept.originLabel;
+  if (concept.isAiGenerated === true) return 'ai';
+  if (concept.isAiGenerated === false) return 'handwritten';
+  return null;
 }
 
 async function conceptEntries(
@@ -199,6 +220,7 @@ async function conceptEntries(
     id: link.concept.id,
     title: link.concept.title,
     status: statuses.get(link.concept.id) ?? "not_started",
+    originLabel: conceptLabelOf(link.concept),
   }));
 }
 

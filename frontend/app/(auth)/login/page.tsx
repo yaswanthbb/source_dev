@@ -492,14 +492,12 @@ export default function LoginPage() {
 
   const getDashboardRoute = (role: User["role"]) => {
     switch (role) {
-      case "student":
-        return "/student/dashboard";
-      case "instructor":
-        return "/instructor/dashboard";
+      case "developer":
+        return "/developer/dashboard";
       case "admin":
         return "/admin/dashboard";
       default:
-        return "/student/dashboard";
+        return "/developer/dashboard";
     }
   };
 
@@ -507,7 +505,7 @@ export default function LoginPage() {
   if (bootingUser) {
     return (
       <CenteredTerminalLoader
-        portal={bootingUser.role}
+        portal={bootingUser.role === 'admin' ? 'admin' : 'student'}
         minDuration={5000}
         onComplete={() => {
           if (typeof window !== "undefined") {

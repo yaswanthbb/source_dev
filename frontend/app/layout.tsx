@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { Inter, Space_Grotesk, Outfit, Rubik } from "next/font/google";
 import { QueryProvider } from "../providers/query-provider";
 import { SnackbarProvider } from "../providers/snackbar-provider";
-import { SessionSync } from "../providers/session-sync";
 import { ThemeProvider } from "../providers/theme-provider";
 import { UiModeProvider } from "../providers/ui-mode-provider";
 import { ScrollProgressBar } from "@/components/scroll-progress-bar";
@@ -90,7 +89,6 @@ export default function RootLayout({
                   up to the nearest boundary during prerendering. */}
               <Suspense fallback={null}>
                 <UiModeProvider>
-                  <SessionSync />
                   {children}
                 </UiModeProvider>
               </Suspense>

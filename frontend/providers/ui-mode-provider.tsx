@@ -124,7 +124,7 @@ export function UiModeProvider({ children }: { children: React.ReactNode }) {
    *  update rather than a guess racing the fetch. */
   const synced = useRef(false);
 
-  const role = (getUser()?.role ?? "student") as Role;
+  const role = (getUser()?.role ?? "developer") as Role;
 
   // ─── Local read, synchronous, first paint ────────────────────────────────
   useEffect(() => {

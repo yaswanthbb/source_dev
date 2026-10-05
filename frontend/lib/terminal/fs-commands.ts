@@ -161,20 +161,25 @@ const pwd: CommandSpec = {
 
 const ls: CommandSpec = {
   name: "ls",
-  usage: "ls [-l] [path]",
+  usage: "ls [-l] [--label ai|handwritten|partial] [path]",
   completes: "path",
   help: {
-    usage: "ls [-l] [path]...",
+    usage: "ls [-l] [--label ai|handwritten|partial] [path]...",
     description: [
       "List what is here: roadmaps at the top level, modules inside a roadmap,",
       "lessons inside a module.",
       "Each row opens with its progress marker — [x] done, [~] in progress,",
       "[ ] not started — so a listing doubles as a progress report.",
+      "Long form adds the origin tag: {ai}, {hand} or {partial}.",
     ],
     args: [
       {
         name: "[path]",
         text: "What to list; the current directory when omitted",
+      },
+      {
+        name: "--label",
+        text: "Only entries with this origin label",
       },
     ],
     options: [
@@ -184,6 +189,7 @@ const ls: CommandSpec = {
     examples: [
       "ls",
       "ls -l",
+      "ls --label ai",
       "ls voip-basics",
       "ls /roadmaps/voip-basics/introduction",
       "ls ~",
@@ -192,14 +198,51 @@ const ls: CommandSpec = {
   summary: "list directory contents",
   group: "filesystem",
   run: async (ctx) => {
-    const { flags, operands } = parseArgs(ctx.args);
+    const { flags } = parseArgs(ctx.args);
     const bad = unknownFlag(flags, "la1");
-    if (bad) return badOption(ctx, "ls", bad, "ls [-l] [path]");
+    if (bad && bad !== "label") return badOption(ctx, "ls", bad, "ls [-l] [--label ai|handwritten|partial] [path]");
     const long = flags.has("l");
+    // --label takes its value as the next operand; both are consumed here so
+    // they never reach path resolution below.
+    // --label takes its value as the next raw token; both are consumed here
+    // so they never reach path resolution below. parseArgs already split
+    // flags from operands, but it drops the pairing — hence the raw scan.
+    const paths: string[] = [];
+    let labelFilter: string | undefined;
+    let literal = false;
+    let takeLabel = false;
+    for (const a of ctx.args) {
+      if (takeLabel) {
+        labelFilter = a.toLowerCase();
+        takeLabel = false;
+        continue;
+      }
+      if (literal) {
+        paths.push(a);
+        continue;
+      }
+      if (a === "--") {
+        literal = true;
+        continue;
+      }
+      if (a === "--label") {
+        takeLabel = true;
+        continue;
+      }
+      if (a.startsWith("-") && a !== "-") continue;
+      paths.push(a);
+    }
+    if (takeLabel) labelFilter = "";
+    if (labelFilter !== undefined && !["ai", "handwritten", "partial"].includes(labelFilter)) {
+      ctx.io.print("ls: --label wants ai, handwritten or partial", "err");
+      return;
+    }
+    const matches = (originLabel?: string | null) =>
+      labelFilter === undefined || (originLabel ?? null) === labelFilter;
 
     // Multiple operands are each labelled, as `ls a b` does. One operand — the
     // common case — prints bare, with no header.
-    const targets = operands.length ? operands : [undefined];
+    const targets = paths.length ? paths : [undefined];
     let first = true;
 
     for (const arg of targets) {
@@ -220,7 +263,7 @@ const ls: CommandSpec = {
       if (!isDirectory(loc)) {
         try {
           const { entry } = await resolveLocation(loc);
-          if (entry) printEntry(ctx, entry, formatPath(loc), long);
+          if (entry && matches(entry.originLabel)) printEntry(ctx, entry, formatPath(loc), long);
         } catch (error) {
           ctx.io.print(vfsErrorText("ls", error), "err");
         }
@@ -228,7 +271,7 @@ const ls: CommandSpec = {
       }
 
       try {
-        const entries = await listChildren(loc);
+        const entries = (await listChildren(loc)).filter((e) => matches(e.originLabel));
         if (!entries.length) {
           // An empty directory prints nothing in Unix. Here that would read as
           // a broken command, so say so dimly — and say what to do next.
@@ -270,7 +313,15 @@ function printEntry(
     ]);
     return;
   }
-  ctx.io.print(`${left.padEnd(38)} ${entry.title}`, "out");
+  const tag =
+    entry.originLabel === "ai"
+      ? " {ai}"
+      : entry.originLabel === "handwritten"
+        ? " {hand}"
+        : entry.originLabel === "partial"
+          ? " {partial}"
+          : "";
+  ctx.io.print(`${left.padEnd(38)} ${entry.title}${tag}`, "out");
 }
 
 // ─── cd ─────────────────────────────────────────────────────────────────────

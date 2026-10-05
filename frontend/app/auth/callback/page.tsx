@@ -20,14 +20,12 @@ function CallbackHandler() {
 
   const getDashboardRoute = (role: User['role']) => {
     switch (role) {
-      case 'student':
-        return '/student/dashboard';
-      case 'instructor':
-        return '/instructor/dashboard';
+      case 'developer':
+        return '/developer/dashboard';
       case 'admin':
         return '/admin/dashboard';
       default:
-        return '/student/dashboard';
+        return '/developer/dashboard';
     }
   };
 
@@ -141,7 +139,7 @@ function CallbackHandler() {
 
   return (
     <CenteredTerminalLoader
-      portal={bootingUser?.role || 'student'}
+      portal={bootingUser?.role === 'admin' ? 'admin' : 'student'}
       minDuration={5000}
       isAsyncComplete={isAuthFetched}
       onComplete={() => {
@@ -150,7 +148,7 @@ function CallbackHandler() {
             sessionStorage.setItem('sd_just_logged_in', String(Date.now()));
           } catch {}
         }
-        const targetRoute = getDashboardRoute(bootingUser?.role || 'student');
+        const targetRoute = getDashboardRoute(bootingUser?.role || 'developer');
         router.replace(targetRoute);
       }}
     />

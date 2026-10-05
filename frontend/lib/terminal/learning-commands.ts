@@ -57,6 +57,7 @@ interface ConceptSummary {
   id: string;
   title: string;
   slug?: string;
+  originLabel?: 'ai' | 'handwritten' | null;
 }
 interface ConceptDetail extends ConceptSummary {
   content: string;
@@ -94,23 +95,22 @@ interface AttemptResult {
 }
 interface QaAnswer {
   id: string;
+  questionId: string;
+  responderId?: string | null;
+  responderName?: string | null;
   isAiAnswer?: boolean;
+  isVerified?: boolean;
   body: string;
   createdAt: string;
-  instructorName?: string | null;
-  instructor?: { id: string; name: string };
 }
 interface QaThread {
   id: string;
   conceptId: string;
-  userId?: string;
-  studentId?: string;
-  studentName?: string | null;
+  askerId?: string;
+  askerName?: string | null;
   body: string;
   createdAt: string;
   updatedAt?: string;
-  user?: { id: string; name: string };
-  student?: { id: string; name: string };
   answers?: QaAnswer[];
   conceptTitle?: string;
 }
@@ -324,6 +324,11 @@ async function showConcept(ctx: CommandCtx, conceptId: string) {
     [
       concept.appearsIn?.[0]?.roadmapTitle,
       concept.difficulty && `difficulty: ${concept.difficulty}`,
+      concept.originLabel === "ai"
+        ? "origin: ai-generated"
+        : concept.originLabel === "handwritten"
+          ? "origin: hand-written"
+          : undefined,
       questionCount
         ? `knowledge check: ${resolved}/${questionCount} resolved`
         : "no knowledge check",
@@ -914,9 +919,8 @@ function remember(threads: QaThread[]) {
   for (const thread of threads) threadCache.set(thread.id, thread);
 }
 
-const askerOf = (t: QaThread) =>
-  t.studentName || t.user?.name || t.student?.name || "Student";
-const askerIdOf = (t: QaThread) => t.userId ?? t.studentId ?? t.user?.id ?? t.student?.id;
+const askerOf = (t: QaThread) => t.askerName || "Developer";
+const askerIdOf = (t: QaThread) => t.askerId;
 
 async function threadsForConcept(
   conceptId: string,
@@ -970,8 +974,23 @@ function printThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
   );
 }
 
-async function locateThread(ctx: CommandCtx, value: string): Promise<QaThread> {
-  const needle = value.trim();
+/** Whether the viewer may (un)verify answers here: concept author or admin.
+ *  Fail-closed — an unreadable concept means no verify tokens. */
+async function canVerifyHere(ctx: CommandCtx, conceptId: string): Promise<boolean> {
+  if (ctx.user?.role === "admin") return true;
+  const mine = ctx.user?.id;
+  if (!mine) return false;
+  try {
+    const { data } = await api.get<{ authorId?: string | null }>(
+      `/concepts/${encodeURIComponent(conceptId)}`,
+    );
+    return data.authorId === mine;
+  } catch {
+    return false;
+  }
+}
+
+async function locateThread(ctx: CommandCtx, value: string): Promise<QaThread> {  const needle = value.trim();
   const cached = threadCache.get(needle);
   if (cached) return cached;
   const threads = await allThreads(ctx);
@@ -992,7 +1011,12 @@ async function locateThread(ctx: CommandCtx, value: string): Promise<QaThread> {
   );
 }
 
-function renderThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
+function renderThread(
+  ctx: CommandCtx,
+  thread: QaThread,
+  mine: boolean,
+  canVerify = false,
+) {
   const answers = thread.answers ?? [];
   heading(ctx, `discussion / ${thread.conceptTitle ?? "lesson"}`);
   ctx.io.print(
@@ -1011,28 +1035,33 @@ function renderThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
   if (!answers.length) {
     ctx.io.print("", "rule");
     ctx.io.print(
-      "no answer yet — an instructor will pick this up, or ask the AI for one now",
+      "no answer yet — anyone reading this lesson can reply, or ask the AI privately",
       "dim",
     );
   }
 
   for (const answer of answers) {
     ctx.io.print("", "rule");
-    ctx.io.print(
-      `${
-        answer.isAiAnswer
-          ? "AI"
-          : `INSTRUCTOR · ${answer.instructorName ?? answer.instructor?.name ?? "verified instructor"}`
-      }  ${shortDate(answer.createdAt)}`,
-      "head",
-    );
+    const who = answer.isAiAnswer
+      ? "AI · private to the asker"
+      : `${(answer.responderName || "Developer").toUpperCase()}${answer.isVerified ? " [VERIFIED]" : ""}`;
+    ctx.io.print(`${who}  ${shortDate(answer.createdAt)}`, "head");
     body(ctx, answer.body);
+    if (!answer.isAiAnswer && canVerify) {
+      next(ctx, [
+        {
+          label: answer.isVerified ? "unverify" : "verify",
+          command: `qa ${answer.isVerified ? "unverify" : "verify"} ${answer.id}`,
+        },
+      ]);
+    }
   }
 
   ctx.io.print("", "rule");
   next(ctx, [
     { label: "cat", command: `cat ${thread.conceptId}` },
     { label: "qa ask", command: `qa ask ${thread.conceptId}` },
+    { label: "qa answer", command: `qa answer ${thread.id}` },
     ...(mine && !answers.length
       ? [{ label: "edit", command: `qa edit ${thread.id}` }]
       : []),
@@ -1065,14 +1094,17 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
 
   // Only two answers mean anything here, so only two are accepted. Anything
   // else re-asks: routing an unrecognised reply to the AI would spend one of
-  // a shared daily quota on a question nobody aimed anywhere.
+  // a metered daily quota on a question nobody aimed anywhere.
   const at = await pickRow(
     ctx,
     "Who should answer?",
-    ["ai · instant explanation", "instructor · replies on the board"],
-    [["ai"], ["instructor"]],
+    [
+      "ai · instant, private — only you ever see it",
+      "discussion · public — any developer reading this lesson can reply",
+    ],
+    [["ai"], ["discussion"]],
   );
-  const to = at === 0 ? "ai" : "instructor";
+  const to = at === 0 ? "ai" : "discussion";
 
   // Checked here, before the request: an AI generation is metered, so a blank
   // or one-word question must never cost one.
@@ -1088,9 +1120,9 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
     );
   }
 
-  ctx.io.status?.(to === "ai" ? "asking the AI" : "posting to instructors");
+  ctx.io.status?.(to === "ai" ? "asking the AI" : "posting to the discussion");
   ctx.io.print(
-    to === "ai" ? "asking the AI…" : "posting to instructors…",
+    to === "ai" ? "asking the AI…" : "posting to the discussion…",
     "dim",
   );
   await api.post(`/concepts/${encodeURIComponent(conceptId)}/qa-questions`, {
@@ -1098,8 +1130,8 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
     target: to,
   });
 
-  if (to === "instructor") {
-    ctx.io.print("[OK] Posted — an instructor will answer on the board.", "ok");
+  if (to === "discussion") {
+    ctx.io.print("[OK] Posted — anyone reading this lesson can reply.", "ok");
     next(ctx, [
       { label: "qa mine", command: "qa mine" },
       { label: "cat", command: `cat ${conceptId}` },
@@ -1108,7 +1140,7 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
   }
 
   // The AI answers synchronously, so re-read the thread and show it rather
-  // than making the student go looking for it.
+  // than making the developer go looking for it.
   ctx.io.print("[OK] Answered.", "ok");
   const threads = await threadsForConcept(conceptId).catch(() => []);
   remember(threads);
@@ -1116,7 +1148,7 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
   const posted = threads
     .filter((t) => !mineId || askerIdOf(t) === mineId)
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
-  if (posted) renderThread(ctx, posted, true);
+  if (posted) renderThread(ctx, posted, true, await canVerifyHere(ctx, conceptId));
 }
 
 const qa: CommandSpec = {
@@ -1126,10 +1158,11 @@ const qa: CommandSpec = {
   completesAfter: ["ask", "concept"],
   help: {
     usage:
-      "qa [ask|open <id>|mine|unanswered|concept <lesson>|edit <id>|delete <id>|search]",
+      "qa [ask|open <id>|mine|unanswered|concept <lesson>|edit <id>|delete <id>|answer <id>|verify <id>|unverify <id>|search]",
     description: [
       "The question board. Bare, it lists recent threads with their answer",
-      "counts; the subcommands ask, read and manage them.",
+      "counts; the subcommands ask, read and manage them. Anyone reading a",
+      "lesson can answer; the lesson author and admins can verify answers.",
     ],
     commands: [
       { name: "ask", text: "Start a thread about the lesson on screen, or name one" },
@@ -1139,6 +1172,9 @@ const qa: CommandSpec = {
       { name: "concept <lesson>", text: "Only threads about one lesson" },
       { name: "edit <id>", text: "Reword a question you asked" },
       { name: "delete <id>", text: "Remove a question you asked" },
+      { name: "answer <id>", text: "Post an answer on a thread" },
+      { name: "verify <id>", text: "Badge an answer verified (author/admin)" },
+      { name: "unverify <id>", text: "Remove the verified badge (author/admin)" },
     ],
     args: [{ name: "[search]", text: "Only threads containing this text" }],
     examples: [
@@ -1148,6 +1184,7 @@ const qa: CommandSpec = {
       "qa mine",
       "qa unanswered",
       "qa concept what-is-voip",
+      "qa answer 9f2c4a1d",
       "qa codec",
     ],
   },
@@ -1171,7 +1208,12 @@ const qa: CommandSpec = {
         return;
       }
       const thread = await locateThread(ctx, argument);
-      renderThread(ctx, thread, isMine(thread));
+      renderThread(
+        ctx,
+        thread,
+        isMine(thread),
+        await canVerifyHere(ctx, thread.conceptId),
+      );
       return;
     }
 
@@ -1224,6 +1266,62 @@ const qa: CommandSpec = {
       await api.delete(`/qa-questions/${encodeURIComponent(thread.id)}`);
       threadCache.delete(thread.id);
       ctx.io.print("[OK] Question deleted.", "ok");
+      return;
+    }
+
+    if (sub === "answer") {
+      if (!argument) {
+        ctx.io.print("usage: qa answer <thread-id>", "dim");
+        return;
+      }
+      const thread = await locateThread(ctx, argument);
+      let answerBody = "";
+      for (;;) {
+        answerBody = (await ctx.io.ask("Your answer")).trim();
+        if (answerBody.length >= MIN_QUESTION && /[a-z]/i.test(answerBody)) break;
+        ctx.io.print(
+          answerBody
+            ? `too short: write a real answer — at least ${MIN_QUESTION} characters, in words.`
+            : "nothing entered: type your answer, or press Escape to cancel.",
+          "err",
+        );
+      }
+      await api.post(`/qa-questions/${encodeURIComponent(thread.id)}/answers`, {
+        body: answerBody,
+      });
+      ctx.io.print("[OK] Answer posted.", "ok");
+      const refreshed = await threadsForConcept(thread.conceptId).catch(() => []);
+      remember(refreshed);
+      const updated =
+        refreshed.find((t) => t.id === thread.id) ?? { ...thread };
+      renderThread(
+        ctx,
+        updated,
+        isMine(updated),
+        await canVerifyHere(ctx, thread.conceptId),
+      );
+      return;
+    }
+
+    if (sub === "verify" || sub === "unverify") {
+      if (!argument) {
+        ctx.io.print(`usage: qa ${sub} <answer-id>`, "dim");
+        return;
+      }
+      try {
+        await api.patch(`/answers/${encodeURIComponent(argument)}/${sub}`);
+        ctx.io.print(
+          `[OK] Answer ${sub === "verify" ? "verified" : "unverified"}.`,
+          "ok",
+        );
+      } catch (e) {
+        const msg =
+          (e as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message ?? "request failed";
+        throw new Error(
+          `${sub === "verify" ? "Verification" : "Unverification"} refused: ${msg}`,
+        );
+      }
       return;
     }
 
@@ -1539,6 +1637,559 @@ const heatmap: CommandSpec = {
   },
 };
 
+// ─── Authoring ───────────────────────────────────────────────────────────────
+// Everything a developer authors lives here: roadmaps, modules and concepts
+// are created, edited, attached and submitted without leaving the shell.
+// Destructive deletes stay admin-only by design — detaching removes a lesson
+// from a module, it never deletes it.
+
+interface RoadmapDetail {
+  id: string;
+  title: string;
+  slug: string;
+  description?: string | null;
+  reviewStatus?: string;
+  modules?: Array<{ id: string; title: string }>;
+}
+
+interface ReviewConcept {
+  id: string;
+  title: string;
+  reviewStatus: string;
+  hasPendingDraft?: boolean;
+}
+
+interface ReviewModule {
+  moduleId: string;
+  title: string;
+  approved: boolean;
+  concepts: ReviewConcept[];
+}
+
+interface RoadmapReview {
+  roadmapId: string;
+  title: string;
+  reviewStatus: string;
+  rejectionReason?: string | null;
+  modules: ReviewModule[];
+  pendingCount: number;
+  rejectedCount: number;
+  canPublish: boolean;
+}
+
+/** Roadmap id for the location on screen, if any. */
+async function cwdRoadmapId(ctx: CommandCtx): Promise<string | null> {
+  const loc = ctx.cwd;
+  if (loc.kind === "root") return null;
+  return (await findRoadmap(loc.roadmap)).id;
+}
+
+/** Module id for the location on screen, if inside one. */
+async function cwdModuleId(ctx: CommandCtx): Promise<string | null> {
+  const loc = ctx.cwd;
+  if (loc.kind !== "module" && loc.kind !== "concept") return null;
+  const roadmapId = await cwdRoadmapId(ctx);
+  if (!roadmapId) return null;
+  const { data } = await api.get<RoadmapDetail>(
+    `/roadmaps/${encodeURIComponent(roadmapId)}`,
+  );
+  const mod = (data.modules ?? []).find(
+    (m) => m.id === loc.module || m.title.toLowerCase() === loc.module.toLowerCase(),
+  );
+  return mod?.id ?? null;
+}
+
+/** Multi-line input terminated by a lone `.` — the heredoc convention. */
+async function readHeredoc(ctx: CommandCtx, prompt: string): Promise<string | null> {
+  ctx.io.print(`${prompt} (end with a single . on its own line)`, "dim");
+  const lines: string[] = [];
+  for (;;) {
+    const line = await ctx.io.ask("]");
+    if (line.trim() === ".") break;
+    lines.push(line);
+  }
+  const text = lines.join("\n").trim();
+  return text ? text : null;
+}
+
+async function pickDifficulty(ctx: CommandCtx): Promise<string> {
+  const at = await pickRow(ctx, "Difficulty?", ["easy", "medium", "hard"], [
+    ["easy"],
+    ["medium"],
+    ["hard"],
+  ]);
+  return ["easy", "medium", "hard"][at];
+}
+
+const roadmapCmd: CommandSpec = {
+  name: "roadmap",
+  usage: "roadmap <new|edit|submit|status> ...",
+  help: {
+    usage: "roadmap <new|edit|submit|status> ...",
+    description: [
+      "Author roadmaps: create one, retitle it, submit the whole tree for",
+      "review, or read its compiled review response. Submit needs 3 modules",
+      "with 3 lessons each — anything less is refused, not warned about.",
+    ],
+    commands: [
+      { name: "new <title>", text: "Create a private roadmap" },
+      { name: "edit [ref]", text: "Retitle / re-describe (this roadmap when omitted)" },
+      { name: "submit [ref]", text: "Submit the whole tree for review" },
+      { name: "status [ref]", text: "Review rollup with publish readiness" },
+    ],
+    examples: ["roadmap new Async JS", "roadmap submit", "roadmap status"],
+  },
+  summary: "author, submit and inspect roadmaps",
+  group: "author",
+  run: async (ctx) => {
+    const [sub, ...rest] = ctx.args;
+    const title = rest.join(" ").trim();
+
+    if (sub === "new") {
+      if (!title) {
+        ctx.io.print("usage: roadmap new <title>", "dim");
+        return;
+      }
+      const description = (await ctx.io.ask("Description (empty to skip)")).trim();
+      const { data } = await api.post<{ id: string; slug: string }>(
+        "/roadmaps",
+        description ? { title, description } : { title },
+      );
+      ctx.io.print(`[OK] roadmap "${title}" created — private until published.`, "ok");
+      next(ctx, [
+        { label: "cd in", command: `cd ${data.slug}` },
+        { label: "module new", command: "module new " },
+      ]);
+      return;
+    }
+
+    const ref = title || null;
+    let roadmapId: string;
+    if (ref) {
+      roadmapId = (await findRoadmap(ref)).id;
+    } else {
+      const current = await cwdRoadmapId(ctx);
+      if (!current) {
+        ctx.io.print("usage: roadmap <edit|submit|status> <roadmap> (or cd into one first)", "dim");
+        return;
+      }
+      roadmapId = current;
+    }
+
+    if (sub === "edit" || !sub) {
+      const { data: current } = await api.get<RoadmapDetail>(
+        `/roadmaps/${encodeURIComponent(roadmapId)}`,
+      );
+      ctx.io.print(`current title: ${current.title}`, "dim");
+      const newTitle = (await ctx.io.ask("Title (empty keeps)")).trim();
+      ctx.io.print(`current description: ${current.description || "—"}`, "dim");
+      const newDescription = (await ctx.io.ask("Description (empty keeps, - clears)")).trim();
+      const patch: Record<string, string | null> = {};
+      if (newTitle) patch.title = newTitle;
+      if (newDescription === "-") patch.description = null;
+      else if (newDescription) patch.description = newDescription;
+      if (Object.keys(patch).length === 0) {
+        ctx.io.print("Unchanged.", "dim");
+        return;
+      }
+      await api.patch(`/roadmaps/${encodeURIComponent(roadmapId)}`, patch);
+      ctx.io.print("[OK] Roadmap updated.", "ok");
+      return;
+    }
+
+    if (sub === "submit") {
+      try {
+        const { data } = await api.post<{ id: string; reviewStatus: string }>(
+          `/roadmaps/${encodeURIComponent(roadmapId)}/submit`,
+        );
+        ctx.io.print(`[OK] submitted — status ${data.reviewStatus}.`, "ok");
+        next(ctx, [{ label: "status", command: "roadmap status" }]);
+      } catch (e) {
+        const msg =
+          (e as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message ?? "request failed";
+        throw new Error(`Submit refused: ${msg}`);
+      }
+      return;
+    }
+
+    if (sub === "status") {
+      const { data: r } = await api.get<RoadmapReview>(
+        `/roadmaps/${encodeURIComponent(roadmapId)}/review`,
+      );
+      heading(ctx, `review / ${r.title} · ${r.reviewStatus}`);
+      ctx.io.print(
+        `  ${"concepts".padEnd(12)} ${r.pendingCount} pending · ${r.rejectedCount} rejected`,
+      );
+      ctx.io.print(
+        `  ${"publishable".padEnd(12)} ${r.canPublish ? "YES" : "NO"}`,
+      );
+      if (r.rejectionReason) ctx.io.print(`  ${"rejection".padEnd(12)} ${r.rejectionReason}`);
+      for (const m of r.modules) {
+        ctx.io.print(`  [${m.approved ? "OK" : ".."}] ${m.title}`);
+        for (const cc of m.concepts) {
+          ctx.io.print(
+            `      ${cc.title} <${cc.reviewStatus}>${cc.hasPendingDraft ? " [DRAFT]" : ""}`,
+          );
+        }
+      }
+      return;
+    }
+
+    ctx.io.print(`roadmap: unknown subcommand "${sub}" — new, edit, submit, status`, "err");
+  },
+};
+
+const moduleNew: CommandSpec = {
+  name: "module",
+  usage: "module new <title>",
+  help: {
+    usage: "module new <title>",
+    description: [
+      "Add a module to the roadmap on screen. Appended at the end; reorder",
+      "from the authoring screens. Needs a roadmap underneath — cd into one.",
+    ],
+    commands: [{ name: "new <title>", text: "Append a module" }],
+    examples: ["module new Scope & Closures"],
+  },
+  summary: "append a module to this roadmap",
+  group: "author",
+  run: async (ctx) => {
+    const [kind, ...rest] = ctx.args;
+    const title = rest.join(" ").trim();
+    if (kind !== "new" || !title) {
+      ctx.io.print("usage: module new <title>", "dim");
+      return;
+    }
+    const roadmapId = await cwdRoadmapId(ctx);
+    if (!roadmapId) {
+      stuck(
+        ctx.io,
+        "No roadmap on screen.",
+        "cd into a roadmap first, then {module new <title>}.",
+      );
+      return;
+    }
+    await api.post(`/roadmaps/${encodeURIComponent(roadmapId)}/modules`, {
+      title,
+      orderIndex: 0,
+    });
+    ctx.io.print(`[OK] module "${title}" appended.`, "ok");
+    next(ctx, [{ label: "concept new", command: "concept new " }]);
+  },
+};
+
+const conceptNew: CommandSpec = {
+  name: "concept",
+  usage: "concept new <title>",
+  help: {
+    usage: "concept new <title>",
+    description: [
+      "Write a lesson into the module on screen: pick a difficulty, then the",
+      "body as heredoc. Created private and attached in one move.",
+    ],
+    commands: [{ name: "new <title>", text: "Write and attach a lesson" }],
+    examples: ["concept new Event Loop"],
+  },
+  summary: "write a lesson into this module",
+  group: "author",
+  run: async (ctx) => {
+    const [kind, ...rest] = ctx.args;
+    const title = rest.join(" ").trim();
+    if (kind !== "new" || !title) {
+      ctx.io.print("usage: concept new <title>", "dim");
+      return;
+    }
+    const moduleId = await cwdModuleId(ctx);
+    if (!moduleId) {
+      stuck(
+        ctx.io,
+        "No module on screen.",
+        "cd into a module first, then {concept new <title>}.",
+      );
+      return;
+    }
+    const difficulty = await pickDifficulty(ctx);
+    const content = await readHeredoc(ctx, "Body");
+    if (!content || content.length < 20) {
+      ctx.io.print("too short: a lesson needs at least 20 characters of body.", "err");
+      return;
+    }
+    const { data: created } = await api.post<{ id: string }>("/concepts", {
+      title,
+      content,
+      difficulty,
+    });
+    await api.post(`/modules/${encodeURIComponent(moduleId)}/concepts`, {
+      conceptId: created.id,
+    });
+    ctx.io.print(`[OK] lesson "${title}" created, private until published.`, "ok");
+    next(ctx, [{ label: "cat it", command: `cat ${created.id}` }]);
+  },
+};
+
+const edit: CommandSpec = {
+  name: "edit",
+  usage: "edit",
+  summary: "edit whatever is on screen",
+  group: "author",
+  help: {
+    usage: "edit",
+    description: [
+      "Context edit: inside a lesson it rewrites the body (heredoc — a big",
+      "rewrite on a live lesson stages as a draft for review); inside a",
+      "module it retitles; at a roadmap it retitles and re-describes.",
+    ],
+    examples: ["edit"],
+  },
+  run: async (ctx) => {
+    const loc = ctx.cwd;
+    if (loc.kind === "root") {
+      ctx.io.print("usage: cd into a roadmap, module or lesson first, then edit", "dim");
+      return;
+    }
+    if (loc.kind === "roadmap") {
+      const roadmapId = await cwdRoadmapId(ctx);
+      if (!roadmapId) return;
+      const { data: current } = await api.get<RoadmapDetail>(
+        `/roadmaps/${encodeURIComponent(roadmapId)}`,
+      );
+      ctx.io.print(`current title: ${current.title}`, "dim");
+      const newTitle = (await ctx.io.ask("Title (empty keeps)")).trim();
+      const patch: Record<string, string> = {};
+      if (newTitle) patch.title = newTitle;
+      if (Object.keys(patch).length === 0) {
+        ctx.io.print("Unchanged.", "dim");
+        return;
+      }
+      await api.patch(`/roadmaps/${encodeURIComponent(roadmapId)}`, patch);
+      ctx.io.print("[OK] Roadmap updated.", "ok");
+      return;
+    }
+    if (loc.kind === "module") {
+      const moduleId = await cwdModuleId(ctx);
+      if (!moduleId) {
+        ctx.io.print("cannot resolve this module — cd again from the roadmap", "err");
+        return;
+      }
+      const newTitle = (await ctx.io.ask("Title")).trim();
+      if (!newTitle) {
+        ctx.io.print("Unchanged.", "dim");
+        return;
+      }
+      await api.patch(`/modules/${encodeURIComponent(moduleId)}`, { title: newTitle });
+      ctx.io.print("[OK] Module retitled.", "ok");
+      return;
+    }
+    // Concept scope: heredoc body rewrite.
+    const conceptId = await findConceptId(loc.concept);
+    const content = await readHeredoc(ctx, "New body");
+    if (!content) {
+      ctx.io.print("Unchanged.", "dim");
+      return;
+    }
+    const { data } = await api.patch<{
+      reviewStatus: string;
+      draftContent?: string | null;
+    }>(`/concepts/${encodeURIComponent(conceptId)}`, { content });
+    if (data.draftContent) {
+      ctx.io.print("[OK] Big rewrite staged as a draft — live lesson unchanged until review.", "ok");
+    } else if (data.reviewStatus === "pending") {
+      ctx.io.print("[OK] Saved — back to pending review.", "ok");
+    } else {
+      ctx.io.print("[OK] Saved live.", "ok");
+    }
+  },
+};
+
+const attach: CommandSpec = {
+  name: "attach",
+  usage: "attach <lesson>",
+  summary: "attach one of your lessons here",
+  group: "author",
+  help: {
+    usage: "attach <lesson>",
+    description: [
+      "Attach a lesson you authored to the module on screen. Lessons live",
+      "only inside their own author's trees — anything else is refused.",
+    ],
+    commands: [{ name: "<lesson>", text: "Title, slug or id of your lesson" }],
+    examples: ["attach event-loop"],
+  },
+  run: async (ctx) => {
+    const ref = ctx.args.join(" ").trim();
+    if (!ref) {
+      ctx.io.print("usage: attach <lesson>", "dim");
+      return;
+    }
+    const moduleId = await cwdModuleId(ctx);
+    if (!moduleId) {
+      stuck(ctx.io, "No module on screen.", "cd into a module first, then {attach <lesson>}.");
+      return;
+    }
+    const conceptId = await findConceptId(ref);
+    await api.post(`/modules/${encodeURIComponent(moduleId)}/concepts`, { conceptId });
+    ctx.io.print("[OK] Attached.", "ok");
+  },
+};
+
+const detach: CommandSpec = {
+  name: "detach",
+  usage: "detach <lesson>",
+  summary: "remove a lesson from this module",
+  group: "author",
+  help: {
+    usage: "detach <lesson>",
+    description: [
+      "Remove a lesson from the module on screen. The lesson itself is kept",
+      "— detaching never deletes. Refused on published trees.",
+    ],
+    commands: [{ name: "<lesson>", text: "Title, slug or id of the lesson" }],
+    examples: ["detach event-loop"],
+  },
+  run: async (ctx) => {
+    const ref = ctx.args.join(" ").trim();
+    if (!ref) {
+      ctx.io.print("usage: detach <lesson>", "dim");
+      return;
+    }
+    const moduleId = await cwdModuleId(ctx);
+    if (!moduleId) {
+      stuck(ctx.io, "No module on screen.", "cd into a module first, then {detach <lesson>}.");
+      return;
+    }
+    const conceptId = await findConceptId(ref);
+    try {
+      await api.delete(`/modules/${encodeURIComponent(moduleId)}/concepts/${encodeURIComponent(conceptId)}`);
+      ctx.io.print("[OK] Detached — the lesson itself is kept.", "ok");
+    } catch (e) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "request failed";
+      throw new Error(`Detach refused: ${msg}`);
+    }
+  },
+};
+
+// ─── Articles ────────────────────────────────────────────────────────────────
+// Public reading plus hand-written authoring. Links are ids here — the GUI
+// picker experience lives on the articles pages; the shell takes what the
+// API takes.
+
+interface ArticleSummary {
+  id: string;
+  title: string;
+  author?: { name?: string } | null;
+  createdAt: string;
+}
+
+const articles: CommandSpec = {
+  name: "articles",
+  usage: "articles [search]",
+  help: {
+    usage: "articles [search]",
+    description: [
+      "Public articles, newest first. Reading needs no account — and you",
+      "have one, so writing is one command away.",
+    ],
+    commands: [{ name: "[search]", text: "Match the title" }],
+    examples: ["articles", "articles closures"],
+  },
+  summary: "browse public articles",
+  group: "author",
+  run: async (ctx) => {
+    const query = ctx.args.join(" ").trim();
+    const qs = query ? `?search=${encodeURIComponent(query)}` : "";
+    const { data } = await api.get<ArticleSummary[]>(`/articles${qs}`);
+    if (!data.length) {
+      stuck(
+        ctx.io,
+        "No articles match that.",
+        "Write the first one with {article new}.",
+      );
+      return;
+    }
+    heading(ctx, `articles · ${plural(data.length, "post")}`);
+    data.slice(0, 25).forEach((a) =>
+      entry(ctx, `[${a.id.slice(0, 8)}]`, `${a.title} — ${a.author?.name ?? "anon"}`,
+        [{ label: "read", command: `article read ${a.id}` }]),
+    );
+    next(ctx, [{ label: "article new", command: "article new" }]);
+  },
+};
+
+const article: CommandSpec = {
+  name: "article",
+  usage: "article <read|new> ...",
+  help: {
+    usage: "article <read|new> ...",
+    description: [
+      "Read one public article, or write one. Writing publishes",
+      "immediately — no review gate — and is always hand-written.",
+    ],
+    commands: [
+      { name: "read <id>", text: "Read one article" },
+      { name: "new", text: "Write and publish an article" },
+    ],
+    examples: ["article read a1b2c3", "article new"],
+  },
+  summary: "read or write articles",
+  group: "author",
+  run: async (ctx) => {
+    const [sub, ...rest] = ctx.args;
+    if (sub === "read") {
+      const id = rest.join(" ").trim();
+      if (!id) {
+        ctx.io.print("usage: article read <id>", "dim");
+        return;
+      }
+      const { data } = await api.get<{
+        title: string;
+        content: string;
+        author?: { name?: string } | null;
+        createdAt: string;
+      }>(`/articles/${encodeURIComponent(id)}`);
+      heading(ctx, `article / ${data.title}`);
+      ctx.io.print(`${data.author?.name ?? "anon"} · ${shortDate(data.createdAt)}`, "dim");
+      body(ctx, data.content.slice(0, 4000));
+      return;
+    }
+    if (sub === "new") {
+      const title = (await ctx.io.ask("Title")).trim();
+      if (!title) {
+        ctx.io.print("Untitled articles stay drafts of the mind — cancelled.", "dim");
+        return;
+      }
+      const content = await readHeredoc(ctx, "Body");
+      if (!content || content.length < 20) {
+        ctx.io.print("too short: an article needs at least 20 characters of body.", "err");
+        return;
+      }
+      const roadmapId = (await ctx.io.ask("Further reading: roadmap id (empty skips)")).trim();
+      const conceptId = (await ctx.io.ask("Further reading: lesson id (empty skips)")).trim();
+      const payload: Record<string, string> = { title, content };
+      if (roadmapId) payload.roadmapId = roadmapId;
+      if (conceptId) payload.conceptId = conceptId;
+      await api.post("/articles", payload);
+      ctx.io.print("[OK] Article published — live immediately.", "ok");
+      next(ctx, [{ label: "articles", command: "articles" }]);
+      return;
+    }
+    ctx.io.print(`article: unknown subcommand "${sub ?? ""}" — read, new`, "err");
+  },
+};
+
+export const AUTHOR_COMMANDS: CommandSpec[] = [
+  roadmapCmd,
+  moduleNew,
+  conceptNew,
+  edit,
+  attach,
+  detach,
+  articles,
+  article,
+];
+
 export const LEARNING_COMMANDS: CommandSpec[] = [
   continueLearning,
   jump,
@@ -1549,6 +2200,7 @@ export const LEARNING_COMMANDS: CommandSpec[] = [
   status,
   today,
   heatmap,
+  ...AUTHOR_COMMANDS,
   {
     name: "dashboard",
     usage: "dashboard",
@@ -1563,6 +2215,6 @@ export const LEARNING_COMMANDS: CommandSpec[] = [
     },
     summary: "return to mission control",
     group: "navigate",
-    run: (ctx) => navigate(ctx, "/student/dashboard"),
+    run: (ctx) => navigate(ctx, "/developer/dashboard"),
   },
 ];

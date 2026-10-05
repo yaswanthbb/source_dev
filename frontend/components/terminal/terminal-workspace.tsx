@@ -8,10 +8,13 @@ import remarkGfm from "remark-gfm";
 import apiClient from "@/lib/api-client";
 import type { User } from "@/lib/auth";
 import type {
+  CommandSpec,
   FetchReport,
   LineSegment,
   TerminalAction,
 } from "@/lib/terminal/commands";
+import { commandsFor } from "@/lib/terminal/commands";
+import { ADMIN_COMMANDS } from "@/lib/terminal/admin-commands";
 import type { ConsoleEntry } from "@/lib/terminal/session";
 import { displayPath } from "@/lib/terminal/location";
 import { getTheme, DEFAULT_THEME_ID } from "./themes";
@@ -382,7 +385,7 @@ function Line({
   if (entry.kind === "cmd")
     return (
       <div className="sd-line" data-kind="cmd">
-        <span className="sd-prompt-user">student@source-dev</span>
+        <span className="sd-prompt-user">developer@source-dev</span>
         <span className="sd-prompt-path">:{entry.path ?? "~"}$</span>{" "}
         {entry.text}
         {entry.typing && <span className="sd-caret" aria-hidden="true" />}
@@ -459,11 +462,20 @@ function RunIndicator({ label }: { label: string | null }) {
 function Console({
   user,
   initialCommand,
+  commands,
+  commandsRole,
 }: {
   user: User;
   initialCommand?: string;
+  commands?: CommandSpec[];
+  commandsRole?: "developer" | "admin";
 }) {
-  const session = useTerminalSession(user, initialCommand);
+  // Functions never cross the server/client boundary: the page passes a role
+  // string and the registry composes client-side.
+  const list =
+    commands ??
+    (commandsRole === "admin" ? commandsFor("admin", ADMIN_COMMANDS) : undefined);
+  const session = useTerminalSession(user, initialCommand, list);
   const {
     lines,
     booting,
@@ -656,7 +668,7 @@ function Console({
                   <span className="sd-prompt-ask">history:</span>
                 ) : (
                   <>
-                    <span className="sd-prompt-user">student@source-dev</span>
+                    <span className="sd-prompt-user">developer@source-dev</span>
                     <span className="sd-prompt-path">:{promptPath}$</span>
                   </>
                 )}
@@ -721,8 +733,12 @@ function Console({
 
 export function TerminalWorkspace({
   initialCommand,
+  commands,
+  commandsRole,
 }: {
   initialCommand?: string;
+  commands?: CommandSpec[];
+  commandsRole?: "developer" | "admin";
 }) {
   const {
     data: user,
@@ -761,5 +777,5 @@ export function TerminalWorkspace({
         </div>
       </TerminalSurface>
     );
-  return <Console key={user.id} user={user} initialCommand={initialCommand} />;
+  return <Console key={user.id} user={user} initialCommand={initialCommand} commands={commands} commandsRole={commandsRole} />;
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import * as React from "react";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
+import apiClient from "@/lib/api-client";
 import type { User } from "@/lib/auth";
 import { DARK, LIGHT } from "@/components/terminal/themes";
 import { useTheme } from "@/providers/theme-provider";
@@ -51,6 +53,8 @@ export function TerminalHeader({
   uptime,
   onLogout,
   onProfile,
+  routes,
+  notificationsHref,
 }: {
   user?: User;
   active?: "dashboard" | "terminal";
@@ -58,7 +62,13 @@ export function TerminalHeader({
   uptime?: string;
   onLogout: () => void;
   onProfile?: () => void;
+  routes?: { dashboard: string; terminal: string; profile?: string };
+  /** Bell target (e.g. "/developer/terminal?view=notify"). Absent = no bell. */
+  notificationsHref?: string;
 }) {
+  const dashboardHref = routes?.dashboard ?? "/developer/dashboard";
+  const terminalHref = routes?.terminal ?? "/developer/terminal";
+  const profileHref = routes?.profile ?? "/developer/terminal?view=profile";
   const { isDark, toggleTheme } = useTheme();
   const c = isDark ? DARK : LIGHT;
   const controlStyle = {
@@ -96,7 +106,7 @@ export function TerminalHeader({
     >
       <div className="sd-topbar-brand">
         <Link
-          href="/student/dashboard"
+          href={dashboardHref}
           className="font-bold tracking-tight whitespace-nowrap"
           style={{ color: c.ink }}
         >
@@ -122,7 +132,7 @@ export function TerminalHeader({
       </div>
       <nav className="sd-view-tabs" aria-label="Workspace views">
         <Link
-          href="/student/dashboard"
+          href={dashboardHref}
           aria-current={active === "dashboard" ? "page" : undefined}
           style={
             active === "dashboard"
@@ -134,7 +144,7 @@ export function TerminalHeader({
           <span className="sm:hidden">DASH</span>]
         </Link>
         <Link
-          href="/student/terminal"
+          href={terminalHref}
           aria-current={active === "terminal" ? "page" : undefined}
           style={
             active === "terminal"
@@ -152,6 +162,7 @@ export function TerminalHeader({
         >
           {user?.name}
         </span>
+        {notificationsHref && <BellControl href={notificationsHref} style={controlStyle} />}
         <button
           type="button"
           onClick={toggleTheme}
@@ -173,7 +184,7 @@ export function TerminalHeader({
           </button>
         ) : (
           <Link
-            href="/student/terminal?view=profile"
+            href={profileHref}
             className="sd-account-control"
             style={controlStyle}
             aria-label="Open profile"
@@ -198,6 +209,235 @@ export function TerminalHeader({
 }
 
 // The `RUN:` strip that used to live here — a row of `[ROADMAPS]` `[REVIEW]`
+
+/** Notifications menu: unread count polled lightly, click opens a themed
+ *  dropdown with the newest items — the shell stays one link away. */
+function BellControl({
+  href,
+  style,
+}: {
+  href: string;
+  style: React.CSSProperties;
+}) {
+  const { isDark } = useTheme();
+  const c = isDark ? DARK : LIGHT;
+  const [unread, setUnread] = React.useState(0);
+  const [open, setOpen] = React.useState(false);
+  const [items, setItems] = React.useState<
+    Array<{
+      id: string;
+      type: string;
+      payload?: Record<string, unknown>;
+      createdAt: string;
+      isRead: boolean;
+    }>
+  >([]);
+  const boxRef = React.useRef<HTMLDivElement | null>(null);
+
+  const readCount = React.useCallback(async () => {
+    try {
+      const { data } = await apiClient.get<{ unread: number }>(
+        "/notifications/unread-count",
+      );
+      setUnread(data.unread ?? 0);
+    } catch {
+      // The badge is decoration; a dead network must not break the header.
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void readCount();
+    const t = setInterval(readCount, 60_000);
+    window.addEventListener("focus", readCount);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", readCount);
+    };
+  }, [readCount]);
+
+  const openMenu = async () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    try {
+      const { data } = await apiClient.get<
+        Array<{
+          id: string;
+          type: string;
+          payload?: Record<string, unknown>;
+          createdAt: string;
+          isRead: boolean;
+        }>
+      >("/notifications");
+      setItems(Array.isArray(data) ? data.slice(0, 8) : []);
+    } catch {
+      setItems([]);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open ]);
+
+  const markOne = async (id: string) => {
+    try {
+      await apiClient.patch(`/notifications/${id}/read`);
+      setItems((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+      );
+      setUnread((u) => Math.max(0, u - 1));
+    } catch {
+      // Best effort; the shell command reports failures properly.
+    }
+  };
+
+  const titleOf = (n: (typeof items)[number]): string => {
+    const p = n.payload ?? {};
+    return (
+      (p.roadmapTitle as string) ||
+      (p.conceptTitle as string) ||
+      (p.title as string) ||
+      (p.targetLabel as string) ||
+      n.type
+    );
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => void openMenu()}
+        className="sd-account-control"
+        style={
+          unread > 0
+            ? { ...style, color: "var(--sd-accent, currentColor)" }
+            : style
+        }
+        aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ""}`}
+        aria-expanded={open}
+        title="Notifications"
+      >
+        <Bell size={12} aria-hidden="true" />
+        <span className="hidden sm:inline">
+          {unread > 0 ? `[NOTIFICATIONS:${unread}]` : "[NOTIFICATIONS]"}
+        </span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "calc(100% + 8px)",
+            width: 320,
+            maxWidth: "80vw",
+            backgroundColor: c.panel,
+            border: `1px solid ${c.line}`,
+            boxShadow: `3px 3px 0px 0px ${c.shadow}`,
+            zIndex: 60,
+          }}
+        >
+          <div
+            style={{
+              padding: "6px 10px",
+              borderBottom: `1px solid ${c.line}`,
+              color: c.faint,
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            ┌─[ notifications :: {unread} unread ]
+          </div>
+          <div style={{ maxHeight: 320, overflowY: "auto" }}>
+            {items.length === 0 && (
+              <div style={{ padding: "12px 10px", color: c.faint, fontSize: 12 }}>
+                Nothing here.
+              </div>
+            )}
+            {items.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => void markOne(n.id)}
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 10px",
+                  borderBottom: `1px solid ${c.line}`,
+                  color: c.text,
+                  cursor: "pointer",
+                  background: "transparent",
+                }}
+              >
+                <span
+                  style={{
+                    color: n.isRead ? c.faint : c.primary,
+                    fontWeight: 700,
+                  }}
+                >
+                  {n.isRead ? " " : "*"}
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: 11,
+                      color: c.faint,
+                    }}
+                  >
+                    [{n.type}]
+                  </span>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: 12,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {titleOf(n)}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <Link
+            href={href}
+            onClick={() => setOpen(false)}
+            style={{
+              display: "block",
+              padding: "8px 10px",
+              color: c.primary,
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            OPEN IN SHELL ➔
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
 // chips under the header — is gone, along with the shortcut table behind it.
 // It was the last of the panelled dashboard showing through into CLI mode, and
 // the shell's contract is that the window holds output and a prompt: a verb
