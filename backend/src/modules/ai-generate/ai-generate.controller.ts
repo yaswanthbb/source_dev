@@ -58,10 +58,11 @@ export class AiGenerateController {
     provider: string;
   }> {
     const creds = await this.aiGenerateService.resolveCredentials(user);
+    // Non-throwing read: exhaustion surfaces as zeros, never a 429, so the
+    // badge (and any other reader) keeps rendering at the limit.
     const { remaining, limit, unlimited } =
-      await this.aiGenerateService.checkRateLimit(
+      await this.aiGenerateService.readQuota(
         user.id,
-        1,
         user.timezone,
         creds,
       );

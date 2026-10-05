@@ -1,0 +1,2 @@
+{"task":"qa_answer","promptVersion":"1.0.0","input":{"conceptTitle":"What is a branch","conceptContent":"A branch is a movable pointer.","questionBody":"Why create a branch?"},"expectContains":["Why create a branch?","What is a branch"]}
+{"task":"qa_answer","promptVersion":"1.0.0","input":{"conceptTitle":"Merge conflicts","conceptContent":"Conflicts arise on overlapping edits.","questionBody":"How do I resolve one?"},"expectContains":["How do I resolve one?"]}

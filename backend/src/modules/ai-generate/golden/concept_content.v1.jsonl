@@ -1,0 +1,2 @@
+{"task":"concept_content","promptVersion":"1.0.0","input":{"title":"What is a branch","difficulty":"easy","moduleTitle":"Branching Basics"},"expectContains":["What is a branch","Module:"]}
+{"task":"concept_content","promptVersion":"1.0.0","input":{"title":"Merge conflicts","siblingConceptTitles":["What is a branch","Creating branches"]},"expectContains":["do NOT duplicate","Merge conflicts"]}

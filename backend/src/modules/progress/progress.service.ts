@@ -70,7 +70,7 @@ export class ProgressService {
       await this.gamificationService.awardXpForConceptCompletion(
         userId,
         conceptId,
-        XpSource.ASSIGNMENT_PASSED,
+        XpSource.CONCEPT_COMPLETED,
       );
       await this.gamificationService.updateStreak(userId, timezone);
       await this.gamificationService.checkAndAwardBadges(userId);

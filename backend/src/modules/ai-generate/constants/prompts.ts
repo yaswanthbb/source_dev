@@ -196,3 +196,160 @@ export function buildQaAnswerUserPrompt(
     : '';
   return `Concept: "${conceptTitle}"${contentSnippet}\n\nStudent Question:\n"${questionBody}"\n\nProvide a clear, helpful answer grounded in this concept.`;
 }
+
+// ---------------------------------------------------------------------------
+// §8 compiler stage prompts. The stage contracts live in
+// ../compiler-stages.ts (parse + validate); these builders render the inputs.
+// `research_brief` is a null placeholder in the outline contract until the
+// RAG phase fills it — no retrieval is built here.
+// ---------------------------------------------------------------------------
+
+export const CONCEPT_OUTLINE_SYSTEM_PROMPT = `You are a principal engineer and curriculum architect outlining a single concept article before it is drafted.
+
+Output MUST be a strictly valid JSON object with exactly this shape:
+{
+  "title": "concept title, verbatim as given",
+  "objectives": ["3-5 learning objectives, each starting with a Bloom verb (define, explain, apply, analyze, evaluate, create, compare, demonstrate)"],
+  "key_terms": [{"term": "canonical term", "definition": "one-sentence precise definition"}],
+  "builds_on": ["concept ids this concept directly requires, from the provided registry context; empty array when truly foundational"],
+  "recall_hooks": ["names of earlier terms or concepts this lesson should explicitly recall and link back to"],
+  "lesson_shape": {
+    "hook": "one-sentence opener tying the concept to a real problem",
+    "intuition": "the core mental model in plain language",
+    "definition": "the precise technical definition",
+    "worked_example": "what the concrete worked example must demonstrate",
+    "faded_practice": "how the guided-then-unguided practice is scaffolded",
+    "retrieval_questions": "what the 2-3 recall questions must probe"
+  },
+  "difficulty": "one of: easy, medium, hard",
+  "research_brief": null
+}
+
+Rules:
+1. key_terms covers every non-obvious term the draft will use; definitions must be precise enough to check the draft against.
+2. builds_on may ONLY reference concept ids present in the provided registry context. Never invent ids.
+3. STRICTLY FORBIDDEN: Markdown formatting, code fences, explanations, or notes. Output ONLY the raw JSON object.`;
+
+export function buildOutlineUserPrompt(input: {
+  title: string;
+  difficulty?: string;
+  roadmapTitle?: string;
+  moduleTitle?: string;
+  siblingConceptTitles?: string[];
+  registryContext?: string;
+}): string {
+  const parts = [`Target Concept: "${input.title}"`];
+  if (input.difficulty) parts.push(`Target Difficulty: "${input.difficulty}"`);
+  if (input.roadmapTitle) parts.push(`Roadmap: "${input.roadmapTitle}"`);
+  if (input.moduleTitle) parts.push(`Module: "${input.moduleTitle}"`);
+  if (input.siblingConceptTitles && input.siblingConceptTitles.length > 0) {
+    parts.push(
+      `Sibling concepts in this module (scope against overlap): ${input.siblingConceptTitles.map((t) => `"${t}"`).join(', ')}`,
+    );
+  }
+  if (input.registryContext) {
+    parts.push(`Registry Context (valid builds_on ids and known terms):\n${input.registryContext}`);
+  }
+  parts.push('Produce the outline JSON for this concept.');
+  return parts.join('\n\n');
+}
+
+export const CONCEPT_DRAFT_SYSTEM_PROMPT = `You are a principal engineer and master technical educator authoring a concept article for a comprehensive learning platform.
+
+Guidelines & Scope:
+- Write a structured, high-quality technical article in GitHub Flavored Markdown that realizes the provided outline section by section. Every objective must be visibly taught; every key term must be used exactly as defined.
+- Respect the curriculum context: focus deeply on the target concept. Do not duplicate or broadly retell topics that belong in sibling concepts.
+- Structure with clear headings (##, ###), concrete real-world code or architecture examples where appropriate, mental models, edge cases, and common pitfalls.
+- Maintain a natural, authoritative instructor tone with crisp explanations and varied sentence length.
+- STRICTLY FORBIDDEN: AI clichés and hollow filler phrases such as "In today's fast-paced digital world", "Let's dive into", "delve into", "In conclusion", "In summary", "tapestry", "seamlessly", "it's important to remember", or excessive hedging.
+- Do NOT output preamble, conversational filler, or wrap the whole response in an outer markdown code fence. Output ONLY the raw markdown article starting with the first heading or conceptual introduction.`;
+
+export function buildDraftUserPrompt(input: {
+  outlineJson: string;
+  contextBlock?: string;
+  personaLines?: string;
+}): string {
+  const parts = [`Approved Outline (realize every section):\n"""\n${input.outlineJson}\n"""`];
+  if (input.contextBlock) {
+    parts.push(`Curriculum Context:\n${input.contextBlock}`);
+  }
+  if (input.personaLines) {
+    parts.push(`Teacher Persona:\n${input.personaLines}`);
+  }
+  parts.push('Write the complete educational article content in Markdown for this concept.');
+  return parts.join('\n\n');
+}
+
+export const CONCEPT_FACTCHECK_SYSTEM_PROMPT = `You are a meticulous technical reviewer checking a drafted concept article against its approved outline and term registry.
+
+Output MUST be a strictly valid JSON object with exactly this shape:
+{
+  "consistent": true or false,
+  "outline_drift": ["each outline objective or lesson-shape element the draft fails to teach, quoted briefly; empty when fully realized"],
+  "term_issues": ["each key term the draft misuses, redefines, or omits, quoted briefly; empty when all terms match the registry"]
+}
+
+Rules:
+1. Quote the drift precisely — section names, missing objectives, redefined terms.
+2. Do NOT judge style, pedagogy, or difficulty fit here; that is the critique stage's job.
+3. STRICTLY FORBIDDEN: Markdown formatting, code fences, explanations, or notes. Output ONLY the raw JSON object.`;
+
+export function buildFactcheckUserPrompt(input: {
+  outlineJson: string;
+  draftContent: string;
+  registryTerms: string;
+}): string {
+  return [
+    `Approved Outline:\n"""\n${input.outlineJson}\n"""`,
+    `Draft Article:\n"""\n${input.draftContent.slice(0, 8000)}\n"""`,
+    `Term Registry (canonical definitions):\n${input.registryTerms}`,
+    'Check the draft against the outline and registry. Output ONLY the fact-check JSON.',
+  ].join('\n\n');
+}
+
+export const CONCEPT_CRITIQUE_SYSTEM_PROMPT = `You are a senior pedagogy judge reviewing a concept article for a developer learning platform.
+
+Output MUST be a strictly valid JSON object with exactly this shape:
+{
+  "blocking_issues": ["each issue that MUST be fixed before publishing: factual errors, broken callbacks to prerequisites, wrong difficulty placement; empty when publishable"],
+  "suggestions": ["non-blocking improvements: clarity, examples, pacing"]
+}
+
+Rubric — accuracy, clarity, pedagogy, callback validity, difficulty fit:
+1. blocking_issues is for publish-stoppers only. Nits, style preferences, and nice-to-haves go in suggestions.
+2. A callback to a prerequisite concept is valid only if that concept actually teaches what is referenced.
+3. STRICTLY FORBIDDEN: Markdown formatting, code fences, explanations, or notes. Output ONLY the raw JSON object.`;
+
+export function buildCritiqueUserPrompt(input: {
+  title: string;
+  draftContent: string;
+  objectives: string[];
+  difficulty: string;
+}): string {
+  return [
+    `Concept: "${input.title}" (target difficulty: ${input.difficulty})`,
+    `Objectives the draft must teach:\n${input.objectives.map((o) => `- ${o}`).join('\n')}`,
+    `Draft Article:\n"""\n${input.draftContent.slice(0, 8000)}\n"""`,
+    'Judge the draft against the rubric. Output ONLY the critique JSON.',
+  ].join('\n\n');
+}
+
+export const CONCEPT_REVISE_SYSTEM_PROMPT = `You are a principal engineer revising a concept article to fix exactly the listed blocking issues and fact-check findings.
+
+Rules:
+1. Address every blocking issue and every fact-check finding. Leave everything else untouched — do not restructure, re-tone, or expand passing sections.
+2. Output the full revised article in GitHub Flavored Markdown. No preamble, no changelog, no code fences around the article.
+3. If a blocking issue contradicts the approved outline, follow the outline and note nothing — output ONLY the article.`;
+
+export function buildReviseUserPrompt(input: {
+  draftContent: string;
+  blockingIssues: string[];
+  factcheckFindings: string[];
+}): string {
+  const fixList = [...input.blockingIssues, ...input.factcheckFindings];
+  return [
+    `Current Draft:\n"""\n${input.draftContent.slice(0, 8000)}\n"""`,
+    `Must-fix list (address every item):\n${fixList.map((f) => `- ${f}`).join('\n')}`,
+    'Output ONLY the full revised article in Markdown.',
+  ].join('\n\n');
+}

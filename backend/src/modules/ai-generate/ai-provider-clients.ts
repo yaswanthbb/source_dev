@@ -8,6 +8,16 @@ export interface CompletionOptions {
   responseFormat?: { type: 'json_object' | 'text' };
 }
 
+export interface CompletionResult {
+  text: string;
+  tokensIn: number | null;
+  tokensOut: number | null;
+}
+
+function numOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
 export interface ProviderMeta {
   provider: AiProvider;
   displayName: string;
@@ -90,6 +100,27 @@ function isAuthFailure(status: number): boolean {
   return status === 401 || status === 403;
 }
 
+/**
+ * Fallback-chain predicate: true when a completion failed because the model
+ * id is retired/gone (404/410 from either provider). Detected via the
+ * machine-readable `code` marker, not message text.
+ */
+export function isModelRetiredError(err: unknown): boolean {
+  if (err instanceof HttpException) {
+    const response = err.getResponse() as
+      | { code?: unknown }
+      | string
+      | null
+      | undefined;
+    return (
+      typeof response === 'object' &&
+      response !== null &&
+      response.code === 'MODEL_RETIRED'
+    );
+  }
+  return false;
+}
+
 @Injectable()
 export class AiProviderClients {
   private readonly logger = new Logger(AiProviderClients.name);
@@ -118,7 +149,7 @@ export class AiProviderClients {
     userPrompt: string,
     options?: CompletionOptions,
     signal?: AbortSignal,
-  ): Promise<string> {
+  ): Promise<CompletionResult> {
     return provider === AiProvider.GEMINI
       ? this.geminiCompletion(
           apiKey,
@@ -145,7 +176,7 @@ export class AiProviderClients {
     userPrompt: string,
     options?: CompletionOptions,
     signal?: AbortSignal,
-  ): Promise<string> {
+  ): Promise<CompletionResult> {
     const apiUrl =
       this.configService.get<string>('NVIDIA_API_URL')?.trim() ||
       'https://integrate.api.nvidia.com/v1/chat/completions';
@@ -201,6 +232,7 @@ export class AiProviderClients {
             statusCode: HttpStatus.BAD_GATEWAY,
             message: `Model "${model}" is not available on NVIDIA NIM (HTTP ${response.status} — likely retired). Pick another model from the live model list.`,
             error: 'Bad Gateway',
+            code: 'MODEL_RETIRED',
           },
           HttpStatus.BAD_GATEWAY,
         );
@@ -214,12 +246,20 @@ export class AiProviderClients {
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      usage?: {
+        prompt_tokens?: unknown;
+        completion_tokens?: unknown;
+      };
     };
     const text = data.choices?.[0]?.message?.content?.trim();
     if (!text) {
       throw providerFailure(AiProvider.NVIDIA, 'empty response');
     }
-    return text;
+    return {
+      text,
+      tokensIn: numOrNull(data.usage?.prompt_tokens),
+      tokensOut: numOrNull(data.usage?.completion_tokens),
+    };
   }
 
   private async geminiCompletion(
@@ -229,7 +269,7 @@ export class AiProviderClients {
     userPrompt: string,
     options?: CompletionOptions,
     signal?: AbortSignal,
-  ): Promise<string> {
+  ): Promise<CompletionResult> {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent` +
       `?key=${encodeURIComponent(apiKey)}`;
@@ -280,6 +320,7 @@ export class AiProviderClients {
             statusCode: HttpStatus.BAD_GATEWAY,
             message: `Model "${model}" is not available on Google Gemini (HTTP 404 — likely retired or misspelled). Pick another model from the live model list.`,
             error: 'Bad Gateway',
+            code: 'MODEL_RETIRED',
           },
           HttpStatus.BAD_GATEWAY,
         );
@@ -293,6 +334,10 @@ export class AiProviderClients {
 
     const data = (await response.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      usageMetadata?: {
+        promptTokenCount?: unknown;
+        candidatesTokenCount?: unknown;
+      };
     };
     const text = (data.candidates?.[0]?.content?.parts ?? [])
       .map((p) => p.text ?? '')
@@ -301,7 +346,11 @@ export class AiProviderClients {
     if (!text) {
       throw providerFailure(AiProvider.GEMINI, 'empty response');
     }
-    return text;
+    return {
+      text,
+      tokensIn: numOrNull(data.usageMetadata?.promptTokenCount),
+      tokensOut: numOrNull(data.usageMetadata?.candidatesTokenCount),
+    };
   }
 
   /**

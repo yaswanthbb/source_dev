@@ -92,16 +92,19 @@ describe('ProgressService', () => {
 
       await service.markConceptCompleted('user-1', 'concept-1');
 
+      // Intentional change (2026-10-05): concept completions were mislabeled
+      // as assignment passes; the source is now CONCEPT_COMPLETED.
       expect(gamification.awardXpForConceptCompletion).toHaveBeenCalledWith(
         'user-1',
         'concept-1',
-        XpSource.ASSIGNMENT_PASSED,
+        XpSource.CONCEPT_COMPLETED,
       );
-      expect(gamification.updateStreak).toHaveBeenCalledWith('user-1');
+      expect(gamification.updateStreak).toHaveBeenCalledWith('user-1', undefined);
       expect(gamification.checkAndAwardBadges).toHaveBeenCalledWith('user-1');
       expect(review.populateReviewItemsForConcept).toHaveBeenCalledWith(
         'user-1',
         'concept-1',
+        undefined,
       );
     });
 

@@ -54,7 +54,7 @@ export function AiQuotaBadge({
             ? 'bg-amber-tint border-amber/20 text-amber'
             : 'bg-accent-tint border-accent/20 text-accent'
       } ${className}`}
-      title={`${quota.remaining} out of ${quota.limit} AI generations remaining today (resets at 00:00 UTC)`}
+      title={`${quota.remaining} out of ${quota.limit} AI generations remaining today (resets at midnight in your own timezone)`}
     >
       <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
       <span>

@@ -4,6 +4,11 @@ import { ConfigModule } from '@nestjs/config';
 import { AiGenerationLog } from './entities/ai-generation-log.entity';
 import { AiGenerationJob } from './entities/ai-generation-job.entity';
 import { AiProviderKey } from './entities/ai-provider-key.entity';
+import { AiPromptVersion } from './entities/ai-prompt-version.entity';
+import { CourseTerm } from './entities/course-term.entity';
+import { CourseConceptCard } from './entities/course-concept-card.entity';
+import { CourseConceptEdge } from './entities/course-concept-edge.entity';
+import { ConceptCompilation } from './entities/concept-compilation.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../content/entities/module.entity';
 import { Concept } from '../content/entities/concept.entity';
@@ -15,6 +20,9 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { AiGenerateService } from './ai-generate.service';
 import { AiGenerateController } from './ai-generate.controller';
 import { AiKeysService } from './ai-keys.service';
+import { AiPromptRegistry } from './ai-prompt-registry.service';
+import { CourseContextService } from './course-context.service';
+import { CourseContextBuilder } from './course-context-builder.service';
 import { AiKeysController } from './ai-keys.controller';
 import { AiKeyCryptoService } from './ai-key-crypto.service';
 import { AiProviderClients } from './ai-provider-clients';
@@ -25,6 +33,11 @@ import { AiProviderClients } from './ai-provider-clients';
       AiGenerationLog,
       AiGenerationJob,
       AiProviderKey,
+      AiPromptVersion,
+      CourseTerm,
+      CourseConceptCard,
+      CourseConceptEdge,
+      ConceptCompilation,
       Roadmap,
       ModuleEntity,
       Concept,
@@ -42,7 +55,10 @@ import { AiProviderClients } from './ai-provider-clients';
     AiKeysService,
     AiKeyCryptoService,
     AiProviderClients,
+    AiPromptRegistry,
+    CourseContextService,
+    CourseContextBuilder,
   ],
-  exports: [AiGenerateService, AiKeysService],
+  exports: [AiGenerateService, AiKeysService, CourseContextService, CourseContextBuilder],
 })
 export class AiGenerateModule {}

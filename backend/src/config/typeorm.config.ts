@@ -32,6 +32,11 @@ import { ReviewItem } from '../modules/review/entities/review-item.entity';
 import { AiGenerationLog } from '../modules/ai-generate/entities/ai-generation-log.entity';
 import { AiGenerationJob } from '../modules/ai-generate/entities/ai-generation-job.entity';
 import { AiProviderKey } from '../modules/ai-generate/entities/ai-provider-key.entity';
+import { AiPromptVersion } from '../modules/ai-generate/entities/ai-prompt-version.entity';
+import { CourseTerm } from '../modules/ai-generate/entities/course-term.entity';
+import { CourseConceptCard } from '../modules/ai-generate/entities/course-concept-card.entity';
+import { CourseConceptEdge } from '../modules/ai-generate/entities/course-concept-edge.entity';
+import { ConceptCompilation } from '../modules/ai-generate/entities/concept-compilation.entity';
 import { Notification } from '../modules/notifications/entities/notification.entity';
 import { Article } from '../modules/articles/entities/article.entity';
 import { PasswordResetOtp } from '../modules/auth/entities/password-reset-otp.entity';
@@ -60,6 +65,11 @@ export const entities = [
   AiGenerationLog,
   AiGenerationJob,
   AiProviderKey,
+  AiPromptVersion,
+  CourseTerm,
+  CourseConceptCard,
+  CourseConceptEdge,
+  ConceptCompilation,
   Notification,
   Article,
   PasswordResetOtp,

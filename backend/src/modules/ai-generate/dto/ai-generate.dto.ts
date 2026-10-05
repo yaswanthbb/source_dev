@@ -110,6 +110,22 @@ export class GenerateConceptContentDto extends AiGenerationOptions {
   @IsArray()
   @IsString({ each: true })
   siblingConceptTitles?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'Roadmap id for course-context hydration (§8 Phase 1). When set with COURSE_ENGINE_ENABLED=true, the context context block is appended to the prompt. Omit for legacy behavior.',
+  })
+  @IsOptional()
+  @IsUUID()
+  roadmapId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Concept id for course-context hydration (§8 Phase 1). Target card + prerequisite summaries load only when set.',
+  })
+  @IsOptional()
+  @IsUUID()
+  conceptId?: string;
 }
 
 export class GenerateConceptMcqsDto extends AiGenerationOptions {

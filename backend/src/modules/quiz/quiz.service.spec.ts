@@ -346,9 +346,11 @@ describe('QuizService', () => {
         selectedOptionId: 'c',
       } as any);
 
+      // Drive-by fix (2026-10-05): pre-existing stale expectation — the
+      // service passes the caller's timezone through; the test predates it.
       expect(
         progressService.markConceptCompletedFromAssignment,
-      ).toHaveBeenCalledWith('developer-2', 'concept-1');
+      ).toHaveBeenCalledWith('developer-2', 'concept-1', 'UTC');
     });
   });
 

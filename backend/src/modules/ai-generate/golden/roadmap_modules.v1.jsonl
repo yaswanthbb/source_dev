@@ -1,0 +1,2 @@
+{"task":"roadmap_modules","promptVersion":"1.0.0","input":{"roadmapTitle":"Git Fundamentals","targetCount":3},"expectContains":["Git Fundamentals","JSON array of strings"]}
+{"task":"roadmap_modules","promptVersion":"1.0.0","input":{"roadmapTitle":"Git Fundamentals","roadmapDescription":"From zero to confident branching","existingModuleTitles":["Setup & First Commit"],"targetCount":2},"expectContains":["do NOT duplicate","Module #2"]}

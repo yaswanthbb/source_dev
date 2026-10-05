@@ -1,0 +1,2 @@
+{"task":"module_concepts","promptVersion":"1.0.0","input":{"moduleTitle":"Branching Basics","moduleOrderIndex":2,"totalModuleCount":5,"siblingModules":[]},"expectContains":["Branching Basics","Module #2"]}
+{"task":"module_concepts","promptVersion":"1.0.0","input":{"moduleTitle":"Branching Basics","moduleOrderIndex":2,"totalModuleCount":5,"siblingModules":[{"title":"Setup & First Commit","orderIndex":1}],"existingConceptTitles":["What is a branch"],"targetCount":3},"expectContains":["do NOT cover these topics","Concept #2"]}

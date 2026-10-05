@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#f7f8f6" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#101412" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="data:," />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <title>AI Course Generation R&amp;D</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f8f6;
+      --surface: #ffffff;
+      --surface-2: #eef1ed;
+      --ink: #14211b;
+      --muted: #53635b;
+      --line: #cfd7d1;
+      --accent: #087f5b;
+      --accent-strong: #056145;
+      --accent-soft: #daf2e8;
+      --warm: #c65035;
+      --warm-soft: #f8e4de;
+      --blue: #2667a9;
+      --blue-soft: #e1edf8;
+      --shadow: 0 12px 34px rgba(20, 33, 27, .08);
+      --mono: "IBM Plex Mono", monospace;
+      --sans: "IBM Plex Sans", sans-serif;
+      --serif: "Source Serif 4", Georgia, serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101412;
+        --surface: #171d1a;
+        --surface-2: #202824;
+        --ink: #edf3ef;
+        --muted: #aebdb5;
+        --line: #35433b;
+        --accent: #62d6aa;
+        --accent-strong: #86ebc3;
+        --accent-soft: #173d30;
+        --warm: #ff9a80;
+        --warm-soft: #47271f;
+        --blue: #83b7ee;
+        --blue-soft: #1d3348;
+        --shadow: 0 12px 34px rgba(0, 0, 0, .28);
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+    a { color: inherit; }
+    button { font: inherit; }
+    .wrap { width: min(1220px, calc(100% - 40px)); margin: 0 auto; }
+    .hero {
+      padding: clamp(42px, 7vw, 92px) 0 48px;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 340px;
+      height: 340px;
+      right: -120px;
+      top: -170px;
+      border: 46px solid var(--accent-soft);
+      border-radius: 50%;
+      opacity: .75;
+      pointer-events: none;
+    }
+    .meta-line { display: flex; flex-wrap: wrap; gap: 9px 18px; align-items: center; margin-bottom: 22px; }
+    .date { font: 500 12px/1.4 var(--mono); letter-spacing: .04em; color: var(--muted); }
+    .status { display: inline-flex; align-items: center; gap: 7px; font: 500 12px/1 var(--mono); color: var(--accent-strong); }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    h1, h2, h3 { margin: 0; }
+    h1 {
+      max-width: 930px;
+      font: 700 clamp(42px, 7.4vw, 90px)/.97 var(--serif);
+      letter-spacing: -.045em;
+      text-wrap: balance;
+    }
+    .deck {
+      max-width: 820px;
+      margin: 26px 0 0;
+      font-size: clamp(18px, 2vw, 23px);
+      line-height: 1.46;
+      color: var(--muted);
+      text-wrap: pretty;
+    }
+    .thesis {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 28px;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 3px solid var(--ink);
+      max-width: 980px;
+    }
+    .thesis strong { font: 500 12px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .thesis p { margin: 0; font: 600 clamp(20px, 2.4vw, 30px)/1.25 var(--serif); }
+
+    .mobile-jump { display: none; }
+    .layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: clamp(34px, 5vw, 76px); padding: 44px 0 100px; }
+    .rail { position: sticky; top: 22px; align-self: start; }
+    .rail-label { font: 500 11px/1 var(--mono); color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 14px; }
+    .rail a {
+      display: block;
+      padding: 9px 10px;
+      border-left: 2px solid var(--line);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .rail a:hover, .rail a.active { color: var(--ink); border-left-color: var(--accent); background: var(--accent-soft); }
+    .evidence-key { margin-top: 28px; padding: 14px 0 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+    .evidence-key span { display: block; margin-top: 8px; }
+    .dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--accent); }
+    .dot.index { background: var(--warm); }
+
+    section { scroll-margin-top: 24px; margin-bottom: 84px; }
+    .section-no { font: 500 12px/1 var(--mono); color: var(--accent-strong); letter-spacing: .08em; margin-bottom: 12px; }
+    h2 { font: 700 clamp(30px, 4vw, 50px)/1.05 var(--serif); letter-spacing: -.025em; max-width: 800px; }
+    h3 { font: 600 21px/1.2 var(--sans); }
+    .intro { max-width: 790px; margin: 16px 0 30px; color: var(--muted); font-size: 18px; }
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      text-decoration: none;
+      font: 500 11px/1.5 var(--mono);
+      white-space: nowrap;
+    }
+    .source-link.index { background: var(--warm-soft); color: var(--warm); }
+    .source-link:hover { text-decoration: underline; }
+
+    .answer {
+      display: grid;
+      grid-template-columns: 1.25fr .75fr;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .answer-main { padding: clamp(24px, 4vw, 44px); }
+    .answer-side { padding: clamp(24px, 3vw, 34px); background: var(--accent-soft); }
+    .answer h3 { font: 700 clamp(25px, 3vw, 36px)/1.12 var(--serif); }
+    .answer p { margin: 16px 0 0; color: var(--muted); }
+    .answer-side ol { margin: 14px 0 0; padding-left: 22px; }
+    .answer-side li { margin: 10px 0; }
+
+    .pipeline { margin-top: 34px; border-top: 1px solid var(--line); }
+    .stage {
+      display: grid;
+      grid-template-columns: 72px 190px 1fr;
+      gap: 20px;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--line);
+      align-items: start;
+    }
+    .stage-num { font: 500 12px/1.3 var(--mono); color: var(--accent-strong); }
+    .stage h3 { font-size: 18px; }
+    .stage p { margin: 0; color: var(--muted); }
+    .stage b { color: var(--ink); font-weight: 600; }
+
+    .bible {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .bible-head { grid-column: 1 / -1; padding: 25px 28px; background: var(--ink); color: var(--bg); }
+    .bible-head p { margin: 8px 0 0; color: color-mix(in srgb, var(--bg) 72%, transparent); }
+    .bible-item { padding: 23px 28px; border-top: 1px solid var(--line); }
+    .bible-item:nth-child(even) { border-right: 1px solid var(--line); }
+    .bible-item h3 { font-size: 17px; }
+    .bible-item p { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+    .bible-item code { font: 400 12px/1.5 var(--mono); color: var(--accent-strong); }
+    .callout { margin-top: 24px; padding: 20px 22px; background: var(--blue-soft); color: var(--ink); border-left: 4px solid var(--blue); }
+    .callout strong { display: block; margin-bottom: 5px; }
+
+    .principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .principle { padding: 24px; min-height: 190px; background: var(--surface); border-top: 4px solid var(--accent); box-shadow: var(--shadow); }
+    .principle:nth-child(2) { border-top-color: var(--blue); }
+    .principle:nth-child(3) { border-top-color: var(--warm); }
+    .principle .tag { font: 500 11px/1 var(--mono); color: var(--muted); }
+    .principle h3 { margin-top: 30px; }
+    .principle p { margin: 9px 0 0; color: var(--muted); font-size: 14px; }
+
+    .lesson-arc { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 28px; }
+    .arc-step { min-height: 124px; padding: 15px 12px; background: var(--surface-2); border-bottom: 3px solid var(--line); }
+    .arc-step b { display: block; font-size: 14px; }
+    .arc-step span { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }
+    .arc-step:nth-child(1), .arc-step:nth-child(2) { border-color: var(--accent); }
+    .arc-step:nth-child(3), .arc-step:nth-child(4) { border-color: var(--blue); }
+    .arc-step:nth-child(5), .arc-step:nth-child(6) { border-color: var(--warm); }
+
+    .evidence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .finding { padding: 24px; background: var(--surface); border: 1px solid var(--line); }
+    .finding .metric { font: 700 38px/1 var(--serif); color: var(--accent-strong); }
+    .finding h3 { margin-top: 12px; }
+    .finding p { margin: 9px 0 0; color: var(--muted); font-size: 14px; }
+    .finding .caveat { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font: 400 12px/1.45 var(--mono); color: var(--warm); }
+
+    .matrix { border-top: 2px solid var(--ink); }
+    .matrix-row { display: grid; grid-template-columns: 175px 1fr 1fr; gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .matrix-row.header { padding: 10px 0; font: 500 11px/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .matrix-row > strong { font-size: 14px; }
+    .matrix-row > div { color: var(--muted); font-size: 14px; }
+
+    .quiz-split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .quiz-panel { padding: 28px; background: var(--surface); border: 1px solid var(--line); }
+    .quiz-panel ul { margin: 18px 0 0; padding: 0; list-style: none; }
+    .quiz-panel li { position: relative; padding: 10px 0 10px 22px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .quiz-panel li::before { content: ""; position: absolute; left: 0; top: 17px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+    .quiz-panel.warn li::before { background: var(--warm); }
+
+    .eval-stack { display: grid; gap: 10px; }
+    .eval-layer { display: grid; grid-template-columns: 60px 200px 1fr; gap: 18px; padding: 20px; background: var(--surface); border: 1px solid var(--line); align-items: center; }
+    .eval-layer .n { font: 700 28px/1 var(--serif); color: var(--accent-strong); }
+    .eval-layer p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .roadmap-tabs { display: flex; gap: 8px; margin: 26px 0 18px; flex-wrap: wrap; }
+    .roadmap-tabs button { border: 1px solid var(--line); background: var(--surface); color: var(--muted); padding: 9px 13px; border-radius: 4px; cursor: pointer; }
+    .roadmap-tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .phase-panel { display: none; grid-template-columns: 145px 1fr; gap: 28px; padding: 30px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .phase-panel.active { display: grid; }
+    .phase-panel .window { font: 500 12px/1.4 var(--mono); color: var(--accent-strong); }
+    .phase-panel h3 { font: 700 27px/1.15 var(--serif); }
+    .phase-panel ul { margin: 14px 0 0; padding-left: 18px; color: var(--muted); }
+    .phase-panel li { margin: 7px 0; }
+    .gate { margin-top: 17px; padding: 12px 14px; background: var(--accent-soft); color: var(--accent-strong); font-size: 13px; }
+
+    .landscape { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .landscape th { text-align: left; padding: 11px 10px; border-bottom: 2px solid var(--ink); font: 500 11px/1.2 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+    .landscape td { vertical-align: top; padding: 16px 10px; border-bottom: 1px solid var(--line); }
+    .landscape td:not(:first-child) { color: var(--muted); }
+    .landscape strong { color: var(--ink); }
+
+    details { background: var(--surface); border-top: 1px solid var(--line); }
+    details:last-child { border-bottom: 1px solid var(--line); }
+    summary { cursor: pointer; padding: 18px 4px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 20px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--accent-strong); font: 500 20px/1 var(--mono); }
+    details[open] summary::after { content: "−"; }
+    details .detail-body { padding: 0 4px 20px; color: var(--muted); }
+    .sources { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-top: 12px; }
+    .sources a { overflow-wrap: anywhere; color: var(--accent-strong); font-size: 13px; }
+
+    .final {
+      margin-top: 40px;
+      padding: clamp(28px, 5vw, 54px);
+      background: var(--ink);
+      color: var(--bg);
+    }
+    .final h2 { color: var(--bg); }
+    .final p { max-width: 760px; color: color-mix(in srgb, var(--bg) 72%, transparent); font-size: 18px; }
+    .final-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 28px; background: color-mix(in srgb, var(--bg) 20%, transparent); }
+    .final-grid div { padding: 20px; background: var(--ink); }
+    .final-grid b { display: block; font: 600 15px/1.3 var(--sans); }
+    .final-grid span { display: block; margin-top: 8px; font-size: 13px; color: color-mix(in srgb, var(--bg) 65%, transparent); }
+    footer { padding: 32px 0 44px; border-top: 1px solid var(--line); font: 400 12px/1.5 var(--mono); color: var(--muted); }
+
+    @media (max-width: 860px) {
+      .wrap { width: min(100% - 28px, 760px); }
+      .hero::after { display: none; }
+      .thesis { grid-template-columns: 1fr; gap: 10px; }
+      .layout { display: block; padding-top: 24px; }
+      .rail { display: none; }
+      .mobile-jump { display: block; width: 100%; margin: 0 0 38px; padding: 12px 36px 12px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font: 500 14px var(--sans); }
+      section { margin-bottom: 66px; }
+      .answer { grid-template-columns: 1fr; }
+      .stage { grid-template-columns: 48px 150px 1fr; }
+      .principles { grid-template-columns: 1fr; }
+      .principle { min-height: auto; }
+      .principle h3 { margin-top: 18px; }
+      .lesson-arc { grid-template-columns: repeat(3, 1fr); }
+      .matrix-row { grid-template-columns: 130px 1fr; }
+      .matrix-row > div:last-child { grid-column: 2; }
+      .matrix-row.header { display: none; }
+      .eval-layer { grid-template-columns: 45px 1fr; }
+      .eval-layer p { grid-column: 2; }
+    }
+    @media (max-width: 600px) {
+      .wrap { width: min(100% - 22px, 560px); }
+      .hero { padding-top: 34px; }
+      h1 { font-size: clamp(40px, 13vw, 62px); }
+      .deck { font-size: 17px; }
+      .stage { grid-template-columns: 38px 1fr; gap: 8px 12px; }
+      .stage p { grid-column: 2; }
+      .bible { grid-template-columns: 1fr; }
+      .bible-item:nth-child(even) { border-right: 0; }
+      .lesson-arc { grid-template-columns: 1fr 1fr; }
+      .evidence-grid, .quiz-split, .sources { grid-template-columns: 1fr; }
+      .matrix-row { display: block; }
+      .matrix-row > strong, .matrix-row > div { display: block; margin-bottom: 8px; }
+      .phase-panel { grid-template-columns: 1fr; gap: 10px; padding: 22px; }
+      .landscape, .landscape tbody, .landscape tr, .landscape td { display: block; }
+      .landscape thead { display: none; }
+      .landscape tr { padding: 18px 0; border-bottom: 1px solid var(--line); }
+      .landscape td { border: 0; padding: 4px 0; }
+      .landscape td::before { content: attr(data-label); display: block; margin-bottom: 2px; font: 500 10px/1.2 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+      .final-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <div class="meta-line">
+        <span class="date">RESEARCH SNAPSHOT · 05 OCT 2026</span>
+        <span class="status">Architecture recommendation</span>
+      </div>
+      <h1>From one-shot generation to an evidence engine.</h1>
+      <p class="deck">The winning system is not a larger prompt. It is a persistent curriculum state, a multi-pass lesson factory, and an evaluation loop that learns from real student outcomes.</p>
+      <div class="thesis">
+        <strong>Core answer</strong>
+        <p>Build all three—state, chained passes, and evals—but in that order. The “imaginary box” should be structured data, not an ever-growing chat transcript.</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap layout">
+    <aside class="rail" aria-label="Report sections">
+      <div class="rail-label">Briefing</div>
+      <nav>
+        <a href="#decision">The decision</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#memory">Course bible</a>
+        <a href="#learning">Learning design</a>
+        <a href="#outcomes">Evidence</a>
+        <a href="#assessment">Assessment</a>
+        <a href="#evaluation">Evaluation</a>
+        <a href="#roadmap">Build order</a>
+        <a href="#media">Media &amp; rights</a>
+        <a href="#landscape">Landscape</a>
+        <a href="#questions">Open questions</a>
+        <a href="#sources">Sources</a>
+      </nav>
+      <div class="evidence-key">
+        Evidence status
+        <span><i class="dot"></i>read directly</span>
+        <span><i class="dot index"></i>index-derived; recheck before quoting</span>
+      </div>
+    </aside>
+
+    <main>
+      <select class="mobile-jump" aria-label="Jump to report section" id="mobileJump">
+        <option value="#decision">The decision</option>
+        <option value="#architecture">Architecture</option>
+        <option value="#memory">Course bible</option>
+        <option value="#learning">Learning design</option>
+        <option value="#outcomes">Evidence</option>
+        <option value="#assessment">Assessment</option>
+        <option value="#evaluation">Evaluation</option>
+        <option value="#roadmap">Build order</option>
+        <option value="#media">Media &amp; rights</option>
+        <option value="#landscape">Landscape</option>
+        <option value="#questions">Open questions</option>
+        <option value="#sources">Sources</option>
+      </select>
+
+      <section id="decision">
+        <div class="section-no">01 / DECISION</div>
+        <h2>What makes it better than hand-prompting?</h2>
+        <p class="intro">A strong general model can write one plausible lesson. A world-class course system must preserve intent over dozens of lessons, verify claims, test what students retain, and improve without silently regressing.</p>
+        <div class="answer">
+          <div class="answer-main">
+            <h3>A fixed graph first. Controlled generation second. Measured learning third.</h3>
+            <p>Leading documented architectures converge on a fixed curriculum, per-lesson multi-pass production, a quality layer, and a human gate. SkillFlow is the clearest engineering example: outline → draft → research/fact-check → critique → style → review. <a class="source-link" href="https://github.com/priyeshdave/skillflow" target="_blank" rel="noopener">SkillFlow · live ↗</a></p>
+          </div>
+          <div class="answer-side">
+            <strong>Order of operations</strong>
+            <ol>
+              <li>Course bible + versioned prompts</li>
+              <li>Multi-pass concept pipeline</li>
+              <li>Grounded research + provenance</li>
+              <li>Cross-concept continuity</li>
+              <li>Media validation</li>
+              <li>Quality and outcome evals</li>
+              <li>FSRS review upgrade</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <div class="section-no">02 / TARGET ARCHITECTURE</div>
+        <h2>Turn six isolated calls into one course compiler.</h2>
+        <p class="intro">Keep <code>AiGenerateService.complete()</code> as the provider boundary. Replace each single-shot path with a staged workflow that reads and updates one roadmap-scoped source of truth.</p>
+        <div class="pipeline">
+          <div class="stage">
+            <div class="stage-num">00</div>
+            <h3>Analyze</h3>
+            <p><b>Inputs:</b> learner profile, prior knowledge, outcome, constraints, teacher voice. Convert the course promise into measurable outcomes with Bloom verbs.</p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">01</div>
+            <h3>Curriculum graph</h3>
+            <p>Generate modules, concepts, prerequisites, difficulty phases, and assessment coverage. Dedupe concepts before any prose is written.</p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">02</div>
+            <h3>Research brief</h3>
+            <p>Retrieve from licensed, OER, or public-domain sources; extract claims and provenance. The draft sees the brief, not an unbounded scrape.</p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">03</div>
+            <h3>Lesson outline</h3>
+            <p>Require the learning objective, concept sequence, worked example, likely misconception, prior-lesson callback, and next-lesson bridge.</p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">04</div>
+            <h3>Draft</h3>
+            <p>Use the strongest suitable writing model. Feed only relevant graph context, terminology, teacher-persona rules, and compressed prerequisite recaps.</p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">05</div>
+            <h3>Fact-check</h3>
+            <p>Check atomic claims against the research brief, surface unsupported statements, validate links, and run verbatim-overlap filtering.</p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">06</div>
+            <h3>Critique</h3>
+            <p>Score accuracy, organization, relevance, adaptability, practicality, currency, challenge, and vividness with anchored evidence—not a single “quality” score. <a class="source-link index" href="https://www.mdpi.com/2079-9292/15/18/4212" target="_blank" rel="noopener">MDPI · index ↗</a></p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">07</div>
+            <h3>Revise + style</h3>
+            <p>Repair only failed dimensions, then apply the roadmap’s voice. Keep “sound human” out of the factual drafting step so style cannot mask errors.</p>
+          </div>
+          <div class="stage">
+            <div class="stage-num">08</div>
+            <h3>Validate + publish</h3>
+            <p>Schema validation, callback integrity, Mermaid compile check, MCQ lint, source/license checks, rubric threshold, then a human gate.</p>
+          </div>
+        </div>
+        <div class="callout"><strong>Model routing belongs in the factory.</strong>Use inexpensive models for extraction, classification, and repair; reserve the strongest model for synthesis and judging. A role-based LLM factory with fallbacks is documented by syllabus-swarm. <a class="source-link index" href="https://github.com/loos-glr/syllabus-swarm" target="_blank" rel="noopener">GitHub · index ↗</a></div>
+      </section>
+
+      <section id="memory">
+        <div class="section-no">03 / THE “IMAGINARY BOX”</div>
+        <h2>Memory should be queryable, inspectable, and hard to contradict.</h2>
+        <p class="intro">Do not pour a million-token transcript into every call. Long-context models can still miss information in the middle. Persist structured state and hydrate only what the current lesson needs.</p>
+        <div class="bible">
+          <div class="bible-head">
+            <h3>One course bible per roadmap</h3>
+            <p>Updated after every approved generation; every path reads from it.</p>
+          </div>
+          <div class="bible-item">
+            <h3>Curriculum graph</h3>
+            <p><code>module → concept → objective → prerequisite → phase</code></p>
+          </div>
+          <div class="bible-item">
+            <h3>Terminology registry</h3>
+            <p><code>canonical term → definition → introduced_in</code></p>
+          </div>
+          <div class="bible-item">
+            <h3>Concept summaries</h3>
+            <p><code>concept_id → 2–3 sentence summary → key claims</code></p>
+          </div>
+          <div class="bible-item">
+            <h3>Example &amp; code registry</h3>
+            <p><code>artifact → introduced_in → reused_in</code></p>
+          </div>
+          <div class="bible-item">
+            <h3>Misconception inventory</h3>
+            <p><code>concept → typical error → diagnostic distractor</code></p>
+          </div>
+          <div class="bible-item">
+            <h3>Source provenance</h3>
+            <p><code>claim → source → license → verified_at</code></p>
+          </div>
+          <div class="bible-item">
+            <h3>Cross-reference edges</h3>
+            <p><code>introduced_in / builds_on / revisited_in</code></p>
+          </div>
+          <div class="bible-item">
+            <h3>Teacher-persona spec</h3>
+            <p><code>audience → voice → analogy style → callback style</code></p>
+          </div>
+        </div>
+        <div class="callout"><strong>Teacher-like callbacks become deterministic.</strong>The outline selects valid <code>builds_on</code> IDs; the draft renders the callback; validation confirms the term really appeared in the cited lesson. StoryWriter’s event graph and history-compressing Coordinator provide an analogous long-form mechanism. <a class="source-link index" href="https://arxiv.org/pdf/2506.16445v1.pdf" target="_blank" rel="noopener">arXiv · index ↗</a></div>
+      </section>
+
+      <section id="learning">
+        <div class="section-no">04 / LEARNING DESIGN</div>
+        <h2>Optimize for durable learning, not fluent reading.</h2>
+        <p class="intro">The course should feel simple at first, but the learning loop should deliberately require recall, variation, and transfer. In Dunlosky’s evidence review, practice testing and distributed practice were high-utility; elaborative interrogation, self-explanation, and interleaving were moderate-utility. <a class="source-link index" href="https://bsfgresearch.weebly.com/uploads/9/6/6/9/96694756/improving_student_achievement__dunlosky_et_al_.pdf" target="_blank" rel="noopener">Dunlosky et al. · index ↗</a></p>
+        <div class="principles">
+          <article class="principle">
+            <span class="tag">DESIGN RULE 01</span>
+            <h3>Retrieve before rereading</h3>
+            <p>End lessons with low-stakes recall and begin later lessons with a prerequisite retrieval hook. Do not mistake summaries for practice.</p>
+          </article>
+          <article class="principle">
+            <span class="tag">DESIGN RULE 02</span>
+            <h3>Interleave for transfer</h3>
+            <p>Mix current and earlier problem types in cumulative quizzes. The research brief reports a 43% delayed-test accuracy gain for interleaved versus blocked practice; this figure is index-derived and should be rechecked before external quotation.</p>
+          </article>
+          <article class="principle">
+            <span class="tag">DESIGN RULE 03</span>
+            <h3>Fade the scaffolds</h3>
+            <p>Move from fully worked example to completion problem to independent attempt. Difficulty should rise with demonstrated competence, not elapsed lessons.</p>
+          </article>
+        </div>
+        <div class="lesson-arc" aria-label="Recommended lesson arc">
+          <div class="arc-step"><b>Hook</b><span>Concrete problem, no jargon wall.</span></div>
+          <div class="arc-step"><b>Intuition</b><span>Plain-language mental model.</span></div>
+          <div class="arc-step"><b>Formalize</b><span>Precise terms and boundaries.</span></div>
+          <div class="arc-step"><b>Worked</b><span>Full expert example.</span></div>
+          <div class="arc-step"><b>Fade</b><span>Learner completes missing steps.</span></div>
+          <div class="arc-step"><b>Retrieve</b><span>Recall, explain why, preview.</span></div>
+        </div>
+        <div class="matrix" style="margin-top:32px">
+          <div class="matrix-row header"><div>Technique</div><div>Generate</div><div>Validate</div></div>
+          <div class="matrix-row"><strong>Bloom alignment</strong><div>Every objective uses an observable verb; assessments rise from remember to create.</div><div>Audit the distribution because AI questions tend to skew lower-order.</div></div>
+          <div class="matrix-row"><strong>Dual coding</strong><div>Use a visual only when spatial or relational structure benefits.</div><div>Place explanation adjacent; remove decorative material under Mayer’s coherence principle. <a class="source-link index" href="https://www.structural-learning.com/post/dual-coding-a-teachers-guide" target="_blank" rel="noopener">Source · index ↗</a></div></div>
+          <div class="matrix-row"><strong>Elaboration</strong><div>Ask “why does this work?” and “when would it fail?”</div><div>Compare the answer to a claim-level rubric, not exact wording.</div></div>
+          <div class="matrix-row"><strong>Desirable difficulty</strong><div>Vary context, space practice, and require attempts before hints.</div><div>Back off when difficulty exceeds prior knowledge; friction is not inherently useful. <a class="source-link index" href="https://static1.squarespace.com/static/631f3333434573769b6da366/t/64513774777e291579ff8078/1683044212516/2019.01.09+Bjork.pdf" target="_blank" rel="noopener">Bjork · index ↗</a></div></div>
+        </div>
+      </section>
+
+      <section id="outcomes">
+        <div class="section-no">05 / WHAT THE OUTCOME EVIDENCE SAYS</div>
+        <h2>Guardrails decide whether AI helps or harms.</h2>
+        <p class="intro">The strongest evidence in the brief is not about prose quality. It is about what learners can do later without the model.</p>
+        <div class="evidence-grid">
+          <article class="finding">
+            <div class="metric">−17%</div>
+            <h3>Unrestricted help can create an illusion of learning.</h3>
+            <p>A 2024 PNAS study of roughly 1,000 high-school students reported that unrestricted ChatGPT improved practice performance by 48% but reduced later unaided test scores by 17%. A guardrailed Socratic tutor improved practice by 127% and mitigated the harm.</p>
+            <div class="caveat">INDEX-DERIVED SUMMARY · verify paper before quoting figures externally</div>
+            <a class="source-link index" href="https://www.pnas.org/doi/10.1073/pnas.2422633122" target="_blank" rel="noopener">PNAS · index ↗</a>
+          </article>
+          <article class="finding">
+            <div class="metric">0.63</div>
+            <h3>Well-scaffolded tutoring can produce substantial gains.</h3>
+            <p>A 2025 crossover RCT in Harvard introductory physics (194 students) reported an effect size of 0.63: median post-test 4.5 versus 3.5, in 49 versus 60 minutes. The tutor withheld full answers, required attempts, and used short feedback bursts.</p>
+            <div class="caveat">INDEX-DERIVED SUMMARY · authors position AI as augmentation, not replacement</div>
+            <a class="source-link index" href="https://www.nature.com/articles/s41598-025-97652-6" target="_blank" rel="noopener">Scientific Reports · index ↗</a>
+          </article>
+          <article class="finding">
+            <div class="metric">≈ ⅓</div>
+            <h3>Capability does not guarantee engagement.</h3>
+            <p>In an 18-school Khanmigo evaluation, students reportedly used the tutor on about one-third of practice days and 17% of mistakes; it added no measured benefit over practice alone. The binding constraint appeared to be use, not access.</p>
+            <div class="caveat">INDEX-DERIVED SECONDARY REPORTING</div>
+            <a class="source-link index" href="https://hechingerreport.org/proof-points-khanmigo-math-ai-tutor/" target="_blank" rel="noopener">Hechinger Report · index ↗</a>
+          </article>
+          <article class="finding">
+            <div class="metric">d = 0.37</div>
+            <h3>Low-tech delivery can still work.</h3>
+            <p>The brief reports a 2024 RCT of the Rori WhatsApp math tutor with roughly 900 students in Ghana and an effect size of 0.37.</p>
+            <div class="caveat">INDEX-DERIVED PROJECT SUMMARY · primary trial details were not directly verified</div>
+            <a class="source-link index" href="https://github.com/maskai-ia/maskai/blob/HEAD/reportes/03-socratic-ai-tutoring-agent.md" target="_blank" rel="noopener">Project report · index ↗</a>
+          </article>
+        </div>
+        <div class="callout"><strong>Product rule for QA answers.</strong>Force an attempt, diagnose the misconception, offer a small hint, then explain. Optimize for the delayed post-test, not whether the student got through today’s exercise quickly.</div>
+      </section>
+
+      <section id="assessment">
+        <div class="section-no">06 / MCQs &amp; REVIEW</div>
+        <h2>Questions should diagnose thinking, not just score answers.</h2>
+        <p class="intro">Generated MCQs save time, but current evidence says they can be easier, lower-order, and somewhat more error-prone than human items. Treat generation as the first draft of an instrument.</p>
+        <div class="quiz-split">
+          <div class="quiz-panel">
+            <h3>Pre-publish lint</h3>
+            <ul>
+              <li>Stem contains the complete problem, phrased positively.</li>
+              <li>Options are homogeneous, independent, and similar in length.</li>
+              <li>No “all of the above”; use “none” sparingly.</li>
+              <li>Distractors come from real misconceptions.</li>
+              <li>Every option has a rationale.</li>
+              <li>Correct-answer positions are balanced.</li>
+              <li>Bloom target matches the objective.</li>
+            </ul>
+            <p><a class="source-link index" href="https://cpe.pharmacy.ufl.edu/wordpress/files/2022/09/Checklist-for-Writing-MCQs.pdf" target="_blank" rel="noopener">MCQ checklist · index ↗</a></p>
+          </div>
+          <div class="quiz-panel warn">
+            <h3>Post-answer psychometrics</h3>
+            <ul>
+              <li>Difficulty index by item and learner segment.</li>
+              <li>Discrimination index and point-biserial.</li>
+              <li>Distractor selection rate; flag dead distractors.</li>
+              <li>Guessing success rate and answer-position bias.</li>
+              <li>Misconception-family patterns for remediation.</li>
+              <li>Bloom distribution across each assessment.</li>
+              <li>Retire or regenerate unstable items.</li>
+            </ul>
+            <p><a class="source-link index" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0340277" target="_blank" rel="noopener">PLOS review · index ↗</a></p>
+          </div>
+        </div>
+        <div class="callout"><strong>Upgrade review scheduling from fixed doubling to FSRS.</strong>FSRS models difficulty, stability, and retrievability and schedules to a target retention level. The brief reports about 22% greater precision than SM-2 and 15–20% fewer reviews for similar recall; those figures are index-derived. Add leech detection, lapse recovery, due-queue prioritization, and claim-targeted cards. <a class="source-link index" href="https://dl.acm.org/doi/10.1145/3534678.3539081" target="_blank" rel="noopener">ACM KDD · index ↗</a> <a class="source-link index" href="https://github.com/open-spaced-repetition/fsrs4anki/blob/main/docs/tutorial.md" target="_blank" rel="noopener">FSRS tutorial · index ↗</a></div>
+      </section>
+
+      <section id="evaluation">
+        <div class="section-no">07 / EVALUATION HARNESS</div>
+        <h2>Quality needs four layers of proof.</h2>
+        <p class="intro">Automated judges make iteration fast; only human calibration and actual learning outcomes make the score credible.</p>
+        <div class="eval-stack">
+          <div class="eval-layer"><span class="n">1</span><strong>Deterministic checks</strong><p>Schema validity, broken links, unsupported callbacks, terminology drift, duplicate concepts, citation coverage, Mermaid compilation, MCQ lint.</p></div>
+          <div class="eval-layer"><span class="n">2</span><strong>Anchored LLM rubrics</strong><p>Per dimension: observable score anchor, evidence quote, failure explanation, proposed revision. Never ask only “is this good?”</p></div>
+          <div class="eval-layer"><span class="n">3</span><strong>Human calibration</strong><p>Experts independently score a stratified sample; calculate Cohen’s or Fleiss’ κ, refine the rubric, and repeat. “Judging the Judges” used this pattern with EQuIP. <a class="source-link index" href="https://arxiv.org/pdf/2602.13243" target="_blank" rel="noopener">arXiv · index ↗</a></p></div>
+          <div class="eval-layer"><span class="n">4</span><strong>Learning outcomes</strong><p>Randomized A/B tests with a pre-registered delayed post-test. Assign variants deterministically by user ID; monitor engagement because availability is not usage.</p></div>
+        </div>
+        <div class="callout"><strong>Prompt operations are release engineering.</strong>Create immutable prompt versions, maintain a golden set per task, log <code>promptVersion</code> on every call, run same-input consistency tests, then deploy shadow → 10% → 25% → 50% → 100% with rollback. A source in the brief reports 30–40% less judge variance from anchored rubrics and a Cronbach’s α improvement from 0.393 to 0.798 after rubric refinement; those values are index-derived. <a class="source-link index" href="https://github.com/menokoog/learning-app/blob/HEAD/content/vol4-llms/63-evaluation-testing-llm-applications.md" target="_blank" rel="noopener">Evaluation guide · index ↗</a></div>
+      </section>
+
+      <section id="roadmap">
+        <div class="section-no">08 / IMPLEMENTATION ROADMAP</div>
+        <h2>Ship the foundation before the spectacle.</h2>
+        <p class="intro">The sequence below minimizes rework. Each phase has a hard gate so “more generation” never becomes a substitute for quality.</p>
+        <div class="roadmap-tabs" role="tablist" aria-label="Implementation phases">
+          <button type="button" role="tab" aria-selected="true" aria-controls="phase1" id="tab1" data-phase="phase1">Foundation</button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="phase2" id="tab2" data-phase="phase2">Lesson factory</button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="phase3" id="tab3" data-phase="phase3">Evidence loop</button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="phase4" id="tab4" data-phase="phase4">Outcome moat</button>
+        </div>
+        <div class="phase-panel active" id="phase1" role="tabpanel" aria-labelledby="tab1">
+          <div class="window">PHASE 1</div>
+          <div><h3>Course bible + prompt ops</h3><ul><li>Add roadmap-scoped curriculum, term, concept, example, and provenance registries.</li><li>Version every prompt; store model, parameters, prompt version, inputs, outputs, latency, cost, and evaluation result.</li><li>Add per-task model defaults behind the existing provider abstraction.</li><li>Create golden sets for the six current generation paths.</li></ul><div class="gate"><b>Exit gate:</b> a regeneration can reproduce its exact prompt/model context, and every lesson can resolve valid prerequisites.</div></div>
+        </div>
+        <div class="phase-panel" id="phase2" role="tabpanel" aria-labelledby="tab2" hidden>
+          <div class="window">PHASE 2</div>
+          <div><h3>Multi-pass lesson and question factory</h3><ul><li>Outline → research → draft → fact-check → critique → revise/style.</li><li>Schema validation and repair at every boundary.</li><li>Callback validator, terminology checker, dedupe check, MCQ lint.</li><li>Human approve/edit/reject gate with reason codes.</li></ul><div class="gate"><b>Exit gate:</b> no lesson publishes with unsupported claims, broken callbacks, schema failures, or critical rubric failures.</div></div>
+        </div>
+        <div class="phase-panel" id="phase3" role="tabpanel" aria-labelledby="tab3" hidden>
+          <div class="window">PHASE 3</div>
+          <div><h3>Grounding, media, and fast evaluation</h3><ul><li>Curated lawful source ingestion and claim-level provenance.</li><li>Mermaid plan → generate → compile → critique → revise pipeline.</li><li>Anchored LLM judges calibrated to expert ratings.</li><li>Shadow prompt releases and percentage rollouts.</li></ul><div class="gate"><b>Exit gate:</b> new prompt versions beat the baseline on every protected metric with no golden-set regression.</div></div>
+        </div>
+        <div class="phase-panel" id="phase4" role="tabpanel" aria-labelledby="tab4" hidden>
+          <div class="window">PHASE 4</div>
+          <div><h3>Psychometrics and learning outcomes</h3><ul><li>FSRS with leech handling, claim-targeted cards, and due prioritization.</li><li>Item difficulty, discrimination, point-biserial, and distractor analytics.</li><li>Student-level A/B tests using delayed post-tests.</li><li>Feed outcome and item failures back into prompt and curriculum revisions.</li></ul><div class="gate"><b>Exit gate:</b> a course version earns promotion because learners retain and transfer more—not because reviewers prefer its prose.</div></div>
+        </div>
+      </section>
+
+      <section id="media">
+        <div class="section-no">09 / MEDIA &amp; RIGHTS</div>
+        <h2>Every visual needs a teaching job. Every source needs a provenance record.</h2>
+        <div class="matrix" style="margin-top:28px">
+          <div class="matrix-row"><strong>Diagrams</strong><div>Plan the relationship first, generate Mermaid second, compile-check, then critique against the lesson objective.</div><div>Mermaid benchmarks show meaningful syntax and usability failures; raw model output is not publishable. <a class="source-link index" href="https://arxiv.org/pdf/2511.14967" target="_blank" rel="noopener">MermaidSeqBench · index ↗</a></div></div>
+          <div class="matrix-row"><strong>Figures &amp; images</strong><div>Select only visuals that clarify structure, procedure, comparison, or spatial relations.</div><div>Check subject relevance and put explanatory text adjacent; no decorative filler.</div></div>
+          <div class="matrix-row"><strong>Video</strong><div>Prefer official channels or CC-licensed uploads; respect disabled embedding and log attribution/license.</div><div>University guidance says embedding is generally acceptable when the upload itself is legitimate; commercial use receives less fair-use latitude. <a class="source-link index" href="https://www.lib.sfu.ca/help/academic-integrity/copyright/instructors/faqs" target="_blank" rel="noopener">SFU · index ↗</a></div></div>
+          <div class="matrix-row"><strong>Books &amp; articles</strong><div>Use licensed, OER, public-domain, or otherwise lawfully acquired material. Store source → claim → lesson mapping.</div><div>The brief’s legal summary says <i>Bartz v. Anthropic</i> treated training on lawfully acquired books as transformative while pirated corpora remained infringing; legal details are index-derived and not legal advice. <a class="source-link index" href="https://www.insidetechlaw.com/blog/2025/09/bartz-v-anthropic-settlement-reached-after-landmark-summary-judgment-and-class-certification" target="_blank" rel="noopener">Legal analysis · index ↗</a></div></div>
+        </div>
+      </section>
+
+      <section id="landscape">
+        <div class="section-no">10 / COMPETITIVE OPENING</div>
+        <h2>The moat is the combination competitors do not document.</h2>
+        <p class="intro">Roundup descriptions suggest commercial tools compete mainly on generation speed, editing, LMS export, and selling workflows. Independent quality evaluations are scarce, and the report found no commercial product publicly documenting the full combination of multi-pass critique, persistent curriculum state, psychometric item analysis, and learning-outcome RCTs.</p>
+        <table class="landscape">
+          <thead><tr><th>Segment</th><th>What exists</th><th>Opening</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Segment"><strong>Commercial authoring</strong></td><td data-label="What exists">Coursebox, Mindsmith, LearnWorlds, Easygenerator, eSkilled, Eurekaa and peers emphasize fast authoring, editing, interactivity, or course commerce.</td><td data-label="Opening">Publish evidence of course coherence and learner outcomes, not just generation features.</td></tr>
+            <tr><td data-label="Segment"><strong>Open-source pipelines</strong></td><td data-label="What exists">SkillFlow documents multi-pass continuity; syllabus-swarm documents role routing; curriculab-ai and obsidian-curricula document RAG and staged design.</td><td data-label="Opening">Unify their strongest architectural ideas, then add a rigorous eval and deployment system.</td></tr>
+            <tr><td data-label="Segment"><strong>AI tutoring</strong></td><td data-label="What exists">Evidence ranges from learning gains under scaffolded tutoring to harm from unrestricted answer-giving.</td><td data-label="Opening">Make every hint, explanation, quiz, and review serve a measurable learning policy.</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:14px"><a class="source-link index" href="https://viasocket.com/blog/best-ai-course-generators" target="_blank" rel="noopener">Commercial roundup · index ↗</a> <a class="source-link" href="https://github.com/priyeshdave/skillflow" target="_blank" rel="noopener">SkillFlow · live ↗</a> <a class="source-link index" href="https://github.com/varanasi-ramya/curriculab-ai" target="_blank" rel="noopener">curriculab-ai · index ↗</a> <a class="source-link index" href="https://github.com/ianmoran11/obsidian-curricula" target="_blank" rel="noopener">obsidian-curricula · index ↗</a></p>
+      </section>
+
+      <section id="questions">
+        <div class="section-no">11 / OPEN QUESTIONS</div>
+        <h2>What still needs direct validation.</h2>
+        <p class="intro">These are research gaps, not footnotes to hide.</p>
+        <details open><summary>How much automation should each course allow?</summary><div class="detail-body">The “Instructional Agents” paper describes four levels of human involvement, but detailed prompt appendices and full evaluation numbers were not directly re-verified. Recheck the paper before operationalizing its exact roles or quoting results. <a class="source-link index" href="https://arxiv.org/pdf/2508.19611" target="_blank" rel="noopener">arXiv · index ↗</a></div></details>
+        <details><summary>Can generated visual relevance be scored reliably?</summary><div class="detail-body">The research found strong principles for removing decorative visuals, but no strong primary evidence for automatic relevance validation of generated lesson imagery. Start with human review and log visual failure modes.</div></details>
+        <details><summary>Which model belongs at each stage?</summary><div class="detail-body">Architecture sources support role-based routing, but no universal model winner exists here. Benchmark available NVIDIA NIM and Gemini models on your golden sets by stage, quality, latency, and total cost per approved lesson.</div></details>
+        <details><summary>What is the right Bloom distribution?</summary><div class="detail-body">There is evidence that AI items skew lower-order, but the ideal mix depends on domain, learner level, and objective. Define the distribution per module—not globally—and validate it against expert judgment and outcomes.</div></details>
+        <details><summary>What does “better than human-made” mean?</summary><div class="detail-body">Pre-register the claim. Suggested primary outcome: delayed unaided transfer test. Secondary outcomes: completion, time-on-task, confidence calibration, engagement, expert revision effort, and cost per mastered objective.</div></details>
+      </section>
+
+      <section id="sources">
+        <div class="section-no">12 / SELECTED SOURCES</div>
+        <h2>Research trail.</h2>
+        <p class="intro">Only SkillFlow was read directly in the research pass. The remaining links were derived from indexed pages or abstracts and are marked accordingly throughout.</p>
+        <details open><summary>Architecture &amp; continuity</summary><div class="detail-body"><div class="sources"><a href="https://github.com/priyeshdave/skillflow" target="_blank" rel="noopener">SkillFlow — verified live</a><a href="https://arxiv.org/pdf/2508.19611" target="_blank" rel="noopener">Instructional Agents — index</a><a href="https://arxiv.org/abs/2305.13304" target="_blank" rel="noopener">RecurrentGPT — index</a><a href="https://arxiv.org/pdf/2506.16445v1.pdf" target="_blank" rel="noopener">StoryWriter — index</a><a href="https://www.mdpi.com/2078-2489/17/8/742" target="_blank" rel="noopener">Knowledge-graph teaching platform — index</a><a href="https://github.com/loos-glr/syllabus-swarm" target="_blank" rel="noopener">syllabus-swarm — index</a></div></div></details>
+        <details><summary>Evaluation &amp; learning outcomes</summary><div class="detail-body"><div class="sources"><a href="https://arxiv.org/pdf/2602.13243" target="_blank" rel="noopener">Judging the Judges — index</a><a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0340277" target="_blank" rel="noopener">PLOS MCQ meta-analysis — index</a><a href="https://link.springer.com/article/10.1186/s12909-025-06796-6" target="_blank" rel="noopener">BMC generated MCQ study — index</a><a href="https://www.nature.com/articles/s41598-025-97652-6" target="_blank" rel="noopener">Harvard AI tutor RCT — index</a><a href="https://www.pnas.org/doi/10.1073/pnas.2422633122" target="_blank" rel="noopener">AI assistance RCT — index</a><a href="https://arxiv.org/html/2505.02850v1" target="_blank" rel="noopener">Misconception-based distractors — index</a></div></div></details>
+        <details><summary>Learning science &amp; review</summary><div class="detail-body"><div class="sources"><a href="https://bsfgresearch.weebly.com/uploads/9/6/6/9/96694756/improving_student_achievement__dunlosky_et_al_.pdf" target="_blank" rel="noopener">Dunlosky et al. — index</a><a href="https://dl.acm.org/doi/10.1145/3534678.3539081" target="_blank" rel="noopener">FSRS / KDD — index</a><a href="https://github.com/open-spaced-repetition/fsrs4anki/blob/main/docs/tutorial.md" target="_blank" rel="noopener">FSRS tutorial — index</a><a href="https://cpe.pharmacy.ufl.edu/wordpress/files/2022/09/Checklist-for-Writing-MCQs.pdf" target="_blank" rel="noopener">MCQ writing checklist — index</a><a href="https://www.structural-learning.com/post/dual-coding-a-teachers-guide" target="_blank" rel="noopener">Dual coding guide — index</a><a href="https://static1.squarespace.com/static/631f3333434573769b6da366/t/64513774777e291579ff8078/1683044212516/2019.01.09+Bjork.pdf" target="_blank" rel="noopener">Desirable difficulties — index</a></div></div></details>
+        <details><summary>Prompt operations, media &amp; rights</summary><div class="detail-body"><div class="sources"><a href="https://github.com/kayra-ml/rovecode_plugins/blob/HEAD/plugins/ai-engineering/skills/prompt-engineering.md" target="_blank" rel="noopener">Prompt versioning workflow — index</a><a href="https://github.com/menokoog/learning-app/blob/HEAD/content/vol4-llms/66-building-a-production-llm-application.md" target="_blank" rel="noopener">Production rollout patterns — index</a><a href="https://arxiv.org/pdf/2511.14967" target="_blank" rel="noopener">MermaidSeqBench — index</a><a href="https://github.com/jorgemunozl/synthetic-data" target="_blank" rel="noopener">Diagram generation pipeline — index</a><a href="https://www.lib.sfu.ca/help/academic-integrity/copyright/instructors/faqs" target="_blank" rel="noopener">YouTube embedding guidance — index</a><a href="https://www.insidetechlaw.com/blog/2025/09/bartz-v-anthropic-settlement-reached-after-landmark-summary-judgment-and-class-certification" target="_blank" rel="noopener">Bartz analysis — index</a></div></div></details>
+
+        <div class="final">
+          <div class="section-no" style="color:var(--accent)">THE PRODUCT BET</div>
+          <h2>Make quality cumulative.</h2>
+          <p>Every approved lesson enriches the course bible. Every student answer improves the item bank. Every prompt release earns promotion through evidence. That compounding loop—not raw model access—is the defensible system.</p>
+          <div class="final-grid">
+            <div><b>Consistency moat</b><span>Curriculum graph, registries, validated callbacks.</span></div>
+            <div><b>Pedagogy moat</b><span>Retrieval, spacing, interleaving, fading, Socratic help.</span></div>
+            <div><b>Evidence moat</b><span>Rubrics, psychometrics, delayed outcome tests.</span></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer><div class="wrap">Prepared as a research and architecture recommendation. Research status is shown per source; legal discussion is not legal advice.</div></footer>
+
+  <script>
+    (function () {
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('.roadmap-tabs button'));
+      var panels = Array.prototype.slice.call(document.querySelectorAll('.phase-panel'));
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          tabs.forEach(function (t) { t.setAttribute('aria-selected', 'false'); });
+          panels.forEach(function (p) { p.classList.remove('active'); p.hidden = true; });
+          tab.setAttribute('aria-selected', 'true');
+          var panel = document.getElementById(tab.getAttribute('data-phase'));
+          panel.hidden = false;
+          panel.classList.add('active');
+        });
+      });
+
+      var jump = document.getElementById('mobileJump');
+      jump.addEventListener('change', function () {
+        var target = document.querySelector(jump.value);
+        if (target) target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      });
+
+      var links = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+      var sections = links.map(function (link) { return document.querySelector(link.getAttribute('href')); }).filter(Boolean);
+      if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              links.forEach(function (link) { link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id); });
+            }
+          });
+        }, { rootMargin: '-20% 0px -72% 0px' });
+        sections.forEach(function (section) { observer.observe(section); });
+      }
+    }());
+  </script>
+</body>
+</html>

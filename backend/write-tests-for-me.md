@@ -368,3 +368,20 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ### 8.3 Deletion paths
 - **Endpoint:** `DELETE /articles/<id>` (as `B`, own) — **Expected:** `200`, no notification created.
 - Recreate, then **Endpoint:** `DELETE /articles/admin/<id>` (as `ADMIN`) + `{ "reason": "Plagiarised." }` — **Expected:** `200`; author (`B`) gets `article_deleted` with `{ what: "article", title, removedBy, removedAt, reason }`. Missing reason → `400`.
+
+---
+
+## 9. Course compiler (§8) — needs migration run (`ConceptCompilations`)
+
+Set `COURSE_ENGINE_ENABLED=true` on the backend before these (flag off = legacy single-shot everywhere).
+
+### 9.1 Single-shot path runs the pipeline
+- **Endpoint:** `POST /ai-generate/concept-content` (as `B`) + `{ "title": "What is a branch", "roadmapId": "<id>" }` — **Expected:** `200 { content }` (Markdown article, no publish, no attach).
+- Without `roadmapId` — **Expected:** legacy single-shot output, same shape.
+
+### 9.2 Batch module-concepts job compiles per concept
+- **Endpoint:** `POST /ai-generate/module-concepts` + `{ "moduleId": "<id>" }` — **Expected:** `202`, job progress climbs per stage (6 bumps/concept), concepts created + attached.
+- SQL: `SELECT title, status, warnings FROM concept_compilations;` — one row per concept, `status` in (`succeeded`, `succeeded_with_warnings`), `stages` has 6 entries (outline, draft, fact-check, critique-revise, validate, publish).
+
+### 9.3 Internal stages cost no quota
+- Burn to 1 remaining, run one single-shot compile — **Expected:** succeeds (draft = the 1 slot); `SELECT count(*) FROM ai_generation_logs WHERE internal = false` grew by exactly 1 while several `internal = true` rows were recorded.

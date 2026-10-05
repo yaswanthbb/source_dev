@@ -75,6 +75,13 @@ export class Roadmap extends BaseEntity {
   })
   deleteEffectiveAt: Date | null;
 
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    name: 'teacher_persona',
+  })
+  teacherPersona: Record<string, unknown> | null;
+
   @OneToMany(() => Module, (module) => module.roadmap)
   modules: Module[];
 

@@ -1,0 +1,2 @@
+{"task":"concept_mcqs","promptVersion":"1.0.0","input":{"title":"What is a branch","content":"A branch is a movable pointer to a commit."},"expectContains":["What is a branch","Generate 5"]}
+{"task":"concept_mcqs","promptVersion":"1.0.0","input":{"title":"Merge conflicts","content":"Conflicts arise when two branches edit the same lines."},"expectContains":["Merge conflicts"]}
