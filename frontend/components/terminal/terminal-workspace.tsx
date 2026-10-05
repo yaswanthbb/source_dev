@@ -577,6 +577,16 @@ function Console({
         user={user}
         active="terminal"
         onLogout={account.requestLogout}
+        routes={
+          user.role === "admin"
+            ? { dashboard: "/admin/dashboard", terminal: "/admin/terminal" }
+            : undefined
+        }
+        notificationsHref={
+          commandsRole === "admin"
+            ? "/admin/terminal?view=notify"
+            : "/developer/terminal?view=notify"
+        }
       />
       <main className="sd-console-main" aria-label="Terminal">
         <h1 className="sr-only">source:dev learning shell</h1>

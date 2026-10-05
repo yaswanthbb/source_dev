@@ -162,6 +162,40 @@ export function TerminalHeader({
         >
           {user?.name}
         </span>
+        {user?.role && (
+          <span
+            className="hidden md:inline text-[11px] font-bold"
+            style={{ color: c.primary }}
+            aria-label={`Role ${user.role}`}
+            title={`Signed in as ${user.role}`}
+          >
+            [{user.role.toUpperCase()}]
+          </span>
+        )}
+        {user?.role === "admin" &&
+          (routes?.dashboard?.startsWith("/admin") ? (
+            <Link
+              href="/developer/dashboard"
+              className="sd-account-control"
+              style={controlStyle}
+              aria-label="Switch to developer view"
+              title="Switch to developer view"
+            >
+              <span className="hidden sm:inline">[SWITCH:DEV]</span>
+              <span className="sm:hidden">[DEV]</span>
+            </Link>
+          ) : (
+            <Link
+              href="/admin/dashboard"
+              className="sd-account-control"
+              style={controlStyle}
+              aria-label="Switch to admin view"
+              title="Switch to admin view"
+            >
+              <span className="hidden sm:inline">[SWITCH:ADMIN]</span>
+              <span className="sm:hidden">[ADM]</span>
+            </Link>
+          ))}
         {notificationsHref && <BellControl href={notificationsHref} style={controlStyle} />}
         <button
           type="button"
