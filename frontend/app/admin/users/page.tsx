@@ -3,20 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Users,
   Search,
-  Filter,
-  Shield,
-  GraduationCap,
-  BookOpen,
-  Mail,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
   Trash2,
-  Check,
-  X,
-  AlertTriangle,
   Clock,
   CheckCircle2,
   XCircle,
@@ -29,11 +17,8 @@ interface UserDirectoryItem {
   id: string;
   name: string;
   email: string;
-  role: 'student' | 'instructor' | 'admin';
+  role: 'developer' | 'admin';
   createdAt: string;
-  instructorProfile?: {
-    status?: string;
-  };
 }
 
 interface DeletionRequestItem {
@@ -125,40 +110,6 @@ export default function AdminUsersDirectoryPage() {
 
   const pendingRequestsCount = deletionRequests.filter((r) => r.status === 'pending').length;
 
-  // Mutation: Promote
-  const promoteMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      return (await apiClient.patch(`/users/${userId}/promote-to-instructor`)).data;
-    },
-    onSuccess: () => {
-      showSuccess('User directly promoted to instructor');
-      setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-      refetchUsers();
-      queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
-    },
-    onError: (err: unknown) => {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      showError(axiosErr.response?.data?.message || 'Failed to promote user.');
-    },
-  });
-
-  // Mutation: Demote / Degrade
-  const demoteMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      return (await apiClient.patch(`/users/${userId}/demote-to-student`)).data;
-    },
-    onSuccess: () => {
-      showSuccess('Instructor degraded to student role');
-      setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-      refetchUsers();
-      queryClient.invalidateQueries({ queryKey: ['admin', 'analytics'] });
-    },
-    onError: (err: unknown) => {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      showError(axiosErr.response?.data?.message || 'Failed to degrade instructor.');
-    },
-  });
-
   // Mutation: Direct Delete User
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
@@ -211,36 +162,11 @@ export default function AdminUsersDirectoryPage() {
     },
   });
 
-  const handlePromote = (userId: string, name: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Promote to Instructor',
-      message: `Directly promote "${name}" to Instructor? They will gain immediate access to author roadmaps, modules, and concepts.`,
-      confirmText: 'Promote User',
-      variant: 'primary',
-      onConfirm: () => promoteMutation.mutate(userId),
-    });
-  };
-
-  const handleDemote = (userId: string, name: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Degrade to Student',
-      message: `Are you sure you want to degrade "${name}" back to Student? Their instructor authoring privileges will be revoked.`,
-      confirmText: 'Degrade to Student',
-      variant: 'danger',
-      onConfirm: () => demoteMutation.mutate(userId),
-    });
-  };
-
   const handleDeleteUser = (u: UserDirectoryItem) => {
-    const isInstructor = u.role === 'instructor';
     setConfirmModal({
       isOpen: true,
-      title: `Delete ${isInstructor ? 'Instructor' : 'User'} Account`,
-      message: isInstructor
-        ? `Are you sure you want to permanently delete instructor "${u.name}" (${u.email})? Their user account will be deleted, but all created roadmaps, modules, concepts, and QA answers will remain safely preserved on the platform.`
-        : `Are you sure you want to permanently delete student "${u.name}" (${u.email})? All student progress, quiz submissions, streaks, and badges will be permanently erased.`,
+      title: 'Delete Developer Account',
+      message: `Are you sure you want to permanently delete developer "${u.name}" (${u.email})? Their personal progress data will be erased, but authored roadmaps, concepts, and QA answers are preserved on the platform.`,
       confirmText: 'Delete User',
       variant: 'danger',
       onConfirm: () => deleteUserMutation.mutate(u.id),
@@ -272,8 +198,6 @@ export default function AdminUsersDirectoryPage() {
   };
 
   const isActionLoading =
-    promoteMutation.isPending ||
-    demoteMutation.isPending ||
     deleteUserMutation.isPending ||
     approveDeletionMutation.isPending ||
     rejectDeletionMutation.isPending;
@@ -287,7 +211,7 @@ export default function AdminUsersDirectoryPage() {
             Users Directory
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Manage system users, assign instructor roles, and review account deletion requests.
+            Manage system users and review account deletion requests.
           </p>
         </div>
 
@@ -346,7 +270,7 @@ export default function AdminUsersDirectoryPage() {
             </div>
 
             <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-              {(['all', 'admin', 'instructor', 'student'] as const).map((r) => (
+              {(['all', 'admin', 'developer'] as const).map((r) => (
                 <button
                   key={r}
                   type="button"
@@ -394,9 +318,7 @@ export default function AdminUsersDirectoryPage() {
                         let rolePillStyle = 'bg-bg text-text-secondary border border-border';
                         if (u.role === 'admin') {
                           rolePillStyle = 'bg-accent-tint text-accent font-bold border border-accent/20';
-                        } else if (u.role === 'instructor') {
-                          rolePillStyle = 'bg-amber-tint text-amber font-bold border border-amber/20';
-                        } else if (u.role === 'student') {
+                        } else if (u.role === 'developer') {
                           rolePillStyle = 'bg-accent-tint text-accent font-semibold border border-accent/20';
                         }
 
@@ -433,30 +355,6 @@ export default function AdminUsersDirectoryPage() {
 
                             <td className="p-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                {u.role === 'student' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handlePromote(u.id, u.name)}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent-tint text-accent hover:bg-accent hover:text-white text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
-                                    title="Directly promote to Instructor"
-                                  >
-                                    <ArrowUpRight className="w-3 h-3" />
-                                    <span>Promote</span>
-                                  </button>
-                                )}
-
-                                {u.role === 'instructor' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDemote(u.id, u.name)}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber/30 bg-amber-tint/50 text-amber hover:bg-amber-tint text-[11px] font-semibold transition-all cursor-pointer"
-                                    title="Revoke instructor status and degrade back to student"
-                                  >
-                                    <ArrowDownRight className="w-3 h-3" />
-                                    <span>Degrade</span>
-                                  </button>
-                                )}
-
                                 {u.role !== 'admin' ? (
                                   <button
                                     type="button"
@@ -488,9 +386,7 @@ export default function AdminUsersDirectoryPage() {
                     let rolePillStyle = 'bg-bg text-text-secondary border border-border';
                     if (u.role === 'admin') {
                       rolePillStyle = 'bg-accent-tint text-accent font-bold border border-accent/20';
-                    } else if (u.role === 'instructor') {
-                      rolePillStyle = 'bg-amber-tint text-amber font-bold border border-amber/20';
-                    } else if (u.role === 'student') {
+                    } else if (u.role === 'developer') {
                       rolePillStyle = 'bg-accent-tint text-accent font-semibold border border-accent/20';
                     }
 
@@ -522,28 +418,6 @@ export default function AdminUsersDirectoryPage() {
                           </span>
 
                           <div className="flex items-center gap-2">
-                            {u.role === 'student' && (
-                              <button
-                                type="button"
-                                onClick={() => handlePromote(u.id, u.name)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-accent/30 bg-accent-tint text-accent text-[11px] font-semibold"
-                              >
-                                <ArrowUpRight className="w-3 h-3" />
-                                <span>Promote</span>
-                              </button>
-                            )}
-
-                            {u.role === 'instructor' && (
-                              <button
-                                type="button"
-                                onClick={() => handleDemote(u.id, u.name)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber/30 bg-amber-tint/50 text-amber text-[11px] font-semibold"
-                              >
-                                <ArrowDownRight className="w-3 h-3" />
-                                <span>Degrade</span>
-                              </button>
-                            )}
-
                             {u.role !== 'admin' ? (
                               <button
                                 type="button"

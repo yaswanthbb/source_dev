@@ -25,7 +25,7 @@ export class ReviewController {
     description: 'Due review items with questions and options retrieved.',
   })
   async getDueReviewItems(@CurrentUser() user: User) {
-    return this.reviewService.getDueReviewItems(user.id);
+    return this.reviewService.getDueReviewItems(user.id, user.timezone);
   }
 
   @Get('due-count')
@@ -37,7 +37,7 @@ export class ReviewController {
     description: 'Count of due items retrieved.',
   })
   async getDueCount(@CurrentUser() user: User) {
-    return this.reviewService.getDueCount(user.id);
+    return this.reviewService.getDueCount(user.id, user.timezone);
   }
 
   @Post(':reviewItemId/answer')
@@ -58,6 +58,11 @@ export class ReviewController {
     @CurrentUser() user: User,
     @Body() dto: AnswerReviewItemDto,
   ) {
-    return this.reviewService.answerReviewItem(reviewItemId, user.id, dto);
+    return this.reviewService.answerReviewItem(
+      reviewItemId,
+      user.id,
+      dto,
+      user.timezone,
+    );
   }
 }

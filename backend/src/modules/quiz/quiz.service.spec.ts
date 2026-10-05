@@ -36,9 +36,12 @@ describe('QuizService', () => {
   let conceptRepo: MockRepository;
   let progressService: { markConceptCompletedFromAssignment: jest.Mock };
 
-  const owner = makeUser({ id: 'author-1', role: UserRole.INSTRUCTOR });
+  const owner = makeUser({ id: 'author-1', role: UserRole.DEVELOPER });
   const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
-  const student = makeUser({ id: 'student-1', role: UserRole.STUDENT });
+  const otherDeveloper = makeUser({
+    id: 'developer-2',
+    role: UserRole.DEVELOPER,
+  });
 
   beforeEach(async () => {
     progressService = { markConceptCompletedFromAssignment: jest.fn() };
@@ -99,7 +102,7 @@ describe('QuizService', () => {
       );
 
       await expect(
-        service.createQuestion('concept-1', student, validDto),
+        service.createQuestion('concept-1', otherDeveloper, validDto),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -251,7 +254,7 @@ describe('QuizService', () => {
       ]);
 
       await expect(
-        service.submitAttempt('question-1', student, {
+        service.submitAttempt('question-1', otherDeveloper, {
           selectedOptionId: 'w',
         } as any),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -264,7 +267,7 @@ describe('QuizService', () => {
       ]);
 
       await expect(
-        service.submitAttempt('question-1', student, {
+        service.submitAttempt('question-1', otherDeveloper, {
           selectedOptionId: 'c',
         } as any),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -275,7 +278,7 @@ describe('QuizService', () => {
       attemptRepo.find.mockResolvedValue([]);
 
       await expect(
-        service.submitAttempt('question-1', student, {
+        service.submitAttempt('question-1', otherDeveloper, {
           selectedOptionId: 'nope',
         } as any),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -286,7 +289,7 @@ describe('QuizService', () => {
       attemptRepo.find.mockResolvedValue([]);
       questionRepo.find.mockResolvedValue([]); // completion check: skip
 
-      const result = await service.submitAttempt('question-1', student, {
+      const result = await service.submitAttempt('question-1', otherDeveloper, {
         selectedOptionId: 'c',
       } as any);
 
@@ -303,7 +306,7 @@ describe('QuizService', () => {
       attemptRepo.find.mockResolvedValue([]);
       questionRepo.find.mockResolvedValue([]);
 
-      const result = await service.submitAttempt('question-1', student, {
+      const result = await service.submitAttempt('question-1', otherDeveloper, {
         selectedOptionId: 'w',
       } as any);
 
@@ -320,7 +323,7 @@ describe('QuizService', () => {
       ]);
       questionRepo.find.mockResolvedValue([]);
 
-      const result = await service.submitAttempt('question-1', student, {
+      const result = await service.submitAttempt('question-1', otherDeveloper, {
         selectedOptionId: 'w',
       } as any);
 
@@ -339,13 +342,13 @@ describe('QuizService', () => {
         ]);
       questionRepo.find.mockResolvedValue([makeQuestion({ id: 'question-1' })]);
 
-      await service.submitAttempt('question-1', student, {
+      await service.submitAttempt('question-1', otherDeveloper, {
         selectedOptionId: 'c',
       } as any);
 
       expect(
         progressService.markConceptCompletedFromAssignment,
-      ).toHaveBeenCalledWith('student-1', 'concept-1');
+      ).toHaveBeenCalledWith('developer-2', 'concept-1');
     });
   });
 
@@ -358,14 +361,16 @@ describe('QuizService', () => {
       ]);
     });
 
-    it('strips isCorrect from options for students', async () => {
+    it('strips isCorrect from options for non-authors', async () => {
       conceptRepo.findOne.mockResolvedValue(
         makeConcept({ authorId: 'author-1' }),
       );
 
-      const result = await service.getQuestionsForConcept('concept-1', student);
+      const result = await service.getQuestionsForConcept('concept-1', otherDeveloper);
 
-      expect(result[0].options[0]).not.toHaveProperty('isCorrect');
+      expect((result[0].options as unknown[])[0]).not.toHaveProperty(
+        'isCorrect',
+      );
     });
 
     it('retains isCorrect for the author', async () => {
@@ -375,7 +380,10 @@ describe('QuizService', () => {
 
       const result = await service.getQuestionsForConcept('concept-1', owner);
 
-      expect(result[0].options[0]).toHaveProperty('isCorrect', true);
+      expect((result[0].options as unknown[])[0]).toHaveProperty(
+        'isCorrect',
+        true,
+      );
     });
 
     it('retains isCorrect for an admin', async () => {
@@ -385,14 +393,17 @@ describe('QuizService', () => {
 
       const result = await service.getQuestionsForConcept('concept-1', admin);
 
-      expect(result[0].options[0]).toHaveProperty('isCorrect', true);
+      expect((result[0].options as unknown[])[0]).toHaveProperty(
+        'isCorrect',
+        true,
+      );
     });
 
     it('throws NotFound when the concept is missing', async () => {
       conceptRepo.findOne.mockResolvedValue(null);
 
       await expect(
-        service.getQuestionsForConcept('missing', student),
+        service.getQuestionsForConcept('missing', otherDeveloper),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

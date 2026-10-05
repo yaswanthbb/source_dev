@@ -10,11 +10,9 @@ import * as bcrypt from 'bcrypt';
 
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
-import { InstructorProfile } from './entities/instructor-profile.entity';
 import { AccountDeletionRequest } from './entities/account-deletion-request.entity';
 
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 
 import {
   createMockRepository,
@@ -27,7 +25,6 @@ jest.mock('bcrypt');
 describe('UsersService', () => {
   let service: UsersService;
   let userRepo: MockRepository;
-  let profileRepo: MockRepository;
   let deletionRepo: MockRepository;
 
   beforeEach(async () => {
@@ -39,10 +36,6 @@ describe('UsersService', () => {
         UsersService,
         { provide: getRepositoryToken(User), useValue: createMockRepository() },
         {
-          provide: getRepositoryToken(InstructorProfile),
-          useValue: createMockRepository(),
-        },
-        {
           provide: getRepositoryToken(AccountDeletionRequest),
           useValue: createMockRepository(),
         },
@@ -51,7 +44,6 @@ describe('UsersService', () => {
 
     service = module.get(UsersService);
     userRepo = module.get(getRepositoryToken(User));
-    profileRepo = module.get(getRepositoryToken(InstructorProfile));
     deletionRepo = module.get(getRepositoryToken(AccountDeletionRequest));
   });
 
@@ -190,202 +182,54 @@ describe('UsersService', () => {
     });
   });
 
-  describe('applyForInstructor — state machine', () => {
-    const dto: any = { bio: 'teach me' };
 
-    it('throws NotFound for a missing user', async () => {
-      userRepo.findOne.mockResolvedValue(null);
+  describe('createUser — developer by default', () => {
+    it('creates new accounts with the developer role', async () => {
+      userRepo.create.mockImplementation((d: any) => d);
+      userRepo.save.mockImplementation(async (u: any) => ({
+        ...u,
+        id: 'user-1',
+      }));
 
-      await expect(
-        service.applyForInstructor('user-1', dto),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it('rejects a user who is already an instructor', async () => {
-      userRepo.findOne.mockResolvedValue(
-        makeUser({ role: UserRole.INSTRUCTOR }),
-      );
-
-      await expect(
-        service.applyForInstructor('user-1', dto),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('rejects a second application while one is pending', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.PENDING,
+      const result: any = await service.createUser({
+        email: 'dev@test.dev',
+        passwordHash: 'hashed',
+        name: 'Dev',
       });
 
-      await expect(
-        service.applyForInstructor('user-1', dto),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('rejects an application from an already-approved instructor profile', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.APPROVED,
-      });
-
-      await expect(
-        service.applyForInstructor('user-1', dto),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('re-opens a previously rejected profile back to PENDING', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.REJECTED,
-        approvedAt: new Date('2026-01-01T00:00:00.000Z'),
-      });
-
-      await service.applyForInstructor('user-1', dto);
-
-      expect(profileRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: InstructorStatus.PENDING,
-          approvedAt: null,
-        }),
+      expect(userRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ role: UserRole.DEVELOPER }),
       );
-    });
-
-    it('creates a fresh PENDING profile when none exists', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue(null);
-
-      await service.applyForInstructor('user-1', dto);
-
-      expect(profileRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ status: InstructorStatus.PENDING }),
-      );
-      expect(profileRepo.save).toHaveBeenCalledTimes(1);
+      expect(result.role).toBe(UserRole.DEVELOPER);
     });
   });
 
-  describe('approveInstructor', () => {
-    it('requires a pending profile', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.APPROVED,
+  describe('findUsers — role and search filters', () => {
+    const qb: any = {
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn(),
+    };
+
+    beforeEach(() => {
+      userRepo.createQueryBuilder.mockReturnValue(qb);
+      qb.andWhere.mockClear();
+      qb.getMany.mockResolvedValue([]);
+    });
+
+    it('filters by role', async () => {
+      await service.findUsers({ role: UserRole.DEVELOPER } as any);
+
+      expect(qb.andWhere).toHaveBeenCalledWith('user.role = :role', {
+        role: UserRole.DEVELOPER,
       });
-
-      await expect(service.approveInstructor('user-1')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
     });
 
-    it('promotes the user and approves the profile', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.PENDING,
-      });
+    it('filters by search term', async () => {
+      await service.findUsers({ search: 'ann' } as any);
 
-      const result: any = await service.approveInstructor('user-1');
-
-      expect(profileRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: InstructorStatus.APPROVED }),
-      );
-      expect(userRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ role: UserRole.INSTRUCTOR }),
-      );
-      expect(result.user.role).toBe(UserRole.INSTRUCTOR);
-    });
-  });
-
-  describe('rejectInstructor', () => {
-    it('rejects the profile and keeps the user a student', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.PENDING,
-      });
-
-      await service.rejectInstructor('user-1');
-
-      expect(profileRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: InstructorStatus.REJECTED }),
-      );
-      expect(userRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ role: UserRole.STUDENT }),
-      );
-    });
-  });
-
-  describe('promoteToInstructor', () => {
-    it('refuses to change an admin', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser({ role: UserRole.ADMIN }));
-
-      await expect(
-        service.promoteToInstructor('user-1', 'admin-1'),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('promotes directly and stamps the inviting admin on an existing profile', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.REJECTED,
-      });
-
-      await service.promoteToInstructor('user-1', 'admin-1');
-
-      expect(userRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ role: UserRole.INSTRUCTOR }),
-      );
-      expect(profileRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: InstructorStatus.APPROVED,
-          invitedById: 'admin-1',
-        }),
-      );
-    });
-
-    it('creates an approved profile when the user has none', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser());
-      profileRepo.findOne.mockResolvedValue(null);
-
-      await service.promoteToInstructor('user-1', 'admin-1');
-
-      expect(profileRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: InstructorStatus.APPROVED,
-          invitedById: 'admin-1',
-        }),
-      );
-    });
-  });
-
-  describe('demoteToStudent', () => {
-    it('refuses to demote an admin', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser({ role: UserRole.ADMIN }));
-
-      await expect(service.demoteToStudent('user-1')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
-    });
-
-    it('rejects demoting someone who is already a student', async () => {
-      userRepo.findOne.mockResolvedValue(makeUser({ role: UserRole.STUDENT }));
-
-      await expect(service.demoteToStudent('user-1')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
-    });
-
-    it('demotes an instructor and rejects their profile', async () => {
-      userRepo.findOne.mockResolvedValue(
-        makeUser({ role: UserRole.INSTRUCTOR }),
-      );
-      profileRepo.findOne.mockResolvedValue({
-        status: InstructorStatus.APPROVED,
-      });
-
-      await service.demoteToStudent('user-1');
-
-      expect(userRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ role: UserRole.STUDENT }),
-      );
-      expect(profileRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: InstructorStatus.REJECTED }),
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        '(user.name ILIKE :search OR user.email ILIKE :search)',
+        { search: '%ann%' },
       );
     });
   });

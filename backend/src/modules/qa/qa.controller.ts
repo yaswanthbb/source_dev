@@ -39,13 +39,17 @@ export class QaController {
   }
 
   @Get('concepts/:conceptId/qa-questions')
-  @ApiOperation({ summary: 'List Q&A questions and answers for a concept' })
+  @ApiOperation({ summary: 'List Q&A discussion for a concept' })
   @ApiResponse({
     status: 200,
-    description: 'Questions and nested answers retrieved.',
+    description:
+      'Questions and nested answers retrieved. AI answers are only included for the developer who asked (admins excepted).',
   })
-  async getQuestionsForConcept(@Param('conceptId') conceptId: string) {
-    return this.qaService.getQuestionsForConcept(conceptId);
+  async getQuestionsForConcept(
+    @Param('conceptId') conceptId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.qaService.getQuestionsForConcept(conceptId, user);
   }
 
   @Patch('qa-questions/:id')
@@ -68,13 +72,9 @@ export class QaController {
 
   @Post('qa-questions/:id/answers')
   @ApiOperation({
-    summary: 'Post an answer to a Q&A question (Approved Instructor / Admin)',
+    summary: 'Post an answer in the discussion (any developer)',
   })
   @ApiResponse({ status: 201, description: 'Answer posted.' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden (Approved instructor or Admin required).',
-  })
   async createAnswer(
     @Param('id') questionId: string,
     @CurrentUser() user: User,
@@ -99,5 +99,31 @@ export class QaController {
   @ApiResponse({ status: 200, description: 'Answer deleted.' })
   async deleteAnswer(@Param('id') id: string, @CurrentUser() user: User) {
     return this.qaService.deleteAnswer(id, user);
+  }
+
+  @Patch('answers/:id/verify')
+  @ApiOperation({
+    summary: 'Mark an answer verified (Concept Author / Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Answer marked verified.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden (Concept author or Admin required).',
+  })
+  async verifyAnswer(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.qaService.setAnswerVerified(id, user, true);
+  }
+
+  @Patch('answers/:id/unverify')
+  @ApiOperation({
+    summary: 'Remove verification from an answer (Concept Author / Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Answer verification removed.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden (Concept author or Admin required).',
+  })
+  async unverifyAnswer(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.qaService.setAnswerVerified(id, user, false);
   }
 }

@@ -5,6 +5,7 @@ import {
   AiGenerationJobType,
   AiGenerationJobStatus,
 } from '../../../common/enums/ai-generation-job.enum';
+import { AiProvider } from '../../../common/enums/ai-provider.enum';
 
 export interface AiGenerationJobFailedItem {
   title: string;
@@ -68,4 +69,18 @@ export class AiGenerationJob extends BaseEntity {
 
   @Column({ name: 'retry_of_job_id', type: 'uuid', nullable: true })
   retryOfJobId: string | null;
+
+  /**
+   * Own-key used by this job (null = platform free tier). Blocks key
+   * deletion while the job is pending/running.
+   */
+  @Column({ name: 'provider_key_id', type: 'uuid', nullable: true })
+  providerKeyId: string | null;
+
+  /** Provider + model snapshot so detached runs use the request's choice. */
+  @Column({ type: 'enum', enum: AiProvider, nullable: true })
+  provider: AiProvider | null;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  model: string | null;
 }

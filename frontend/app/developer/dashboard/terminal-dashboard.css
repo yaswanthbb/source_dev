@@ -1,0 +1,516 @@
+/* ==========================================================================
+   source:dev terminal dashboard — styles & animations
+   Structure/spacing extracted from Stitch export: "btop Developer Terminal
+   Dashboard (API Grounded)". Colors live in the component (theme-driven).
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@600;700&display=swap');
+
+.sd-dash {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  min-height: 100vh;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sd-dash .font-display {
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+/* ── CRT scanline overlay ───────────────────────────────────────────── */
+.sd-dash-scanlines {
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.28) 50%),
+    linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.02),
+      rgba(0, 255, 0, 0.01),
+      rgba(0, 0, 255, 0.02)
+    );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+/* Light mode: the same texture, dialled right down so cream stays cream */
+.sd-dash-scanlines-light {
+  background: linear-gradient(
+    rgba(0, 0, 0, 0) 50%,
+    rgba(27, 28, 25, 0.055) 50%
+  );
+  background-size: 100% 3px;
+  pointer-events: none;
+}
+
+/* ── Block cursor (instant digital blink, no fade) ──────────────────── */
+@keyframes sd-cursor-blink {
+  0%,
+  49.99% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.sd-cursor {
+  animation: sd-cursor-blink 1s steps(1, end) infinite;
+}
+
+/* ── Telemetry pulse (LIVE dot, ALERT chip, ACTIVE RUNTIME chip) ────── */
+@keyframes sd-pulse-subtle {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.sd-pulse {
+  animation: sd-pulse-subtle 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-cursor,
+  .sd-pulse {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── Profile shell: the footer prompt growing upward ────────────────────────
+   The panel animates its own height so the prompt never moves — the buffer
+   opens above it, the way a real terminal fills upward. `max-height` is the
+   animated property (not `height`) so the closed state can stay at 0 without
+   the content needing a fixed size. */
+.sd-shell {
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    max-height 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 160ms linear;
+  opacity: 0;
+}
+
+.sd-shell-open {
+  /* Tall enough for `help` output; the buffer scrolls past this. */
+  max-height: min(58vh, 30rem);
+  opacity: 1;
+}
+
+/* Each boot line drops in one after the next — set `--sd-delay` per line.
+   Text arriving in sequence is what makes it read as a boot, not a modal. */
+@keyframes sd-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sd-line-in {
+  animation: sd-line-in 140ms ease-out backwards;
+  animation-delay: var(--sd-delay, 0ms);
+}
+
+/* One-shot scanline sweep across the buffer as it opens — the CRT catching up
+   with the new rows. Purely decorative, so it is `pointer-events: none`.
+
+   It must end at `opacity: 0`. The animation is `forwards`, so the last
+   keyframe is held forever: ending on a visible transform parked a tinted
+   band permanently across the top of the shell, over the command list.
+
+   The travel is `58vh` to match the shell's own `min(58vh, 30rem)` cap — the
+   band always clears the bottom edge, whatever the buffer's height. The fade
+   is what guarantees nothing is left behind if that cap ever changes. */
+@keyframes sd-sweep {
+  from {
+    transform: translateY(-100%);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(58vh);
+    opacity: 0;
+  }
+}
+
+.sd-sweep {
+  animation: sd-sweep 420ms ease-out 1 forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The shell still opens, it just arrives at full height immediately. */
+  .sd-shell {
+    transition: none;
+  }
+  .sd-line-in {
+    animation: none;
+  }
+  .sd-sweep {
+    display: none;
+  }
+}
+
+/* ── Activity graph (GitHub contribution-graph layout) ──────────────────
+   One column per calendar week, seven rows Sun→Sat, month labels above and
+   Mon/Wed/Fri down the left — the same geometry GitHub uses.
+
+   53 columns is what makes this shape read correctly: from `md` up the
+   columns are `1fr` with square cells, so the graph always spans the full
+   panel width instead of sitting in a fixed-size block. Below `md` that
+   would crush cells to ~4px, so phones get a fixed cell size and scroll
+   sideways (the panel auto-scrolls to today on mount). */
+.sd-gh {
+  --gh-cell: 10px;
+  --gh-gap: 2px;
+  --gh-gutter: 22px;
+  --gh-track: var(--gh-cell);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+@media (min-width: 768px) {
+  .sd-gh {
+    /* Fluid: 53 square tracks sharing whatever width the panel has. */
+    --gh-track: minmax(0, 1fr);
+    --gh-gap: 3px;
+    --gh-gutter: 26px;
+    overflow-x: hidden;
+  }
+}
+
+@media (min-width: 1280px) {
+  .sd-gh {
+    --gh-gap: 4px;
+  }
+}
+
+/* Labels sit on the same column tracks as the grid below, offset by the
+   weekday gutter, so each lands above the week it marks. Text is free to
+   overflow right — a month name is wider than one column. */
+.sd-gh-months {
+  display: grid;
+  grid-template-columns: repeat(var(--gh-cols, 53), var(--gh-track));
+  gap: var(--gh-gap);
+  margin-left: calc(var(--gh-gutter) + var(--gh-gap));
+  margin-bottom: var(--gh-gap);
+  height: 12px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.sd-gh-months > span {
+  white-space: nowrap;
+  overflow: visible;
+  min-width: 0;
+}
+
+.sd-gh-body {
+  display: flex;
+  gap: var(--gh-gap);
+}
+
+.sd-gh-days {
+  display: grid;
+  grid-template-rows: repeat(7, auto);
+  gap: var(--gh-gap);
+  width: var(--gh-gutter);
+  flex: none;
+  font-size: 9px;
+}
+
+.sd-gh-days > span {
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.sd-gh-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--gh-cols, 53), var(--gh-track));
+  grid-template-rows: repeat(7, auto);
+  gap: var(--gh-gap);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Square at any track width — this is what lets the columns go fluid. */
+.sd-gh-cell {
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .sd-gh-cell {
+    width: var(--gh-cell);
+  }
+}
+
+/* Legend swatch — fixed size, since it sits outside the graph's scale. */
+.sd-gh-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+/* ── Thin terminal scrollbars ───────────────────────────────────────── */
+.sd-dash ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.sd-dash ::-webkit-scrollbar-thumb {
+  background: #34383f;
+}
+
+.sd-dash ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sd-dash-light ::-webkit-scrollbar-thumb {
+  background: #c5c6cb;
+}
+
+/* ── Roadmap progress bar ───────────────────────────────────────────────
+   Fluid replacement for a fixed 24-character block-glyph bar, which
+   overflowed below ~420px. Keeps the chunky terminal look via a
+   hard-stop gradient (no anti-aliased edge) and scales to its column. */
+.sd-bar {
+  display: block;
+  height: 9px;
+  overflow: hidden;
+  background: var(--sd-bar-track);
+  mask-image: repeating-linear-gradient(to right, #000 0 6px, transparent 6px 8px);
+}
+
+.sd-bar-progress {
+  display: block;
+  height: 100%;
+  width: clamp(0%, var(--sd-bar-pct), 100%);
+  background: var(--sd-bar-fill);
+  transform-origin: left;
+  transition: width 600ms steps(16, end);
+}
+
+/* ── Terminal power-on choreography ───────────────────────────────────
+   The screen remains interactive during boot. Only transforms and opacity
+   animate; no flashing, layout shifts, or artificial loading gate. */
+@keyframes sd-panel-online {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sd-screen-sweep {
+  from { opacity: 0; transform: translateY(-12vh); }
+  15% { opacity: 0.65; }
+  75% { opacity: 0.35; }
+  to { opacity: 0; transform: translateY(100vh); }
+}
+
+.sd-dash .sd-boot-sweep {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 12vh;
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--sd-accent) 9%, transparent), transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--sd-accent) 18%, transparent);
+}
+
+.sd-dash[data-motion="on"] .sd-boot-sweep {
+  animation: sd-screen-sweep 1100ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+
+.sd-dash .sd-panel {
+  position: relative;
+  min-width: 0;
+  --sd-panel-delay: 0ms;
+}
+
+.sd-dash[data-motion="on"] .sd-panel {
+  animation: sd-panel-online 440ms cubic-bezier(0.16, 1, 0.3, 1) var(--sd-panel-delay) backwards;
+}
+
+.sd-dash .sd-gauges > :nth-child(1) { --sd-panel-delay: 70ms; }
+.sd-dash .sd-gauges > :nth-child(2) { --sd-panel-delay: 130ms; }
+.sd-dash .sd-gauges > :nth-child(3) { --sd-panel-delay: 190ms; }
+.sd-dash .sd-gauges > :nth-child(4) { --sd-panel-delay: 250ms; }
+.sd-dash .sd-activity { --sd-panel-delay: 200ms; }
+.sd-dash .sd-roadmaps { --sd-panel-delay: 300ms; }
+.sd-dash .sd-badges { --sd-panel-delay: 260ms; }
+.sd-dash .sd-events { --sd-panel-delay: 360ms; }
+
+/* Illuminated corner brackets pick out the panel under the pointer/focus. */
+.sd-dash .sd-panel::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(var(--sd-accent), var(--sd-accent)) top left / 16px 2px,
+    linear-gradient(var(--sd-accent), var(--sd-accent)) top left / 2px 16px,
+    linear-gradient(var(--sd-accent), var(--sd-accent)) bottom right / 16px 2px,
+    linear-gradient(var(--sd-accent), var(--sd-accent)) bottom right / 2px 16px;
+  background-repeat: no-repeat;
+  transition: opacity 180ms ease-out;
+}
+
+.sd-dash .sd-panel:focus-within::after { opacity: 1; }
+
+/* A slow signal travels along mission control's top edge. */
+@keyframes sd-signal-travel {
+  0% { transform: translateX(-100%); opacity: 0; }
+  12%, 70% { opacity: 0.85; }
+  90%, 100% { transform: translateX(400%); opacity: 0; }
+}
+
+.sd-dash .sd-mission::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 3px;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--sd-accent), transparent);
+}
+
+.sd-dash[data-motion="on"] .sd-mission::before {
+  animation: sd-signal-travel 7s linear 900ms infinite;
+}
+
+.sd-dash .sd-readout { font-variant-numeric: tabular-nums; }
+
+@keyframes sd-cell-charge {
+  from { opacity: 0.15; transform: scale(0.65); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.sd-dash[data-motion="on"] .sd-gh-cell[data-active="true"] {
+  animation: sd-cell-charge 360ms ease-out var(--sd-cell-delay, 0ms) backwards;
+}
+
+@keyframes sd-bar-load {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.sd-dash[data-motion="on"] .sd-bar-progress {
+  animation: sd-bar-load 800ms steps(16, end) var(--sd-delay, 0ms) backwards;
+}
+
+.sd-dash[data-motion="on"] .sd-track,
+.sd-dash[data-motion="on"] .sd-badge-row {
+  animation: sd-line-in 240ms ease-out var(--sd-delay, 0ms) backwards;
+}
+
+.sd-dash .sd-track,
+.sd-dash .sd-badge-row {
+  transition: background-color 160ms ease-out;
+}
+
+.sd-dash .sd-gh-cell {
+  transition: box-shadow 150ms ease-out;
+}
+
+.sd-dash .sd-launch {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: filter 160ms ease-out;
+}
+
+.sd-dash .sd-launch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 30%) 50%, transparent 75%);
+  transform: translateX(-120%);
+}
+
+@keyframes sd-launch-sheen {
+  to { transform: translateX(120%); }
+}
+
+.sd-dash[data-motion="on"] .sd-launch:focus-visible::after {
+  animation: sd-launch-sheen 550ms ease-out;
+}
+
+.sd-dash .sd-prompt {
+  position: relative;
+  transition: box-shadow 180ms ease-out;
+}
+
+.sd-dash .sd-prompt:focus-within {
+  box-shadow: inset 3px 0 var(--sd-accent), inset 0 1px color-mix(in srgb, var(--sd-accent) 35%, transparent);
+}
+
+.sd-dash :is(button, a):focus-visible {
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 3px;
+}
+
+.sd-dash .sd-motion-toggle {
+  min-height: 24px;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .sd-dash .sd-panel:hover::after { opacity: 1; }
+  .sd-dash .sd-track:hover,
+  .sd-dash .sd-badge-row[data-earned="true"]:hover {
+    background: color-mix(in srgb, var(--sd-accent) 6%, transparent);
+  }
+  .sd-dash .sd-gh-cell[data-active="true"]:hover {
+    box-shadow: 0 0 0 1px var(--sd-accent), 0 0 9px color-mix(in srgb, var(--sd-accent) 45%, transparent) !important;
+  }
+  .sd-dash .sd-launch:hover { filter: brightness(1.1); }
+  .sd-dash[data-motion="on"] .sd-launch:hover::after {
+    animation: sd-launch-sheen 550ms ease-out;
+  }
+  .sd-dash .sd-terminal-tab:hover,
+  .sd-dash .sd-motion-toggle:not(:disabled):hover {
+    background: color-mix(in srgb, var(--sd-accent) 10%, transparent);
+  }
+}
+
+/* The switch also stops existing cursor/pulse/shell animations. Turning FX
+   off exposes final values immediately, never a partially decoded screen. */
+.sd-dash[data-motion="off"] *,
+.sd-dash[data-motion="off"] *::before,
+.sd-dash[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.sd-dash[data-motion="off"] :is(.sd-boot-sweep, .sd-sweep) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-dash *,
+  .sd-dash *::before,
+  .sd-dash *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .sd-dash :is(.sd-boot-sweep, .sd-sweep) { display: none; }
+}

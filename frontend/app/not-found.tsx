@@ -8,10 +8,10 @@ export default function NotFoundPage() {
     <div className="min-h-screen bg-bg flex flex-col justify-between p-6">
       {/* Top Header */}
       <header className="max-w-6xl w-full mx-auto flex items-center justify-between">
-        <Link href="/student/dashboard" className="flex items-center">
+        <Link href="/developer/dashboard" className="flex items-center">
           <Image
             src="/logo.png"
-            alt="KIP Logo"
+            alt="source:dev logo"
             width={105}
             height={33}
             className="h-[30px] w-auto object-contain"
@@ -38,14 +38,14 @@ export default function NotFoundPage() {
 
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href="/student/dashboard"
+            href="/developer/dashboard"
             className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-xs hover:bg-accent/90 transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
           >
             <Home className="w-4 h-4" />
             <span>Go to Dashboard</span>
           </Link>
           <Link
-            href="/student/roadmaps"
+            href="/developer/terminal?view=roadmaps"
             className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-surface border border-border text-text-primary font-semibold text-xs hover:bg-bg transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -56,7 +56,7 @@ export default function NotFoundPage() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-text-secondary">
-        &copy; {new Date().getFullYear()} KIP. All rights reserved.
+        &copy; {new Date().getFullYear()} source:dev. All rights reserved.
       </footer>
     </div>
   );

@@ -49,12 +49,18 @@ export class ConceptsController {
     required: false,
     description: 'Search term for concept title',
   })
+  @ApiQuery({
+    name: 'label',
+    required: false,
+    description: 'Filter by origin label: ai, handwritten, partial',
+  })
   @ApiResponse({ status: 200, description: 'Concepts retrieved.' })
   async findAllConcepts(
     @CurrentUser() user: User,
     @Query('search') search?: string,
+    @Query('label') label?: string,
   ) {
-    return this.conceptsService.findAllConcepts(search, user);
+    return this.conceptsService.findAllConcepts(search, user, label);
   }
 
   @Get(':id')

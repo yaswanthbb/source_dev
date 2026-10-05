@@ -3,25 +3,20 @@ import {
   NotFoundException,
   BadRequestException,
   UnauthorizedException,
-  ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
-import { InstructorProfile } from './entities/instructor-profile.entity';
 import {
   AccountDeletionRequest,
   DeletionRequestStatus,
 } from './entities/account-deletion-request.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { UpdateInstructorBioDto } from './dto/update-instructor-bio.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
-import { ApplyInstructorDto } from './dto/apply-instructor.dto';
 import { RequestDeletionDto } from './dto/request-deletion.dto';
 
 @Injectable()
@@ -29,8 +24,6 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(InstructorProfile)
-    private readonly instructorProfileRepository: Repository<InstructorProfile>,
     @InjectRepository(AccountDeletionRequest)
     private readonly deletionRequestRepository: Repository<AccountDeletionRequest>,
   ) {}
@@ -48,7 +41,6 @@ export class UsersService {
   async findOneById(id: string): Promise<Omit<User, 'passwordHash'> | null> {
     const user = await this.userRepository.findOne({
       where: { id },
-      relations: ['instructorProfile'],
     });
     if (!user) return null;
     return this.sanitizeUser(user);
@@ -57,7 +49,6 @@ export class UsersService {
   async findOneByEmailWithPassword(email: string): Promise<User | null> {
     return this.userRepository.findOne({
       where: { email },
-      relations: ['instructorProfile'],
     });
   }
 
@@ -65,12 +56,15 @@ export class UsersService {
     email: string;
     passwordHash: string;
     name: string;
+    timezone?: string;
   }): Promise<Omit<User, 'passwordHash'>> {
     const user = this.userRepository.create({
       email: data.email,
       passwordHash: data.passwordHash,
       name: data.name,
-      role: UserRole.STUDENT,
+      role: UserRole.DEVELOPER,
+      // Omitted when the client didn't send one, so the column default applies.
+      ...(data.timezone ? { timezone: data.timezone } : {}),
     });
     const savedUser = await this.userRepository.save(user);
     return this.sanitizeUser(savedUser);
@@ -82,7 +76,6 @@ export class UsersService {
   ): Promise<User | null> {
     return this.userRepository.findOne({
       where: { authProvider: provider, authProviderId: providerId },
-      relations: ['instructorProfile'],
     });
   }
 
@@ -100,7 +93,7 @@ export class UsersService {
       authProvider: data.authProvider,
       authProviderId: data.authProviderId,
       profilePicture: data.profilePicture || null,
-      role: UserRole.STUDENT,
+      role: UserRole.DEVELOPER,
     });
     const savedUser = await this.userRepository.save(user);
     return this.sanitizeUser(savedUser);
@@ -113,7 +106,6 @@ export class UsersService {
   ): Promise<Omit<User, 'passwordHash'>> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['instructorProfile'],
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -143,7 +135,6 @@ export class UsersService {
   async getSelfProfile(userId: string): Promise<Omit<User, 'passwordHash'>> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['instructorProfile'],
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -157,7 +148,6 @@ export class UsersService {
   ): Promise<Omit<User, 'passwordHash'>> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['instructorProfile'],
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -191,6 +181,20 @@ export class UsersService {
         }
         user.profilePicture = dto.profilePicture;
       }
+    }
+
+    if (dto.preferences !== undefined) {
+      // Merged, not replaced. Every caller sets one key at a time — the mode
+      // toggle writes `uiMode`, the welcome animation writes
+      // `hasSeenCliWelcome` — and a replace would mean each of them silently
+      // clearing the others. Undefined values are dropped so an absent key
+      // never overwrites a stored one with nothing.
+      const incoming = Object.fromEntries(
+        Object.entries(dto.preferences).filter(
+          ([, value]) => value !== undefined,
+        ),
+      );
+      user.preferences = { ...(user.preferences ?? {}), ...incoming };
     }
 
     const savedUser = await this.userRepository.save(user);
@@ -229,59 +233,13 @@ export class UsersService {
     return { message: 'Password updated successfully' };
   }
 
-  async updateInstructorBio(
-    userId: string,
-    dto: UpdateInstructorBioDto,
-  ): Promise<{ message: string; bio: string | null }> {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['instructorProfile'],
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.role !== UserRole.INSTRUCTOR && user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        'Only instructors and admins can update instructor bio',
-      );
-    }
-
-    if (!user.instructorProfile) {
-      const newProfile = this.instructorProfileRepository.create({
-        userId: user.id,
-        bio: dto.bio || null,
-        status: InstructorStatus.APPROVED,
-      });
-      const saved = await this.instructorProfileRepository.save(newProfile);
-      return { message: 'Instructor bio updated successfully', bio: saved.bio };
-    }
-
-    user.instructorProfile.bio =
-      dto.bio !== undefined ? dto.bio || null : user.instructorProfile.bio;
-    await this.instructorProfileRepository.save(user.instructorProfile);
-
-    return {
-      message: 'Instructor bio updated successfully',
-      bio: user.instructorProfile.bio,
-    };
-  }
-
   async findUsers(
     query: GetUsersQueryDto,
   ): Promise<Omit<User, 'passwordHash'>[]> {
-    const qb = this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.instructorProfile', 'instructorProfile');
+    const qb = this.userRepository.createQueryBuilder('user');
 
     if (query.role) {
       qb.andWhere('user.role = :role', { role: query.role });
-    }
-
-    if (query.instructorStatus) {
-      qb.andWhere('instructorProfile.status = :instructorStatus', {
-        instructorStatus: query.instructorStatus,
-      });
     }
 
     if (query.search) {
@@ -294,208 +252,8 @@ export class UsersService {
     return users.map((user) => this.sanitizeUser(user));
   }
 
-  async getAllInstructorsAndApplicants(): Promise<
-    Omit<User, 'passwordHash'>[]
-  > {
-    const users = await this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.instructorProfile', 'instructorProfile')
-      .where('user.role = :role OR instructorProfile.id IS NOT NULL', {
-        role: UserRole.INSTRUCTOR,
-      })
-      .orderBy('user.createdAt', 'DESC')
-      .getMany();
-
-    return users.map((user) => this.sanitizeUser(user));
-  }
-
-  // 1. Student initiates request to become an instructor
-  async applyForInstructor(userId: string, dto: ApplyInstructorDto) {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['instructorProfile'],
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.role === UserRole.INSTRUCTOR || user.role === UserRole.ADMIN) {
-      throw new BadRequestException('User is already an instructor or admin');
-    }
-
-    let profile = await this.instructorProfileRepository.findOne({
-      where: { userId },
-    });
-
-    if (profile) {
-      if (profile.status === InstructorStatus.PENDING) {
-        throw new BadRequestException(
-          'You already have a pending instructor application under review',
-        );
-      }
-      if (profile.status === InstructorStatus.APPROVED) {
-        throw new BadRequestException('You are already an approved instructor');
-      }
-
-      // Re-apply if previously rejected
-      profile.status = InstructorStatus.PENDING;
-      if (dto.bio !== undefined) {
-        profile.bio = dto.bio;
-      }
-      profile.approvedAt = null;
-      profile = await this.instructorProfileRepository.save(profile);
-    } else {
-      profile = this.instructorProfileRepository.create({
-        userId: user.id,
-        status: InstructorStatus.PENDING,
-        bio: dto.bio || null,
-      });
-      profile = await this.instructorProfileRepository.save(profile);
-    }
-
-    return {
-      user: this.sanitizeUser(user),
-      instructorProfile: profile,
-    };
-  }
-
-  // 2. Admin approves a pending instructor application -> role becomes INSTRUCTOR
-  async approveInstructor(userId: string) {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['instructorProfile'],
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const profile = await this.instructorProfileRepository.findOne({
-      where: { userId },
-    });
-    if (!profile || profile.status !== InstructorStatus.PENDING) {
-      throw new BadRequestException(
-        'No pending instructor profile found for user',
-      );
-    }
-
-    profile.status = InstructorStatus.APPROVED;
-    profile.approvedAt = new Date();
-    const savedProfile = await this.instructorProfileRepository.save(profile);
-
-    user.role = UserRole.INSTRUCTOR;
-    const savedUser = await this.userRepository.save(user);
-
-    return {
-      user: this.sanitizeUser(savedUser),
-      instructorProfile: savedProfile,
-    };
-  }
-
-  // 3. Admin rejects a pending instructor application -> user remains/returns to STUDENT
-  async rejectInstructor(userId: string) {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['instructorProfile'],
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const profile = await this.instructorProfileRepository.findOne({
-      where: { userId },
-    });
-    if (!profile || profile.status !== InstructorStatus.PENDING) {
-      throw new BadRequestException(
-        'No pending instructor profile found for user',
-      );
-    }
-
-    profile.status = InstructorStatus.REJECTED;
-    const savedProfile = await this.instructorProfileRepository.save(profile);
-
-    user.role = UserRole.STUDENT;
-    const savedUser = await this.userRepository.save(user);
-
-    return {
-      user: this.sanitizeUser(savedUser),
-      instructorProfile: savedProfile,
-    };
-  }
-
-  // 4. Admin direct promotion (bypass application queue) -> direct INSTRUCTOR + APPROVED
-  async promoteToInstructor(userId: string, adminId: string) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.role === UserRole.ADMIN) {
-      throw new BadRequestException('Cannot change role of an admin user');
-    }
-
-    user.role = UserRole.INSTRUCTOR;
-    const updatedUser = await this.userRepository.save(user);
-
-    let profile = await this.instructorProfileRepository.findOne({
-      where: { userId },
-    });
-
-    if (profile) {
-      profile.status = InstructorStatus.APPROVED;
-      profile.approvedAt = new Date();
-      profile.invitedById = adminId;
-      profile = await this.instructorProfileRepository.save(profile);
-    } else {
-      profile = this.instructorProfileRepository.create({
-        userId: updatedUser.id,
-        status: InstructorStatus.APPROVED,
-        approvedAt: new Date(),
-        invitedById: adminId,
-      });
-      profile = await this.instructorProfileRepository.save(profile);
-    }
-
-    return {
-      user: this.sanitizeUser(updatedUser),
-      instructorProfile: profile,
-    };
-  }
-
-  // 5. Admin demotes / degrades an instructor back to student
-  async demoteToStudent(userId: string) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.role === UserRole.ADMIN) {
-      throw new BadRequestException('Cannot demote an admin user');
-    }
-
-    if (user.role === UserRole.STUDENT) {
-      throw new BadRequestException('User is already a student');
-    }
-
-    user.role = UserRole.STUDENT;
-    const updatedUser = await this.userRepository.save(user);
-
-    const profile = await this.instructorProfileRepository.findOne({
-      where: { userId },
-    });
-
-    if (profile) {
-      profile.status = InstructorStatus.REJECTED;
-      await this.instructorProfileRepository.save(profile);
-    }
-
-    return {
-      user: this.sanitizeUser(updatedUser),
-      instructorProfile: profile,
-    };
-  }
-
-  // 6. Direct User Deletion (Admin only)
-  // Cascade deletes student personal data; preserves authored roadmaps/concepts/QA answers with author SET NULL
+  // 2. Direct User Deletion (Admin only)
+  // Cascade deletes developer personal data; preserves authored roadmaps/concepts/QA answers with author SET NULL
   async deleteUser(targetUserId: string, adminUserId?: string) {
     if (adminUserId && targetUserId === adminUserId) {
       throw new BadRequestException(

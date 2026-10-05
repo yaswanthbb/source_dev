@@ -1,24 +1,38 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getToken } from '@/lib/auth';
+import { RetroHomepage } from '@/components/home/retro-homepage';
+import { CenteredTerminalLoader } from '@/components/loaders/centered-terminal-loader';
 
 export default function RootPage() {
   const router = useRouter();
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     const token = getToken();
     if (token) {
-      router.replace('/student/dashboard');
-    } else {
-      router.replace('/login');
+      setIsRedirecting(true);
+      router.replace('/developer/dashboard');
     }
   }, [router]);
 
-  return (
-    <div className="min-h-screen bg-bg flex items-center justify-center">
-      <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin" />
-    </div>
-  );
+  if (isRedirecting) {
+    return null;
+  }
+
+  if (!isLoaded) {
+    return (
+      <CenteredTerminalLoader
+        portal="homepage"
+        minDuration={5000}
+        onComplete={() => setIsLoaded(true)}
+      />
+    );
+  }
+
+  return <RetroHomepage />;
 }
+

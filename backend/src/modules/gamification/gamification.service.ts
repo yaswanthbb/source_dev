@@ -10,6 +10,12 @@ import { UserConceptProgress } from '../progress/entities/user-concept-progress.
 import { ConceptDifficulty } from '../../common/enums/concept-difficulty.enum';
 import { XpSource } from '../../common/enums/xp-source.enum';
 import { ProgressStatus } from '../../common/enums/progress-status.enum';
+import {
+  addCivilDays,
+  civilDateIn,
+  resolveZone,
+  todayIn,
+} from '../../common/utils/timezone.util';
 
 @Injectable()
 export class GamificationService {
@@ -63,10 +69,17 @@ export class GamificationService {
     await this.xpEventRepository.save(xpEvent);
   }
 
-  async updateStreak(userId: string): Promise<void> {
+  /**
+   * Advance the user's streak for "today" in *their* timezone.
+   *
+   * The day boundary has to be the user's local midnight. On UTC boundaries a
+   * user in Asia/Kolkata studying at 01:00 local gets credited to the previous
+   * day — so two consecutive evenings could collapse into one streak day, and
+   * a genuinely skipped day could still look consecutive.
+   */
+  async updateStreak(userId: string, timezone?: string | null): Promise<void> {
     let streak = await this.streakRepository.findOne({ where: { userId } });
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = todayIn(timezone);
 
     if (!streak) {
       streak = this.streakRepository.create({
@@ -85,9 +98,7 @@ export class GamificationService {
       return;
     }
 
-    const yesterday = new Date(today);
-    yesterday.setUTCDate(today.getUTCDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = addCivilDays(todayStr, -1);
 
     if (lastDateStr === yesterdayStr) {
       streak.currentStreak += 1;
@@ -212,36 +223,46 @@ export class GamificationService {
   async getActivityHeatmap(
     userId: string,
     days: number = 14,
-  ): Promise<Array<{ date: string; active: boolean }>> {
-    const numDays = Math.min(Math.max(days || 14, 1), 90);
+    timezone?: string | null,
+  ): Promise<Array<{ date: string; active: boolean; xp: number }>> {
+    const numDays = Math.min(Math.max(days || 14, 1), 371);
+    const zone = resolveZone(timezone);
 
-    const startDate = new Date();
-    startDate.setUTCHours(0, 0, 0, 0);
-    startDate.setUTCDate(startDate.getUTCDate() - (numDays - 1));
+    // Build the window from the user's civil "today" backwards. One extra day
+    // of slack on the lower bound so no row is missed at the edge, whichever
+    // side of UTC the zone sits on.
+    const todayStr = todayIn(zone);
+    const firstDayStr = addCivilDays(todayStr, -(numDays - 1));
+    const startDate = new Date(`${addCivilDays(firstDayStr, -1)}T00:00:00Z`);
 
-    // Single query grouping by DATE(created_at) in UTC
-    const rawDates = await this.xpEventRepository
+    // Bucketed in JS rather than with `AT TIME ZONE`, so this uses exactly the
+    // same zone logic as the streak — Postgres and Node carry their own tzdata
+    // and a stale one on either side would silently split the two apart.
+    // One user's events over at most a year: a few hundred rows on an indexed
+    // (user_id, created_at) scan, so this stays cheap.
+    const rows = await this.xpEventRepository
       .createQueryBuilder('xp')
-      .select("TO_CHAR(xp.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')", 'date')
+      .select('xp.created_at', 'createdAt')
+      .addSelect('xp.xp_amount', 'xpAmount')
       .where('xp.user_id = :userId', { userId })
       .andWhere('xp.created_at >= :startDate', { startDate })
-      .groupBy("TO_CHAR(xp.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')")
-      .getRawMany<{ date: string }>();
+      .getRawMany<{ createdAt: Date | string; xpAmount: number | string }>();
 
-    const activeDateSet = new Set(rawDates.map((r) => r.date));
+    // XP earned per day, not a row count: XP is what every source here has in
+    // common (concepts, assignments and reviews all award it), so one number
+    // describes the day without claiming it was any particular kind of work.
+    const xpByDate = new Map<string, number>();
+    for (const r of rows) {
+      const dateStr = civilDateIn(zone, new Date(r.createdAt));
+      const amount = Number(r.xpAmount) || 0;
+      xpByDate.set(dateStr, (xpByDate.get(dateStr) ?? 0) + amount);
+    }
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-
-    const result: Array<{ date: string; active: boolean }> = [];
+    const result: Array<{ date: string; active: boolean; xp: number }> = [];
     for (let i = numDays - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setUTCDate(today.getUTCDate() - i);
-      const dateStr = d.toISOString().slice(0, 10);
-      result.push({
-        date: dateStr,
-        active: activeDateSet.has(dateStr),
-      });
+      const dateStr = addCivilDays(todayStr, -i);
+      const xp = xpByDate.get(dateStr) ?? 0;
+      result.push({ date: dateStr, active: xp > 0, xp });
     }
 
     return result;

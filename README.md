@@ -1,4 +1,4 @@
-# Knowledge Is Power
+# source:dev
 
 **A self-directed learning platform for practical, build-it-yourself knowledge — with AI-assisted authoring, spaced repetition, and a full student / instructor / admin workflow.**
 
@@ -175,8 +175,8 @@ Assumes you've never seen this repo before. You'll need **Node.js 20+**, **npm**
 ### 1. Clone
 
 ```bash
-git clone <your-repo-url> knowledge_is_power
-cd knowledge_is_power
+git clone <your-repo-url> source-dev
+cd source-dev
 ```
 
 ### 2. Backend
@@ -267,7 +267,7 @@ Email/password login works out of the box. Google/GitHub login only works once y
 ## Project Structure
 
 ```
-knowledge_is_power/
+source-dev/
 ├── backend/                       # NestJS API
 │   └── src/
 │       ├── main.ts                # bootstrap: CORS, validation, Swagger

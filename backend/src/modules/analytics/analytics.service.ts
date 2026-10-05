@@ -10,18 +10,16 @@ import { XpEvent } from '../gamification/entities/xp-event.entity';
 import { Answer } from '../qa/entities/answer.entity';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { InstructorStatus } from '../../common/enums/instructor-status.enum';
 import { ProgressStatus } from '../../common/enums/progress-status.enum';
 
 export interface OverviewAnalytics {
-  totalStudents: number;
-  totalInstructors: number;
+  totalDevelopers: number;
   totalAdmins: number;
   totalRoadmaps: number;
   totalModules: number;
   totalConcepts: number;
   totalConceptCompletions: number;
-  activeStudents: number;
+  activeDevelopers: number;
   totalXpAwarded: number;
 }
 
@@ -29,7 +27,7 @@ export interface RoadmapAnalytics {
   roadmapId: string;
   title: string;
   totalConcepts: number;
-  totalEnrolledStudents: number;
+  totalEnrolledDevelopers: number;
   averageCompletionPercentage: number;
   totalCompletedConcepts: number;
 }
@@ -42,8 +40,8 @@ export interface ConceptAnalytics {
   startedButNotCompletedCount: number;
 }
 
-export interface InstructorAnalytics {
-  instructorId: string;
+export interface DeveloperAnalytics {
+  developerId: string;
   name: string;
   email: string;
   roadmapsCreated: number;
@@ -74,18 +72,9 @@ export class AnalyticsService {
   ) {}
 
   async getOverviewAnalytics(): Promise<OverviewAnalytics> {
-    const totalStudents = await this.userRepository.count({
-      where: { role: UserRole.STUDENT },
+    const totalDevelopers = await this.userRepository.count({
+      where: { role: UserRole.DEVELOPER },
     });
-
-    const totalInstructors = await this.userRepository
-      .createQueryBuilder('user')
-      .innerJoin('user.instructorProfile', 'profile')
-      .where('user.role = :role AND profile.status = :status', {
-        role: UserRole.INSTRUCTOR,
-        status: InstructorStatus.APPROVED,
-      })
-      .getCount();
 
     const totalAdmins = await this.userRepository.count({
       where: { role: UserRole.ADMIN },
@@ -100,7 +89,7 @@ export class AnalyticsService {
       .innerJoin('users', 'user', 'user.id = ucp.user_id')
       .where('ucp.status = :status AND user.role = :role', {
         status: ProgressStatus.COMPLETED,
-        role: UserRole.STUDENT,
+        role: UserRole.DEVELOPER,
       })
       .getCount();
 
@@ -114,11 +103,11 @@ export class AnalyticsService {
         .select('COUNT(DISTINCT ucp.user_id)', 'count')
         .where('ucp.updated_at >= :sevenDaysAgo AND user.role = :role', {
           sevenDaysAgo,
-          role: UserRole.STUDENT,
+          role: UserRole.DEVELOPER,
         })
         .getRawOne<{ count?: string }>()) ?? {};
 
-    const activeStudents = parseInt(activeResult.count || '0', 10);
+    const activeDevelopers = parseInt(activeResult.count || '0', 10);
 
     const xpResult =
       (await this.xpEventRepository
@@ -129,14 +118,13 @@ export class AnalyticsService {
     const totalXpAwarded = parseInt(xpResult.sum || '0', 10);
 
     return {
-      totalStudents,
-      totalInstructors,
+      totalDevelopers,
       totalAdmins,
       totalRoadmaps,
       totalModules,
       totalConcepts,
       totalConceptCompletions,
-      activeStudents,
+      activeDevelopers,
       totalXpAwarded,
     };
   }
@@ -174,7 +162,7 @@ export class AnalyticsService {
           roadmapId: roadmap.id,
           title: roadmap.title,
           totalConcepts: 0,
-          totalEnrolledStudents: 0,
+          totalEnrolledDevelopers: 0,
           averageCompletionPercentage: 0,
           totalCompletedConcepts: 0,
         });
@@ -186,7 +174,7 @@ export class AnalyticsService {
         .innerJoin('users', 'user', 'user.id = ucp.user_id')
         .where('ucp.concept_id IN (:...conceptIds) AND user.role = :role', {
           conceptIds: roadmapConceptIds,
-          role: UserRole.STUDENT,
+          role: UserRole.DEVELOPER,
         })
         .getMany();
 
@@ -209,7 +197,7 @@ export class AnalyticsService {
         }
       });
 
-      const totalEnrolledStudents = userProgressMap.size;
+      const totalEnrolledDevelopers = userProgressMap.size;
       let totalPercentageSum = 0;
       let totalCompletedConcepts = 0;
 
@@ -220,15 +208,15 @@ export class AnalyticsService {
       });
 
       const averageCompletionPercentage =
-        totalEnrolledStudents > 0
-          ? Math.round((totalPercentageSum / totalEnrolledStudents) * 100) / 100
+        totalEnrolledDevelopers > 0
+          ? Math.round((totalPercentageSum / totalEnrolledDevelopers) * 100) / 100
           : 0;
 
       results.push({
         roadmapId: roadmap.id,
         title: roadmap.title,
         totalConcepts,
-        totalEnrolledStudents,
+        totalEnrolledDevelopers,
         averageCompletionPercentage,
         totalCompletedConcepts,
       });
@@ -244,7 +232,7 @@ export class AnalyticsService {
       .select('ucp.concept_id', 'conceptId')
       .addSelect('ucp.status', 'status')
       .addSelect('COUNT(ucp.id)', 'count')
-      .where('user.role = :role', { role: UserRole.STUDENT })
+      .where('user.role = :role', { role: UserRole.DEVELOPER })
       .groupBy('ucp.concept_id')
       .addGroupBy('ucp.status')
       .getRawMany<{
@@ -303,39 +291,34 @@ export class AnalyticsService {
     return results;
   }
 
-  async getInstructorAnalytics(): Promise<InstructorAnalytics[]> {
-    const approvedInstructors = await this.userRepository
-      .createQueryBuilder('user')
-      .innerJoinAndSelect('user.instructorProfile', 'profile')
-      .where('user.role = :role AND profile.status = :status', {
-        role: UserRole.INSTRUCTOR,
-        status: InstructorStatus.APPROVED,
-      })
-      .getMany();
+  async getDeveloperAnalytics(): Promise<DeveloperAnalytics[]> {
+    const developers = await this.userRepository.find({
+      where: { role: UserRole.DEVELOPER },
+    });
 
-    const results: InstructorAnalytics[] = [];
+    const results: DeveloperAnalytics[] = [];
 
-    for (const instructor of approvedInstructors) {
+    for (const developer of developers) {
       const roadmapsCreated = await this.roadmapRepository.count({
-        where: { createdById: instructor.id },
+        where: { createdById: developer.id },
       });
 
       const conceptsAuthored = await this.conceptRepository.count({
-        where: { authorId: instructor.id },
+        where: { authorId: developer.id },
       });
 
       const questionsAnswered = await this.answerRepository.count({
-        where: { instructorId: instructor.id },
+        where: { responderId: developer.id },
       });
 
       const mcqQuestionsCreated = await this.mcqQuestionRepository.count({
-        where: { createdById: instructor.id },
+        where: { createdById: developer.id },
       });
 
       results.push({
-        instructorId: instructor.id,
-        name: instructor.name,
-        email: instructor.email,
+        developerId: developer.id,
+        name: developer.name,
+        email: developer.email,
         roadmapsCreated,
         conceptsAuthored,
         questionsAnswered,

@@ -1,0 +1,86 @@
+/* ==========================================================================
+   source:dev retro terminal loaders — styles & animations
+   Extracted from the Stitch project's developer hero section design
+   ========================================================================== */
+
+/* Terminal Grid Backgrounds */
+.terminal-loader-grid-dark {
+  background-color: #0c0e10;
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.terminal-loader-grid-light {
+  background-color: #f7f6f1;
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+}
+
+/* Minimal Loader Radial Backgrounds */
+.terminal-minimal-grid-dark {
+  background-color: #111417;
+  background-image: radial-gradient(#44474a 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.terminal-minimal-grid-light {
+  background-color: #faf9f4;
+  background-image: radial-gradient(#c5c6cb 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Diagonal Stripes on Progress Bar Fill */
+.terminal-progress-stripes-dark {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #000,
+    #000 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+.terminal-progress-stripes-light {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #fff,
+    #fff 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+/* Digital Square-Wave Step Cursor Blink (Instant On/Off) */
+@keyframes terminal-cursor-blink {
+  0%, 49.99% {
+    opacity: 1;
+    visibility: visible;
+  }
+  50%, 100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.terminal-cursor {
+  display: inline-block;
+  animation: terminal-cursor-blink 0.9s infinite;
+}
+
+/* Subtle Telemetry Pulsing Dot */
+@keyframes terminal-pulse-subtle {
+  0%, 100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.terminal-pulse-dot {
+  animation: terminal-pulse-subtle 1.4s ease-in-out infinite;
+}

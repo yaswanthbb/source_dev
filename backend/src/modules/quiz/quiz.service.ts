@@ -246,6 +246,7 @@ export class QuizService {
   private async checkAndTriggerConceptCompletion(
     studentId: string,
     conceptId: string,
+    timezone?: string | null,
   ): Promise<void> {
     const allQuestions = await this.mcqQuestionRepository.find({
       where: { conceptId },
@@ -277,6 +278,7 @@ export class QuizService {
       await this.progressService.markConceptCompletedFromAssignment(
         studentId,
         conceptId,
+        timezone,
       );
     }
   }
@@ -331,7 +333,11 @@ export class QuizService {
     const correctOption = (question.options || []).find((o) => o.isCorrect);
     const revealAnswer = isCorrect || attemptsRemaining === 0;
 
-    await this.checkAndTriggerConceptCompletion(user.id, question.conceptId);
+    await this.checkAndTriggerConceptCompletion(
+      user.id,
+      question.conceptId,
+      user.timezone,
+    );
 
     return {
       isCorrect,

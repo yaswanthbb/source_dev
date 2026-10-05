@@ -21,4 +21,7 @@ export class AiGenerationLog extends BaseEntity {
 
   @Column({ type: 'timestamptz', name: 'generated_at', default: () => 'NOW()' })
   generatedAt: Date;
+
+  @Column({ name: 'provider_key_id', type: 'uuid', nullable: true })
+  providerKeyId: string | null;
 }

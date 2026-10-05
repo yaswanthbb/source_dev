@@ -54,9 +54,9 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('Knowledge Is Power API')
+    .setTitle('source:dev API')
     .setDescription(
-      'Comprehensive REST API documentation for Knowledge Is Power learning platform backend.',
+      'Comprehensive REST API documentation for the source:dev learning platform backend.',
     )
     .setVersion('1.0')
     .addBearerAuth(

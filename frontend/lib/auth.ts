@@ -1,30 +1,35 @@
+/** Cross-device user preferences, stored as a single JSONB column on the user
+ *  record. Optional throughout: an account created before a preference existed
+ *  simply has no value for it, and every reader falls back to a default. */
+export interface UserPreferences {
+  uiMode?: 'gui' | 'cli';
+  themeId?: string;
+  /** Serialized virtual-filesystem location, e.g. `/roadmaps/voip/intro`. */
+  lastLocation?: string;
+  hasSeenCliNudge?: boolean;
+  hasSeenCliWelcome?: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'student' | 'instructor' | 'admin';
+  role: 'developer' | 'admin';
   timezone?: string;
   profilePicture?: string | null;
   authProvider?: string | null;
   authProviderId?: string | null;
   hasPassword?: boolean;
   createdAt?: string;
-  instructorProfile?: {
-    id?: string;
-    status?: 'pending' | 'approved' | 'rejected';
-    bio?: string | null;
-    createdAt?: string;
-    approvedAt?: string | null;
-  };
+  preferences?: UserPreferences;
 }
 
 
-const TOKEN_KEY = 'kip_token';
-const USER_KEY = 'kip_user';
+const TOKEN_KEY = 'sd_token';
+const USER_KEY = 'sd_user';
 
-/** Dispatched on this tab whenever the auth token is set or cleared, so
- *  listeners (e.g. SessionSync) can react to login/logout without a reload. */
-export const AUTH_CHANGED_EVENT = 'kip-auth-changed';
+/** Dispatched on this tab whenever the auth token is set or cleared. */
+export const AUTH_CHANGED_EVENT = 'sd-auth-changed';
 
 const notifyAuthChanged = (): void => {
   if (typeof window === 'undefined') return;

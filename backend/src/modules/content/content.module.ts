@@ -5,13 +5,13 @@ import { Module as ModuleEntity } from './entities/module.entity';
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
 import { ModuleConceptPrerequisite } from './entities/module-concept-prerequisite.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { RoadmapsService } from './roadmaps.service';
 import { RoadmapsController } from './roadmaps.controller';
 import { ConceptsService } from './concepts.service';
 import { ConceptsController } from './concepts.controller';
 import { AdminContentReviewController } from './admin-content-review.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -21,9 +21,9 @@ import { AdminContentReviewController } from './admin-content-review.controller'
       Concept,
       ModuleConcept,
       ModuleConceptPrerequisite,
-      InstructorProfile,
       McqQuestion,
     ]),
+    NotificationsModule,
   ],
   controllers: [
     RoadmapsController,

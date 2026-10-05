@@ -35,7 +35,7 @@ import { AiGenerationJob } from './entities/ai-generation-job.entity';
 @ApiTags('AI Generate')
 @ApiBearerAuth('bearer-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+@Roles(UserRole.DEVELOPER, UserRole.ADMIN)
 @Controller('ai-generate')
 export class AiGenerateController {
   constructor(private readonly aiGenerateService: AiGenerateService) {}
@@ -43,23 +43,41 @@ export class AiGenerateController {
   @Get('quota')
   @ApiOperation({
     summary:
-      'Get the remaining daily AI generation quota for the authenticated instructor/admin',
+      'Remaining daily quota for what the next generation would use (free tier, own default key, or unlimited admin)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Remaining quota out of 20 daily generations.',
+    description:
+      "Remaining quota in the applicable bucket, counted against the user's own timezone.",
   })
-  async getQuota(
-    @CurrentUser() user: User,
-  ): Promise<{ remaining: number; limit: number }> {
-    const { remaining } = await this.aiGenerateService.checkRateLimit(user.id);
-    return { remaining, limit: 20 };
+  async getQuota(@CurrentUser() user: User): Promise<{
+    remaining: number;
+    limit: number;
+    unlimited: boolean;
+    tier: string;
+    provider: string;
+  }> {
+    const creds = await this.aiGenerateService.resolveCredentials(user);
+    const { remaining, limit, unlimited } =
+      await this.aiGenerateService.checkRateLimit(
+        user.id,
+        1,
+        user.timezone,
+        creds,
+      );
+    return {
+      remaining,
+      limit,
+      unlimited,
+      tier: creds.tier,
+      provider: creds.provider,
+    };
   }
 
   @Get('jobs/active')
   @ApiOperation({
     summary:
-      'List all pending/running AI generation jobs for the current instructor',
+      'List all pending/running AI generation jobs for the current developer',
   })
   @ApiResponse({
     status: 200,
@@ -140,6 +158,7 @@ export class AiGenerateController {
       AiGenerationJobType.ROADMAP_MODULES,
       dto.roadmapId,
       user,
+      { provider: dto.provider, model: dto.model },
     );
   }
 
@@ -169,6 +188,7 @@ export class AiGenerateController {
       AiGenerationJobType.MODULE_CONCEPTS,
       dto.moduleId,
       user,
+      { provider: dto.provider, model: dto.model },
     );
   }
 
@@ -195,6 +215,7 @@ export class AiGenerateController {
       AiGenerationJobType.MODULE_MCQS,
       dto.moduleId,
       user,
+      { provider: dto.provider, model: dto.model },
     );
   }
 
@@ -210,7 +231,7 @@ export class AiGenerateController {
   })
   @ApiResponse({
     status: 429,
-    description: 'Daily rate limit of 20 generations exceeded.',
+    description: 'Daily quota for the applicable bucket exceeded.',
   })
   async generateConceptContent(
     @CurrentUser() user: User,
@@ -231,7 +252,7 @@ export class AiGenerateController {
   })
   @ApiResponse({
     status: 429,
-    description: 'Daily rate limit of 20 generations exceeded.',
+    description: 'Daily quota for the applicable bucket exceeded.',
   })
   async generateConceptMcqs(
     @CurrentUser() user: User,

@@ -10,7 +10,6 @@ dotenv.config({ path: process.env.ENV_FILE_PATH || '.env' });
 
 
 import { User } from '../modules/users/entities/user.entity';
-import { InstructorProfile } from '../modules/users/entities/instructor-profile.entity';
 import { Roadmap } from '../modules/content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../modules/content/entities/module.entity';
 import { Concept } from '../modules/content/entities/concept.entity';
@@ -32,11 +31,13 @@ import { AccountDeletionRequest } from '../modules/users/entities/account-deleti
 import { ReviewItem } from '../modules/review/entities/review-item.entity';
 import { AiGenerationLog } from '../modules/ai-generate/entities/ai-generation-log.entity';
 import { AiGenerationJob } from '../modules/ai-generate/entities/ai-generation-job.entity';
+import { AiProviderKey } from '../modules/ai-generate/entities/ai-provider-key.entity';
+import { Notification } from '../modules/notifications/entities/notification.entity';
+import { Article } from '../modules/articles/entities/article.entity';
 import { PasswordResetOtp } from '../modules/auth/entities/password-reset-otp.entity';
 
 export const entities = [
   User,
-  InstructorProfile,
   AccountDeletionRequest,
   Roadmap,
   ModuleEntity,
@@ -58,6 +59,9 @@ export const entities = [
   ReviewItem,
   AiGenerationLog,
   AiGenerationJob,
+  AiProviderKey,
+  Notification,
+  Article,
   PasswordResetOtp,
 ];
 

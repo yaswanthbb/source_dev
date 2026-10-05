@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../users/entities/user.entity';
-import { InstructorProfile } from '../users/entities/instructor-profile.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../content/entities/module.entity';
 import { Concept } from '../content/entities/concept.entity';
@@ -16,7 +15,6 @@ import { AnalyticsController } from './analytics.controller';
   imports: [
     TypeOrmModule.forFeature([
       User,
-      InstructorProfile,
       Roadmap,
       ModuleEntity,
       Concept,

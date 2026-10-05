@@ -120,7 +120,7 @@ export class EmailService {
 <body>
   <div class="wrapper">
     <div class="container">
-      <div class="brand">KNOWLEDGE IS POWER</div>
+      <div class="brand">source:dev</div>
       <div class="title">Reset Your Password</div>
       <div class="description">
         We received a request to reset your password. Use the single-use 6-digit verification code below to proceed:
@@ -147,9 +147,9 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: `"Knowledge is Power" <${this.emailUser}>`,
+        from: `"source:dev" <${this.emailUser}>`,
         to: toEmail,
-        subject: `${otp} is your KIP password reset code`,
+        subject: `${otp} is your source:dev password reset code`,
         html: htmlTemplate,
       });
 

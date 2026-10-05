@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -13,6 +14,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { RoadmapsService } from './roadmaps.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -36,7 +38,7 @@ export class RoadmapsController {
   constructor(private readonly roadmapsService: RoadmapsService) {}
 
   @Post('roadmaps')
-  @ApiOperation({ summary: 'Create a roadmap (Approved Instructor / Admin)' })
+  @ApiOperation({ summary: 'Create a roadmap (Developer / Admin)' })
   @ApiResponse({ status: 201, description: 'Roadmap created successfully.' })
   async createRoadmap(
     @CurrentUser() user: User,
@@ -45,11 +47,67 @@ export class RoadmapsController {
     return this.roadmapsService.createRoadmap(user, dto);
   }
 
+  @Post('roadmaps/:id/submit')
+  @ApiOperation({
+    summary:
+      'Submit a roadmap for review (Creator / Admin). Requires 3+ modules with 3+ concepts each; resubmission re-queues rejected concepts only.',
+  })
+  @ApiResponse({ status: 201, description: 'Roadmap submitted for review.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Roadmap is already submitted or published.',
+  })
+  async submitRoadmap(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.roadmapsService.submitRoadmap(id, user);
+  }
+
+  @Get('roadmaps/:id/review')
+  @ApiOperation({
+    summary:
+      'Compiled review response for a roadmap (Creator / Admin): per-module rollup with derived approved flags and publish readiness',
+  })
+  @ApiResponse({ status: 200, description: 'Review status retrieved.' })
+  async getReviewStatus(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.roadmapsService.getReviewStatus(id, user);
+  }
+
+  @Post('roadmaps/:id/request-unpublish')
+  @ApiOperation({
+    summary:
+      'Author requests takedown of a published roadmap (admin approves; 30-day public countdown)',
+  })
+  @ApiResponse({ status: 201, description: 'Unpublish requested.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Roadmap is not published or a request is already open.',
+  })
+  async requestUnpublish(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.roadmapsService.requestUnpublish(id, user);
+  }
+
+  @Post('roadmaps/:id/cancel-unpublish')
+  @ApiOperation({ summary: 'Author withdraws a pending unpublish request' })
+  @ApiResponse({ status: 201, description: 'Unpublish request cancelled.' })
+  async cancelUnpublishRequest(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.roadmapsService.cancelUnpublishRequest(id, user);
+  }
+
   @Get('roadmaps')
   @ApiOperation({ summary: 'List all roadmaps' })
+  @ApiQuery({
+    name: 'label',
+    required: false,
+    description: 'Filter by origin label: ai, handwritten, partial',
+  })
   @ApiResponse({ status: 200, description: 'Roadmaps list retrieved.' })
-  async findAllRoadmaps(@CurrentUser() user: User) {
-    return this.roadmapsService.findAllRoadmaps(user);
+  async findAllRoadmaps(
+    @CurrentUser() user: User,
+    @Query('label') label?: string,
+  ) {
+    return this.roadmapsService.findAllRoadmaps(user, label);
   }
 
   @Get('roadmaps/:id')

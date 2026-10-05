@@ -1,0 +1,762 @@
+.sd-terminal-theme {
+  color: var(--term-text);
+  background: var(--term-base);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  --color-bg: var(--term-base);
+  --color-surface: var(--term-panel);
+  --color-surface-hover: var(--term-hover);
+  --color-border: var(--term-line);
+  --color-border-subtle: var(--term-line);
+  --color-text-primary: var(--term-ink);
+  --color-text-secondary: var(--term-dim);
+  --color-text-muted: var(--term-dim);
+  --color-accent: var(--term-accent);
+  --color-accent-hover: var(--term-accent);
+  --color-accent-tint: color-mix(
+    in srgb,
+    var(--term-accent) 10%,
+    var(--term-panel)
+  );
+  --font-sans: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Space Grotesk", ui-sans-serif, sans-serif;
+}
+.sd-terminal-theme :is(button, a, input, select, textarea):focus-visible,
+.sd-topbar :is(button, a):focus-visible {
+  outline: 2px solid var(--term-accent, currentColor);
+  outline-offset: 3px;
+}
+.sd-terminal-theme button {
+  cursor: pointer;
+}
+.sd-terminal-theme button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.sd-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 5px 16px;
+  flex-shrink: 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+}
+.sd-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+.sd-view-tabs,
+.sd-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sd-account-actions {
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.sd-view-tabs a {
+  padding: 5px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sd-view-tabs a[aria-current] {
+  font-weight: 700;
+}
+.sd-account-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sd-topbar :is(button, a):hover {
+  filter: brightness(0.88);
+}
+/* The `RUN:` command strip that used to sit here is gone. Nothing inside the
+   terminal window is clickable, so there is no strip to style. */
+.sd-console {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sd-console-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* ─── The screen ────────────────────────────────────────────────────────────
+   One scrolling region holding output and the prompt, with no frame of its
+   own: the terminal IS the page, not a widget sitting on one. */
+.sd-screen {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px clamp(12px, 2vw, 22px) 20px;
+  cursor: text;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.sd-screen-lines {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.sd-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sd-line[data-kind="cmd"] {
+  margin-top: 14px;
+  color: var(--term-ink);
+}
+/* The first line of a screen opens at the top of it, not 14px down. Each line
+   sits inside its own reveal wrapper, so the first wrapper's line is the one
+   that matters here. */
+.sd-screen-lines > .sd-line[data-kind="cmd"]:first-child,
+.sd-screen-lines > .sd-reveal:first-child > .sd-line[data-kind="cmd"] {
+  margin-top: 0;
+}
+.sd-line[data-kind="dim"] {
+  color: var(--term-dim);
+}
+.sd-line[data-kind="ok"] {
+  color: var(--term-accent);
+}
+.sd-line[data-kind="head"] {
+  color: var(--term-accent);
+  font-weight: 700;
+}
+.sd-line[data-kind="err"] {
+  color: var(--term-error);
+}
+/* ASCII art must not wrap or the letterforms come apart, so the banner
+   scrolls sideways on a narrow screen instead of reflowing. */
+.sd-banner {
+  margin: 2px 0 10px;
+  color: var(--term-accent);
+  font-weight: 700;
+  font-size: clamp(9px, 2.6vw, 13px);
+  line-height: 1.05;
+  overflow-x: auto;
+  scrollbar-width: none;
+  user-select: none;
+}
+.sd-banner::-webkit-scrollbar {
+  display: none;
+}
+/* A divider the width of the screen, not a run of dashes that would wrap. */
+.sd-rule {
+  height: 0;
+  margin: 10px 0;
+  border-top: 1px solid var(--term-line);
+}
+/* ─── The fetch block ───────────────────────────────────────────────────────
+   `neofetch`: the mark on the left, the identity and the facts on the right,
+   the palette underneath. The command supplied only strings — every width,
+   glyph and colour below is this layer's.
+
+   Mobile first, and the breakpoint is the honest one: a 360px screen has room
+   for the mark or for a column of facts beside it, not both. So the default is
+   one column with the mark above, and the two-column grid starts only where
+   the art can keep its own width without squeezing the labels. */
+.sd-fetch {
+  display: grid;
+  gap: 4px 20px;
+  align-items: center;
+  margin: 6px 0 12px;
+}
+.sd-fetch-art {
+  margin: 0 0 8px;
+  color: var(--term-accent);
+  font-weight: 700;
+  font-size: clamp(10px, 2.8vw, 14px);
+  line-height: 1.1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  user-select: none;
+}
+/* One tone per emblem row — the distro-logo glow. Spans stack as blocks so
+   no stray newline text node can add a sixteenth row. */
+.sd-fetch-art span {
+  display: block;
+  white-space: pre;
+}
+.sd-fetch-art span[data-tone="dim"] {
+  color: var(--term-faint);
+}
+.sd-fetch-art span[data-tone="bright"] {
+  color: var(--term-ink);
+}
+.sd-fetch-art span[data-tone="accent"] {
+  color: var(--term-accent);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--term-accent) 45%, transparent);
+}
+.sd-fetch-art::-webkit-scrollbar {
+  display: none;
+}
+.sd-fetch-facts {
+  min-width: 0;
+}
+.sd-fetch-id,
+.sd-fetch-underline,
+.sd-fetch-palette {
+  margin: 0;
+}
+.sd-fetch-id {
+  font-weight: 700;
+}
+.sd-fetch-user {
+  color: var(--term-accent);
+}
+.sd-fetch-sep,
+.sd-fetch-host {
+  color: var(--term-ink);
+}
+/* As wide as the identity above it and no wider — the rule is built from the
+   theme's glyph repeated to that string's length, so it clips rather than
+   wraps when the name is long. */
+.sd-fetch-underline {
+  color: var(--term-line);
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* Labels in one column, values in the next, so the block scans down the way a
+   real fetch does. The label column is sized in characters rather than pixels
+   because the type is monospace and the longest label is what has to fit. */
+.sd-fetch-rows {
+  display: grid;
+  margin: 6px 0 0;
+  row-gap: 1px;
+}
+.sd-fetch-row {
+  display: grid;
+  grid-template-columns: 9ch 1fr;
+  gap: 8px;
+}
+.sd-fetch-row dt {
+  color: var(--term-accent);
+  font-weight: 700;
+}
+/* The `Field: value` idiom, distro-fetch style. The colon is chrome, not data,
+   so it lives here rather than in the strings the command handed over. */
+.sd-fetch-row dt::after {
+  content: ":";
+  color: var(--term-dim);
+  font-weight: 400;
+}
+.sd-fetch-row dd {
+  margin: 0;
+  color: var(--term-text);
+  overflow-wrap: anywhere;
+}
+.sd-fetch-palette {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.sd-swatch {
+  width: 2em;
+  height: 1em;
+  border: 1px solid var(--term-line);
+  /* One shared edge between neighbours, so the strip reads as a palette
+     rather than as a row of separate chips. */
+  margin-right: -1px;
+}
+@media (min-width: 560px) {
+  .sd-fetch {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .sd-fetch-art {
+    margin-bottom: 0;
+  }
+}
+/* ─── Streaming reveal ──────────────────────────────────────────────────────
+   Output prints on rather than landing whole: each line of one burst starts a
+   step after the line above it. The delay is set per line by the host; the
+   `backwards` fill is what holds a line invisible until its own turn comes. */
+@keyframes sd-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sd-reveal {
+  animation: sd-reveal 120ms ease-out backwards;
+  animation-delay: var(--sd-delay, 0ms);
+}
+/* An inline `[command]` token: text that runs something. Bracket colour comes
+   from the accent so it reads like login's [1] / [ENTER] tokens. */
+.sd-token {
+  color: var(--term-accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  white-space: nowrap;
+}
+.sd-token + .sd-token {
+  margin-left: 6px;
+}
+.sd-token:hover:not(:disabled) {
+  background: var(--term-accent);
+  color: var(--term-base);
+}
+/* A runnable word printed inside output — `[read]`, or a verb inside a
+   sentence. Text, not a control: no button shape, no hover state, nothing to
+   click. The accent alone marks it as something you can type. */
+.sd-word {
+  color: var(--term-accent);
+}
+/* ─── The running line ──────────────────────────────────────────────────────
+   Stands where the prompt would be while a command is in flight. */
+.sd-run {
+  margin-top: 14px;
+}
+.sd-spin {
+  color: var(--term-accent);
+}
+/* ─── The prompt ────────────────────────────────────────────────────────────
+   Sits at the end of the output, in the scroll flow, so the caret is exactly
+   where the next line prints. The input carries no frame and is only as wide
+   as what has been typed: a shell has no field, it has a caret.
+
+   Scoped to `.sd-console`: the dashboard's footer prompt wears the same
+   `.sd-prompt` class and loads this file through `TerminalHeader`, but it is a
+   bar with its own alignment — layout rules here must not reach it. The
+   `.sd-prompt-*` parts below are colour only, so they stay shared. */
+.sd-console .sd-prompt {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.sd-prompt-label {
+  white-space: nowrap;
+  font-weight: 700;
+  cursor: text;
+}
+.sd-prompt-user {
+  color: var(--term-accent);
+}
+.sd-prompt-path {
+  color: var(--term-dim);
+}
+.sd-prompt-ask {
+  color: var(--term-accent);
+  font-weight: 400;
+}
+/* The pager's status line stands in for the prompt while `less` holds the
+   keyboard. The whole string — position and keys together — comes from the
+   theme's `more` glyph and is drawn in the accent by the line's own `head`
+   kind, so there is no second style to keep in step with it. */
+/* A prompt is as long as the path in it, and a concept three levels down can
+   be wider than a phone. Rather than squeeze the input to nothing, the row
+   wraps: the label keeps its full width and the entry drops to the line below
+   once under 12ch is left for it — what a real shell does with a long PS1. If
+   the label alone still overflows it breaks mid-path rather than pushing the
+   page sideways. Layout only, so scoped to `.sd-console`: the dashboard's
+   footer prompt is a bar with its own alignment. */
+.sd-console .sd-prompt {
+  flex-wrap: wrap;
+}
+.sd-console .sd-prompt-label {
+  flex-shrink: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Text and caret sit together and share the rest of the line. */
+.sd-console .sd-prompt-entry {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  flex: 1 1 12ch;
+}
+.sd-console .sd-prompt input {
+  min-width: 1ch;
+  max-width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  color: var(--term-ink);
+  caret-color: var(--term-accent);
+  font: inherit;
+}
+/* The block caret stands in for the native one, so hide that while it does —
+   and never draw a focus ring here: a box around the line is exactly what
+   makes a terminal look like a web form. The caret is the focus indicator. */
+.sd-console .sd-prompt[data-caret="block"] input {
+  caret-color: transparent;
+}
+.sd-terminal-theme .sd-prompt input:focus-visible {
+  outline: 0;
+}
+/* ─── The caret ─────────────────────────────────────────────────────────────
+   One cell wide, filled, blinking — the shell's own, not a text glyph. It
+   holds still when the prompt is not focused, the way an unfocused terminal
+   window does. */
+@keyframes sd-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.sd-caret {
+  display: inline-block;
+  width: 1ch;
+  height: 1.05em;
+  vertical-align: -0.18em;
+  flex-shrink: 0;
+  background: var(--term-accent);
+  animation: sd-caret-blink 1.05s steps(1, end) infinite;
+}
+.sd-prompt:not([data-focused]) .sd-caret {
+  animation: none;
+  opacity: 0.4;
+}
+/* The choice stack and the foot's status bar both used to be styled here. Both
+   are gone: an `ask`'s escapes are printed as a dim line above the prompt, and
+   the foot — `[back]` `[next]`, the position counter, the TAB chips — was
+   pagination for a screen stack this shell no longer has. One scrollback, one
+   prompt, nothing else. */
+.sd-boot {
+  padding: 20px clamp(12px, 2vw, 22px);
+  font-size: 13px;
+  line-height: 1.7;
+}
+/* ─── Flowed markdown ───────────────────────────────────────────────────────
+   A lesson body or an answer. Styled to look typeset by the terminal itself:
+   headings get a `##` marker, lists a `-`, code a faint ground. No frame, no
+   header bar — the caller prints those as ordinary lines around it. */
+.sd-flow {
+  font-size: 13px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.sd-flow > :first-child {
+  margin-top: 0;
+}
+.sd-flow > :last-child {
+  margin-bottom: 0;
+}
+.sd-flow :is(h3, h4, h5, h6) {
+  color: var(--term-accent);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 18px 0 6px;
+}
+.sd-flow h3::before {
+  content: "## ";
+  color: var(--term-dim);
+}
+.sd-flow h4::before {
+  content: "### ";
+  color: var(--term-dim);
+}
+.sd-flow p {
+  margin: 0 0 12px;
+}
+.sd-flow :is(ul, ol) {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+.sd-flow li {
+  margin-bottom: 3px;
+}
+.sd-flow ul {
+  list-style: none;
+  padding-left: 14px;
+}
+.sd-flow ul > li::before {
+  content: "- ";
+  color: var(--term-accent);
+}
+.sd-flow a {
+  color: var(--term-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sd-flow strong {
+  color: var(--term-ink);
+  font-weight: 700;
+}
+.sd-flow em {
+  color: var(--term-dim);
+  font-style: italic;
+}
+.sd-flow code {
+  padding: 0 3px;
+  background: var(--term-head);
+  color: var(--term-accent);
+}
+.sd-flow pre {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--term-head);
+  border-left: 2px solid var(--term-line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.sd-flow pre code {
+  padding: 0;
+  background: none;
+  color: var(--term-text);
+  line-height: 1.65;
+}
+.sd-flow blockquote {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--term-accent);
+  color: var(--term-dim);
+}
+.sd-flow blockquote p:last-child {
+  margin-bottom: 0;
+}
+.sd-flow hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--term-line);
+}
+.sd-flow img {
+  max-width: 100%;
+  height: auto;
+}
+/* Tables scroll on their own rather than widening the screen. */
+.sd-flow table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 12px;
+  scrollbar-width: thin;
+}
+.sd-flow :is(th, td) {
+  border: 1px solid var(--term-line);
+  padding: 5px 9px;
+  text-align: left;
+}
+.sd-flow th {
+  color: var(--term-accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sd-logout-dialog {
+  margin: auto;
+  padding: 0;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid var(--term-accent);
+  background: var(--term-panel);
+  color: var(--term-text);
+  box-shadow: 6px 6px 0 var(--term-shadow);
+  font: inherit;
+}
+.sd-logout-dialog::backdrop {
+  background: rgb(0 0 0 / 0.65);
+}
+.sd-dialog-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  background: var(--term-head);
+  border-bottom: 1px solid var(--term-line);
+  color: var(--term-accent);
+  padding: 10px 16px;
+  font-size: 11px;
+}
+.sd-dialog-heading button {
+  padding: 4px;
+}
+.sd-dialog-body {
+  padding: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.sd-dialog-body .sd-line + .sd-line {
+  margin-top: 10px;
+}
+.sd-dialog-body .sd-line[data-kind="cmd"] {
+  margin-top: 0;
+}
+.sd-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--term-line);
+  font-size: 13px;
+}
+.sd-dialog-body .sd-dialog-hint {
+  color: var(--term-dim);
+  font-size: 10px;
+  margin-top: 12px;
+}
+/* The route error boundary, which has no chrome above it to sit inside. */
+.sd-error-frame {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+.sd-error-panel {
+  width: min(520px, 100%);
+  border: 1px solid var(--term-line);
+  background: var(--term-panel);
+  box-shadow: 3px 3px 0 var(--term-shadow);
+}
+.sd-error-panel .sd-dialog-actions {
+  flex-wrap: wrap;
+}
+.sd-error-digest {
+  margin-top: 14px;
+  font-size: 10px;
+  color: var(--term-dim);
+  overflow-wrap: anywhere;
+}
+.sd-error-digest span {
+  color: var(--term-accent);
+}
+@media (max-width: 767px) {
+  .sd-topbar {
+    padding: 5px 8px;
+    gap: 6px;
+  }
+  .sd-topbar-brand {
+    flex: 0;
+  }
+  .sd-view-tabs {
+    margin-right: auto;
+    gap: 3px;
+  }
+  .sd-view-tabs a {
+    padding: 5px;
+    font-size: 10px;
+  }
+  .sd-account-actions {
+    flex: 0;
+    gap: 4px;
+  }
+  .sd-account-control {
+    padding: 3px 5px;
+    min-height: 32px;
+  }
+  /* 16px stops iOS zooming the page when the prompt takes focus. The whole row
+     moves up together — label, input and caret share one grid, so sizing only
+     the input would leave `student@source-dev:~$` a size smaller beside it. */
+  .sd-console .sd-prompt {
+    font-size: 16px;
+  }
+  .sd-dialog-body {
+    padding: 16px;
+  }
+}
+@media (max-width: 380px) {
+  .sd-topbar {
+    gap: 4px;
+  }
+  .sd-view-tabs a {
+    padding: 4px 3px;
+  }
+  .sd-account-control {
+    padding: 3px 4px;
+  }
+  .sd-screen-lines,
+  .sd-flow {
+    font-size: 12px;
+  }
+  .sd-flow :is(ul, ol) {
+    padding-left: 12px;
+  }
+}
+/* ─── Suggestion menu, choice panel, shortcut panel ───────────────────────
+   Floating rows above the prompt. Text throughout: accepting a row types it,
+   so there is nothing to click and no button styling to keep honest. The
+   cursor row inverts, the way a focused menu item does everywhere. */
+.sd-menu {
+  margin: 10px 0 0;
+  padding: 6px 0;
+  border: 1px solid var(--term-line);
+  background: var(--term-panel);
+  box-shadow: 3px 3px 0 var(--term-shadow);
+  max-height: 12.5em;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.sd-menu .sd-line {
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sd-menu .sd-line[data-active] {
+  background: var(--term-head);
+  color: var(--term-ink);
+}
+.sd-menu-cursor {
+  color: var(--term-accent);
+  font-weight: 700;
+}
+.sd-menu-detail {
+  color: var(--term-dim);
+}
+/* ─── Code tokens ─────────────────────────────────────────────────────────
+   A small highlighter for fenced blocks: keywords carry the accent, strings
+   the second hue, comments recede. Four hues total — anything more reads as
+   decoration rather than structure. */
+.sd-tok-kw {
+  color: var(--term-accent);
+}
+.sd-tok-str {
+  color: var(--term-alert);
+}
+.sd-tok-com {
+  color: var(--term-faint);
+}
+.sd-tok-num {
+  color: var(--term-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sd-terminal-theme *,
+  .sd-terminal-theme *::before,
+  .sd-terminal-theme *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

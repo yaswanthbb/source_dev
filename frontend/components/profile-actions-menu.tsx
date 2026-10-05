@@ -5,11 +5,9 @@ import Link from 'next/link';
 import {
   MoreVertical,
   User as UserIcon,
-  GraduationCap,
   ArrowLeftRight,
   Trash2,
   LogOut,
-  Clock,
   Shield,
 } from 'lucide-react';
 import { User } from '@/lib/auth';
@@ -17,20 +15,14 @@ import { RequestDeletionModal } from './request-deletion-modal';
 
 interface ProfileActionsMenuProps {
   user?: User;
-  onOpenApplyModal?: () => void;
-  isPendingInstructor?: boolean;
-  isRejectedInstructor?: boolean;
   onOpenLogoutModal: () => void;
-  currentView?: 'student' | 'instructor' | 'admin';
+  currentView?: 'developer' | 'admin';
 }
 
 export function ProfileActionsMenu({
   user,
-  onOpenApplyModal,
-  isPendingInstructor,
-  isRejectedInstructor,
   onOpenLogoutModal,
-  currentView = 'student',
+  currentView = 'developer',
 }: ProfileActionsMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showDeletionModal, setShowDeletionModal] = useState(false);
@@ -51,8 +43,6 @@ export function ProfileActionsMenu({
     };
   }, [isMenuOpen]);
 
-  const isStudent = user?.role === 'student';
-  const isInstructor = user?.role === 'instructor';
   const isAdmin = user?.role === 'admin';
 
   return (
@@ -82,7 +72,7 @@ export function ProfileActionsMenu({
               {user?.name || 'User'}
             </p>
             <p className="text-[10px] text-text-secondary capitalize truncate">
-              {user?.role || 'Student'}
+              {user?.role || 'Developer'}
             </p>
           </div>
         </div>
@@ -124,35 +114,7 @@ export function ProfileActionsMenu({
             <span>Edit Profile</span>
           </Link>
 
-          {/* Option 1: Student Application to Instructor */}
-          {isStudent && onOpenApplyModal && (
-            <div>
-              {isPendingInstructor ? (
-                <div className="px-3 py-2 rounded-xl bg-amber-tint/70 text-amber flex items-center gap-2 text-xs font-semibold">
-                  <Clock className="w-3.5 h-3.5 flex-shrink-0 animate-pulse" />
-                  <span className="truncate">Instructor Pending</span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onOpenApplyModal();
-                  }}
-                  className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-primary hover:bg-bg hover:text-accent flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <GraduationCap className="w-4 h-4 text-accent" />
-                  <span>
-                    {isRejectedInstructor
-                      ? 'Re-apply to Teach'
-                      : 'Apply as Instructor'}
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Option 2: View Switchers for Instructors & Admins */}
+          {/* Option 2: View Switchers for Admins */}
           {isAdmin && currentView !== 'admin' && (
             <Link
               href="/admin/dashboard"
@@ -165,25 +127,14 @@ export function ProfileActionsMenu({
           )}
 
 
-          {(isInstructor || isAdmin) && currentView !== 'instructor' && (
+          {isAdmin && currentView !== 'developer' && (
             <Link
-              href="/instructor/dashboard"
+              href="/developer/dashboard"
               onClick={() => setIsMenuOpen(false)}
               className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-primary hover:bg-bg hover:text-accent flex items-center gap-2.5 transition-colors cursor-pointer"
             >
               <ArrowLeftRight className="w-4 h-4 text-accent" />
-              <span>Switch to Instructor Studio</span>
-            </Link>
-          )}
-
-          {(isInstructor || isAdmin) && currentView !== 'student' && (
-            <Link
-              href="/student/dashboard"
-              onClick={() => setIsMenuOpen(false)}
-              className="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-text-primary hover:bg-bg hover:text-accent flex items-center gap-2.5 transition-colors cursor-pointer"
-            >
-              <ArrowLeftRight className="w-4 h-4 text-accent" />
-              <span>Switch to Student View</span>
+              <span>Switch to Developer View</span>
             </Link>
           )}
 

@@ -7,7 +7,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
-  UserCheck,
   Users,
   LogOut,
   User as UserIcon,
@@ -21,10 +20,12 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { getToken, clearAuth, User } from '@/lib/auth';
+import { getToken, getUser, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { MinimalTerminalLoader } from '@/components/loaders/minimal-terminal-loader';
+import '../developer/dashboard/terminal-dashboard.css';
 
 const ADMIN_NAV_ITEMS = [
   {
@@ -36,11 +37,6 @@ const ADMIN_NAV_ITEMS = [
     name: 'Content Review',
     href: '/admin/content-review',
     icon: ClipboardCheck,
-  },
-  {
-    name: 'Instructors',
-    href: '/admin/instructors',
-    icon: UserCheck,
   },
   {
     name: 'Users Directory',
@@ -57,10 +53,36 @@ export default function AdminAppShellLayout({
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [isTokenChecked, setIsTokenChecked] = useState(false);
+  const [isTokenChecked, setIsTokenChecked] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!getToken();
+    }
+    return false;
+  });
+  const [isLoaderDone, setIsLoaderDone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const val = sessionStorage.getItem('sd_just_logged_in');
+        if (val && Date.now() - parseInt(val, 10) < 30000) {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  });
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Clean up the login marker after a brief period
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        sessionStorage.removeItem('sd_just_logged_in');
+      } catch {}
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Auto-close mobile drawer on route change
   useEffect(() => {
@@ -90,6 +112,7 @@ export default function AdminAppShellLayout({
       return response.data;
     },
     enabled: isTokenChecked,
+    initialData: () => getUser() || undefined,
     staleTime: 30000,
   });
 
@@ -99,21 +122,24 @@ export default function AdminAppShellLayout({
     router.replace('/login');
   };
 
-  // Role Guard: Redirect non-admins to /student/dashboard
+  // Role Guard: Redirect non-admins to /developer/dashboard
   useEffect(() => {
     if (user && user.role !== 'admin') {
-      router.replace('/student/dashboard');
+      router.replace('/developer/dashboard');
     }
   }, [user, router]);
 
-  if (!isTokenChecked || userLoading) {
+  const isDataReady = isTokenChecked && (!!user || !userLoading);
+
+  if (!isDataReady || !isLoaderDone) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin" />
-          <p className="text-xs text-text-secondary font-medium">Verifying administrator credentials...</p>
-        </div>
-      </div>
+      <MinimalTerminalLoader
+        minDuration={2000}
+        isAsyncComplete={isDataReady}
+        onComplete={() => setIsLoaderDone(true)}
+        title="admin // verify_credentials"
+        stage="ROOT_01"
+      />
     );
   }
 
@@ -152,6 +178,16 @@ export default function AdminAppShellLayout({
     );
   }
 
+  // The terminal and the terminal-styled dashboard own their full-screen
+  // frames — no sidebar chrome around them. Guards above still apply. The
+  // sidebar remains only for the legacy GUI pages until their Phase C rebuild.
+  if (
+    pathname?.startsWith("/admin/terminal") ||
+    pathname === "/admin/dashboard"
+  ) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen bg-bg flex flex-col lg:flex-row relative">
       {/* Ambient Dark Mode Glow Orbs */}
@@ -166,7 +202,7 @@ export default function AdminAppShellLayout({
         <Link href="/admin/dashboard" className="flex items-center">
           <Image
             src="/logo.png"
-            alt="KIP Logo"
+            alt="source:dev logo"
             width={110}
             height={34}
             className="h-7 w-auto object-contain"
@@ -208,7 +244,7 @@ export default function AdminAppShellLayout({
                 >
                   <Image
                     src="/logo.png"
-                    alt="KIP Logo"
+                    alt="source:dev logo"
                     width={110}
                     height={34}
                     className="h-7 w-auto object-contain"
@@ -289,7 +325,7 @@ export default function AdminAppShellLayout({
             <Link href="/admin/dashboard" className="flex items-center">
               <Image
                 src="/logo.png"
-                alt="KIP Logo"
+                alt="source:dev logo"
                 width={120}
                 height={39}
                 className="h-[33px] w-auto object-contain"
