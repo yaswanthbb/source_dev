@@ -2436,7 +2436,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     try {
       // Stage 1: outline (internal — the draft carries the quota slot).
       const sysOutline = await this.systemFor(
-        AiGenerationType.CONCEPT_CONTENT,
+        AiGenerationType.CONCEPT_OUTLINE,
         CONCEPT_OUTLINE_SYSTEM_PROMPT,
       );
       const outlineParams = this.routeParams('concept_outline', {
@@ -2737,7 +2737,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
         this.logger.warn(`Context hydration skipped: ${msg}`);
       }
       const sysDraft = await this.systemFor(
-        AiGenerationType.CONCEPT_CONTENT,
+        AiGenerationType.CONCEPT_DRAFT,
         CONCEPT_DRAFT_SYSTEM_PROMPT,
       );
       const draftParams = this.routeParams('concept_draft', {
@@ -2827,7 +2827,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
       // Findings feed the revise must-fix list; a malformed fact-check
       // degrades to a warning rather than failing the concept.
       const sysFact = await this.systemFor(
-        AiGenerationType.CONCEPT_CONTENT,
+        AiGenerationType.CONCEPT_FACTCHECK,
         CONCEPT_FACTCHECK_SYSTEM_PROMPT,
       );
       const factParams = this.routeParams('concept_factcheck', {
@@ -2872,7 +2872,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
       // Stages 4+5: critique → revise, capped at 2 revises. Leftover
       // blocking issues publish as warnings, never hard-fail.
       const sysCritique = await this.systemFor(
-        AiGenerationType.CONCEPT_CONTENT,
+        AiGenerationType.CONCEPT_CRITIQUE,
         CONCEPT_CRITIQUE_SYSTEM_PROMPT,
       );
       const critiqueParams = this.routeParams('concept_critique', {
@@ -2880,7 +2880,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
         temperature: 0.3,
       });
       const sysRevise = await this.systemFor(
-        AiGenerationType.CONCEPT_CONTENT,
+        AiGenerationType.CONCEPT_REVISE,
         CONCEPT_REVISE_SYSTEM_PROMPT,
       );
       const reviseParams = this.routeParams('concept_draft', {

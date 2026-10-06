@@ -4,4 +4,11 @@ export enum AiGenerationType {
   CONCEPT_CONTENT = 'concept_content',
   CONCEPT_MCQS = 'concept_mcqs',
   QA_ANSWER = 'qa_answer',
+  // §8 compiler stage-distinct prompt tasks. These resolve prompts only —
+  // log generation_type stays CONCEPT_CONTENT for quota/analytics identity.
+  CONCEPT_OUTLINE = 'concept_outline',
+  CONCEPT_DRAFT = 'concept_draft',
+  CONCEPT_FACTCHECK = 'concept_factcheck',
+  CONCEPT_CRITIQUE = 'concept_critique',
+  CONCEPT_REVISE = 'concept_revise',
 }

@@ -115,6 +115,10 @@ export const getTypeOrmConfig = (
     synchronize: false,
     migrations: configService ? [] : [__dirname + '/../migrations/*{.ts,.js}'],
     migrationsTableName: 'migrations',
+    // Each migration commits independently: Postgres forbids using new enum
+    // labels in the transaction that creates them (55P04), so label-adding
+    // and seed-inserting migrations must not share a transaction.
+    migrationsTransactionMode: 'each',
   };
 
   if (databaseUrl) {
