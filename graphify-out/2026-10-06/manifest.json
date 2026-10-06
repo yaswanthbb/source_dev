@@ -108,9 +108,9 @@
     "semantic_hash": "979664fd0cacda7c7d97f2738f09f9fc"
   },
   "backend/src/config/typeorm.config.ts": {
-    "mtime": 1791261128.2274528,
-    "seen": 1791261674.3536744,
-    "ast_hash": "dcb30d8a5dfa56a7b2a2f6857ed8009e",
+    "mtime": 1791190239.4703672,
+    "seen": 1791194078.1261663,
+    "ast_hash": "aa30a35870619a67dace9d6e5f61e6ea",
     "semantic_hash": ""
   },
   "backend/src/main.ts": {
@@ -198,21 +198,21 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.module.ts": {
-    "mtime": 1791261120.235485,
-    "seen": 1791261674.3537152,
-    "ast_hash": "9ed40b9abbd72a8aa09a966c81116302",
+    "mtime": 1791190233.3553457,
+    "seen": 1791194078.1262078,
+    "ast_hash": "5bd0d8f341f912d4f57d2c1ac550c8c9",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.ts": {
-    "mtime": 1791261250.175972,
-    "seen": 1791261674.3537173,
-    "ast_hash": "0de911cc6a5d81b947bbf4187e2f1f43",
+    "mtime": 1791190230.9543376,
+    "seen": 1791194078.1262097,
+    "ast_hash": "349cf54fffbe13aa82d51c642b1d503e",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.ts": {
-    "mtime": 1791261066.1087072,
-    "seen": 1791261674.3537319,
-    "ast_hash": "73db35a7efa6a4b43d9c4bb50244edb0",
+    "mtime": 1791190173.9101422,
+    "seen": 1791194078.1262243,
+    "ast_hash": "c75a606ff94e20a555306775ec4d56dc",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/dto/ai-generate.dto.ts": {
@@ -1212,9 +1212,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.spec.ts": {
-    "mtime": 1791261319.8087063,
-    "seen": 1791261674.3537161,
-    "ast_hash": "e41afc51b258d6c29e099f654ff35552",
+    "mtime": 1791190343.012291,
+    "seen": 1791194078.1262085,
+    "ast_hash": "c986eb1be4fe38ef9d34b0c2417abb12",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.spec.ts": {
@@ -1422,9 +1422,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-provider-clients.ts": {
-    "mtime": 1791260378.042299,
-    "seen": 1791261674.3537273,
-    "ast_hash": "e36d6a5a34282951338763e764c8ce4f",
+    "mtime": 1791190121.9769704,
+    "seen": 1791194078.1262195,
+    "ast_hash": "2daf4552b78dfcb62443071f0b2231f2",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/dto/ai-keys.dto.ts": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "source-dev-master-plan.md": {
-    "mtime": 1791261377.8314893,
-    "seen": 1791261674.3539937,
-    "ast_hash": "849e3147e1024acc2160249471ceba2a",
+    "mtime": 1791190424.7739317,
+    "seen": 1791194078.1265132,
+    "ast_hash": "2a76fd6928e5ce463c935096a8a54587",
     "semantic_hash": ""
   },
   "frontend/screenshots/neofetch.png": {
@@ -1908,21 +1908,21 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/compiler-stages.spec.ts": {
-    "mtime": 1791261272.7208853,
-    "seen": 1791261674.3537283,
-    "ast_hash": "bd6cb912a37396bbe476c6d48e71fca9",
+    "mtime": 1791190406.0455704,
+    "seen": 1791194078.126221,
+    "ast_hash": "44e1d77952aafcb2074f9882e37b458d",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/compiler-stages.ts": {
-    "mtime": 1791261365.2924478,
-    "seen": 1791261674.3537295,
-    "ast_hash": "e836efb38e701dbc86e51107a270b9db",
+    "mtime": 1791190406.0455704,
+    "seen": 1791194078.1262221,
+    "ast_hash": "8ecc61cad2ed768ae96ae432fce51af4",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-compiler.spec.ts": {
-    "mtime": 1791261310.0357432,
-    "seen": 1791261674.3537328,
-    "ast_hash": "f1d2df06baf9f996edf3abb80aeeb457",
+    "mtime": 1791190406.0455704,
+    "seen": 1791194078.1262255,
+    "ast_hash": "30aff17b2dfc537b677b433c18c42010",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-context-builder.service.ts": {
@@ -1980,21 +1980,21 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/golden.spec.ts": {
-    "mtime": 1791261136.6545746,
-    "seen": 1791261674.3537557,
-    "ast_hash": "c1459a78c92096a9dd14b69838176b59",
+    "mtime": 1791190315.5017002,
+    "seen": 1791194078.126249,
+    "ast_hash": "dff157d79b13a0680e50e373763f5e8c",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/task-routing.spec.ts": {
-    "mtime": 1791261024.362882,
-    "seen": 1791261674.3537595,
-    "ast_hash": "22448fbb0fb90fe93ad80cd5a83d563d",
+    "mtime": 1791187900.2932816,
+    "seen": 1791194078.1262581,
+    "ast_hash": "53c3321b3bdda78d8eb40e0eaed7956d",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/task-routing.ts": {
-    "mtime": 1791261008.4819493,
-    "seen": 1791261674.3537602,
-    "ast_hash": "a776f7ee71a1dc9ec7b5b611170da3a4",
+    "mtime": 1791187900.2932816,
+    "seen": 1791194078.126259,
+    "ast_hash": "d31fa21cd82d4a033026dd8fe69f732f",
     "semantic_hash": ""
   },
   "AI Course Generation R&D.html": {
@@ -2004,21 +2004,21 @@
     "semantic_hash": ""
   },
   "backend/src/migrations/1788010000000-ResearchIngestion.ts": {
-    "mtime": 1791258259.0155365,
-    "seen": 1791261674.3537102,
-    "ast_hash": "64ebb24dd681ca2f029c220c77b501e2",
+    "mtime": 1791187916.0234203,
+    "seen": 1791194078.126205,
+    "ast_hash": "5cf382391d5c7fb130f387941c5ebeba",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-research.service.ts": {
-    "mtime": 1791261365.3465357,
-    "seen": 1791261674.3537393,
-    "ast_hash": "93332aa152b368210de4a269a9d1418c",
+    "mtime": 1791190406.0455704,
+    "seen": 1791194078.126232,
+    "ast_hash": "43af85145ccc2ce670d4f4557f6070c5",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-research.spec.ts": {
-    "mtime": 1791261286.2378335,
-    "seen": 1791261674.3537402,
-    "ast_hash": "374ecf47afd958dde8e5098ef7d3dfd9",
+    "mtime": 1791190406.0455704,
+    "seen": 1791194078.1262333,
+    "ast_hash": "a25918eba947391fa9e567f8799f02a7",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/entities/course-source-chunk.entity.ts": {
@@ -2034,9 +2034,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/research-seed.ts": {
-    "mtime": 1791260204.6456158,
-    "seen": 1791261674.3537567,
-    "ast_hash": "c0a452b9afe63fa35468e0bc09346c43",
+    "mtime": 1791190406.0455704,
+    "seen": 1791194078.12625,
+    "ast_hash": "f4b0c6b5190b499cf0ab1077fe7bc186",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/research-text.util.spec.ts": {
@@ -2049,24 +2049,6 @@
     "mtime": 1791190406.0455704,
     "seen": 1791194078.126252,
     "ast_hash": "4e8680632c99c8fc969a5b55ed0b5f74",
-    "semantic_hash": ""
-  },
-  "backend/src/migrations/1788020000000-ConceptMedia.ts": {
-    "mtime": 1791261070.664688,
-    "seen": 1791261674.3537123,
-    "ast_hash": "9ef9dfc44dbd712d3f593602e7c0711d",
-    "semantic_hash": ""
-  },
-  "backend/src/modules/ai-generate/ai-provider-clients.spec.ts": {
-    "mtime": 1791261365.233491,
-    "seen": 1791261674.353726,
-    "ast_hash": "f2bfe1e6d50379ac12e59544101bd611",
-    "semantic_hash": ""
-  },
-  "backend/src/modules/ai-generate/entities/concept-media.entity.ts": {
-    "mtime": 1791261070.6606882,
-    "seen": 1791261674.3537488,
-    "ast_hash": "eb1a17b1293bd4a1a90bd7e18855e668",
     "semantic_hash": ""
   }
 }
