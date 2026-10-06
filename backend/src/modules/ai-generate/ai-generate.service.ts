@@ -64,6 +64,8 @@ import {
   buildCritiqueUserPrompt,
   CONCEPT_REVISE_SYSTEM_PROMPT,
   buildReviseUserPrompt,
+  CONCEPT_DIAGRAM_SYSTEM_PROMPT,
+  buildDiagramUserPrompt,
   CONCEPT_RESEARCH_SYSTEM_PROMPT,
   buildResearchBriefUserPrompt,
 } from './constants/prompts';
@@ -71,13 +73,17 @@ import {
   ConceptOutline,
   objectivesWithoutBloomVerb,
   parseCritique,
+  parseDiagram,
   parseFactcheck,
   parseOutline,
   parseResearchBrief,
+  validateMermaid,
+  extractDiagramRefs,
 } from './compiler-stages';
 import {
   RESEARCH_GROUNDING_MODE,
   CourseResearchService,
+  VideoResult,
 } from './course-research.service';
 import { verbatimOverlap } from './research-text.util';
 
@@ -102,6 +108,7 @@ import { AiPromptRegistry } from './ai-prompt-registry.service';
 import { CourseContextBuilder } from './course-context-builder.service';
 import { CourseContextService } from './course-context.service';
 import { ConceptCompilation } from './entities/concept-compilation.entity';
+import { ConceptMedia } from './entities/concept-media.entity';
 import { CourseConceptCard } from './entities/course-concept-card.entity';
 import { CourseTerm } from './entities/course-term.entity';
 import { CourseEdgeType } from '../../common/enums/course-edge-type.enum';
@@ -181,6 +188,8 @@ export class AiGenerateService implements OnApplicationBootstrap {
     private readonly conceptCardRepository: Repository<CourseConceptCard>,
     @InjectRepository(CourseTerm)
     private readonly courseTermRepository: Repository<CourseTerm>,
+    @InjectRepository(ConceptMedia)
+    private readonly conceptMediaRepository: Repository<ConceptMedia>,
   ) {}
 
   /**
@@ -2285,7 +2294,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
    * (jobId, title); cards/terms/edges downstream are upserts; only failed
    * titles (nothing published) ever re-run.
    */
-  private static readonly COMPILER_STAGES_PER_CONCEPT = 7;
+  private static readonly COMPILER_STAGES_PER_CONCEPT = 8;
 
   /** Stage multiplier for job progress math (0 = legacy per-concept bumps). */
   private compilerStageCount(jobType: AiGenerationJobType): number {
@@ -2596,6 +2605,122 @@ export class AiGenerateService implements OnApplicationBootstrap {
         await note('research', false, msg);
       }
 
+      // Stage 1.75: media (internal) — diagrams the draft will reference
+      // must exist before drafting. Render failures fail the diagram, never
+      // the concept; videos degrade to empty without a key or on any error.
+      const media: Array<{
+        kind: string;
+        payload: Record<string, unknown>;
+        license: string;
+      }> = [];
+      const sysDiagram = await this.systemFor(
+        AiGenerationType.CONCEPT_CONTENT,
+        CONCEPT_DIAGRAM_SYSTEM_PROMPT,
+      );
+      const diagramParams = this.routeParams('concept_diagram', {
+        maxTokens: 800,
+        temperature: 0.3,
+      });
+      for (const spec of outline.diagrams) {
+        const attemptDiagram = (prior?: { mermaid: string; error: string }) =>
+          this.complete(
+            creds,
+            sysDiagram.text,
+            buildDiagramUserPrompt({
+              diagramId: spec.id,
+              caption: spec.caption,
+              kind: spec.kind,
+              topic: outline.title,
+              objectives: outline.objectives,
+              ...(prior ? { priorAttempt: prior } : {}),
+            }),
+            { ...diagramParams, responseFormat: { type: 'json_object' } },
+            'concept_diagram',
+            undefined,
+            true,
+          );
+        try {
+          let diagramRaw = await attemptDiagram();
+          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
+            model: diagramRaw.model,
+            provider: creds.provider,
+            promptVersion: sysDiagram.version,
+            tokensIn: diagramRaw.tokensIn,
+            tokensOut: diagramRaw.tokensOut,
+            latencyMs: diagramRaw.latencyMs,
+            internal: diagramRaw.internal,
+          });
+          let mermaid = parseDiagram(diagramRaw.text).mermaid;
+          let check = validateMermaid(mermaid, spec.kind);
+          if (!check.ok) {
+            // Exactly one regen with the checker's message fed back.
+            diagramRaw = await attemptDiagram({
+              mermaid,
+              error: check.reason ?? 'invalid diagram',
+            });
+            await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
+              model: diagramRaw.model,
+              provider: creds.provider,
+              promptVersion: sysDiagram.version,
+              tokensIn: diagramRaw.tokensIn,
+              tokensOut: diagramRaw.tokensOut,
+              latencyMs: diagramRaw.latencyMs,
+              internal: diagramRaw.internal,
+            });
+            mermaid = parseDiagram(diagramRaw.text).mermaid;
+            check = validateMermaid(mermaid, spec.kind);
+          }
+          if (!check.ok) {
+            warnings.push(
+              `Diagram "${spec.id}" failed the render check (${check.reason}); skipped.`,
+            );
+            continue;
+          }
+          media.push({
+            kind: 'diagram',
+            payload: {
+              diagramId: spec.id,
+              caption: spec.caption,
+              kind: spec.kind,
+              mermaid,
+            },
+            license: 'original-generated',
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          warnings.push(`Diagram "${spec.id}" failed (${msg}); skipped.`);
+        }
+      }
+      let videos: VideoResult[] = [];
+      if (!this.configService.get<string>('YOUTUBE_API_KEY')?.trim()) {
+        warnings.push('Video search skipped: YOUTUBE_API_KEY not set.');
+      } else {
+        try {
+          videos = await this.courseResearch.searchVideos(
+            outline.title,
+            outline.key_terms.map((k) => k.term),
+          );
+        } catch {
+          videos = [];
+        }
+      }
+      for (const video of videos) {
+        media.push({
+          kind: 'video',
+          payload: {
+            videoId: video.videoId,
+            title: video.title,
+            channel: video.channel,
+            url: video.url,
+          },
+          license: video.license,
+        });
+      }
+      await note('media', true, {
+        diagrams: media.filter((m) => m.kind === 'diagram').length,
+        videos: videos.length,
+      });
+
       // Stage 2: draft (the single billable call per concept).
       // Context hydration never fails the concept — without it we still
       // have the outline, so draft from that alone.
@@ -2626,6 +2751,19 @@ export class AiGenerateService implements OnApplicationBootstrap {
           outlineJson: JSON.stringify(outline),
           contextBlock: contextBlockText,
           researchBrief: researchBrief ?? undefined,
+          diagrams: media
+            .filter((m) => m.kind === 'diagram')
+            .map((m) => ({
+              id: String(m.payload['diagramId']),
+              caption: String(m.payload['caption']),
+            })),
+          videos: media
+            .filter((m) => m.kind === 'video')
+            .map((m) => ({
+              title: String(m.payload['title']),
+              channel: String(m.payload['channel']),
+              url: String(m.payload['url']),
+            })),
         }),
         { ...draftParams },
         'concept_draft',
@@ -2842,6 +2980,21 @@ export class AiGenerateService implements OnApplicationBootstrap {
       if (current !== beforeLinks) {
         warnings.push('Validate stripped dead links from the draft.');
       }
+      // Media coherence (Mayer): references must resolve AND every stored
+      // diagram must be referenced — orphans in either direction warn.
+      const storedDiagramIds = media
+        .filter((m) => m.kind === 'diagram')
+        .map((m) => String(m.payload['diagramId']));
+      for (const ref of extractDiagramRefs(current)) {
+        if (!storedDiagramIds.includes(ref)) {
+          warnings.push(`Diagram reference has no stored diagram: "${ref}"`);
+        }
+      }
+      for (const id of storedDiagramIds) {
+        if (!extractDiagramRefs(current).includes(id)) {
+          warnings.push(`Stored diagram never referenced from content: "${id}"`);
+        }
+      }
       await note('validate', true);
 
       // Stage 7: publish — the compounding loop. Batch creates + attaches;
@@ -2866,6 +3019,16 @@ export class AiGenerateService implements OnApplicationBootstrap {
           summary: this.outlineSummary(outline),
           keyClaims: outline.objectives,
         });
+        for (const item of media) {
+          await this.conceptMediaRepository.save(
+            this.conceptMediaRepository.create({
+              conceptId,
+              kind: item.kind,
+              payload: item.payload,
+              license: item.license,
+            }),
+          );
+        }
         for (const depId of outline.builds_on) {
           try {
             await this.courseContexts.addEdge(

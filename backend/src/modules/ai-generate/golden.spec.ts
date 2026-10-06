@@ -12,6 +12,7 @@ import {
   buildCritiqueUserPrompt,
   buildReviseUserPrompt,
   buildResearchBriefUserPrompt,
+  buildDiagramUserPrompt,
 } from './constants/prompts';
 
 interface GoldenCase {
@@ -63,6 +64,8 @@ function render(task: string, input: any): string {
       return buildReviseUserPrompt(input);
     case 'concept_research':
       return buildResearchBriefUserPrompt(input);
+    case 'concept_diagram':
+      return buildDiagramUserPrompt(input);
     default:
       throw new Error(`unknown golden task: ${task}`);
   }

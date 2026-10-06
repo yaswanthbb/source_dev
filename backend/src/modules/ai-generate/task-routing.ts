@@ -21,6 +21,7 @@ export type CourseTaskKey =
   | 'concept_critique'
   | 'concept_style'
   | 'concept_research'
+  | 'concept_diagram'
   | 'module_mcqs'
   | 'single_concept_mcqs'
   | 'qa_answer';
@@ -60,6 +61,8 @@ export const TASK_ROUTES: Record<CourseTaskKey, TaskRoute> = {
   concept_critique: { tier: 'strong', maxTokens: 2000, temperature: 0.3 },
   // Private research briefs are grounded extraction → cheap/fast.
   concept_research: { tier: 'fast', maxTokens: 800, temperature: 0.3 },
+  // Mermaid diagrams are compact structured output → cheap/fast.
+  concept_diagram: { tier: 'fast', maxTokens: 800, temperature: 0.3 },
   concept_style: { tier: 'strong', maxTokens: 2000, temperature: 0.5 },
 };
 

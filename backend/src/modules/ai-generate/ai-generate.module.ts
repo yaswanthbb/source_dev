@@ -9,6 +9,7 @@ import { CourseTerm } from './entities/course-term.entity';
 import { CourseConceptCard } from './entities/course-concept-card.entity';
 import { CourseConceptEdge } from './entities/course-concept-edge.entity';
 import { ConceptCompilation } from './entities/concept-compilation.entity';
+import { ConceptMedia } from './entities/concept-media.entity';
 import { CourseSource } from './entities/course-source.entity';
 import { CourseSourceChunk } from './entities/course-source-chunk.entity';
 import { Roadmap } from '../content/entities/roadmap.entity';
@@ -43,6 +44,7 @@ import { AiProviderClients } from './ai-provider-clients';
       ConceptCompilation,
       CourseSource,
       CourseSourceChunk,
+      ConceptMedia,
       Roadmap,
       ModuleEntity,
       Concept,

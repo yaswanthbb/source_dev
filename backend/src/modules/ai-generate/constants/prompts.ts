@@ -213,6 +213,7 @@ Output MUST be a strictly valid JSON object with exactly this shape:
   "key_terms": [{"term": "canonical term", "definition": "one-sentence precise definition"}],
   "builds_on": ["concept ids this concept directly requires, from the provided registry context; empty array when truly foundational"],
   "recall_hooks": ["names of earlier terms or concepts this lesson should explicitly recall and link back to"],
+  "diagrams": [{"id": "short kebab-case id, unique within this outline", "caption": "what the diagram shows", "kind": "one of: flowchart, sequence, mindmap (or another Mermaid type when genuinely better)"}],
   "lesson_shape": {
     "hook": "one-sentence opener tying the concept to a real problem",
     "intuition": "the core mental model in plain language",
@@ -228,7 +229,8 @@ Output MUST be a strictly valid JSON object with exactly this shape:
 Rules:
 1. key_terms covers every non-obvious term the draft will use; definitions must be precise enough to check the draft against.
 2. builds_on may ONLY reference concept ids present in the provided registry context. Never invent ids.
-3. STRICTLY FORBIDDEN: Markdown formatting, code fences, explanations, or notes. Output ONLY the raw JSON object.`;
+3. Declare 0-3 diagrams, each earning its place: a diagram must teach something the prose cannot show as clearly (a flow, a sequence, a structure). No decorative visuals.
+4. STRICTLY FORBIDDEN: Markdown formatting, code fences, explanations, or notes. Output ONLY the raw JSON object.`;
 
 export function buildOutlineUserPrompt(input: {
   title: string;
@@ -269,8 +271,20 @@ export function buildDraftUserPrompt(input: {
   contextBlock?: string;
   personaLines?: string;
   researchBrief?: string;
+  diagrams?: Array<{ id: string; caption: string }>;
+  videos?: Array<{ title: string; channel: string; url: string }>;
 }): string {
   const parts = [`Approved Outline (realize every section):\n"""\n${input.outlineJson}\n"""`];
+  if (input.diagrams && input.diagrams.length > 0) {
+    parts.push(
+      `Diagrams available (reference each where it teaches, using {{diagram:<id>}} exactly — never invent ids, never leave a listed diagram unreferenced):\n${input.diagrams.map((d) => `- {{diagram:${d.id}}}: ${d.caption}`).join('\n')}`,
+    );
+  }
+  if (input.videos && input.videos.length > 0) {
+    parts.push(
+      `Supplementary videos (mention by title only where genuinely relevant to the prose; do not invent video references):\n${input.videos.map((v) => `- "${v.title}" (${v.channel}): ${v.url}`).join('\n')}`,
+    );
+  }
   if (input.researchBrief) {
     parts.push(
       `Private Research Brief (ground the article where relevant; NEVER copy passages verbatim — synthesize in your own words):\n"""\n${input.researchBrief.slice(0, 4000)}\n"""`,
@@ -401,4 +415,38 @@ export function buildResearchBriefUserPrompt(input: {
       .join('\n\n')}`,
     'Synthesize the private research brief. Output ONLY the brief JSON.',
   ].join('\n\n');
+}
+
+export const CONCEPT_DIAGRAM_SYSTEM_PROMPT = `You are a technical illustrator producing a single Mermaid diagram for a developer learning article.
+
+Output MUST be a strictly valid JSON object with exactly this shape:
+{ "mermaid": "<complete Mermaid source, no markdown fences>" }
+
+Rules:
+1. The first line must be the correct header for the requested kind (flowchart TD, sequenceDiagram, mindmap, ...).
+2. Keep it focused: 4-10 nodes/participants that teach the caption, nothing decorative.
+3. Node labels must use the article's canonical terms exactly.
+4. No markdown code fences, no explanations, no notes. Output ONLY the raw JSON object.`;
+
+export function buildDiagramUserPrompt(input: {
+  diagramId: string;
+  caption: string;
+  kind: string;
+  topic: string;
+  objectives?: string[];
+  priorAttempt?: { mermaid: string; error: string };
+}): string {
+  const parts = [
+    `Diagram "${input.diagramId}" (${input.kind}) for concept "${input.topic}": ${input.caption}`,
+  ];
+  if (input.objectives && input.objectives.length > 0) {
+    parts.push(`Must illustrate: ${input.objectives.join('; ')}`);
+  }
+  if (input.priorAttempt) {
+    parts.push(
+      `Your previous attempt failed validation: ${input.priorAttempt.error}\nPrior source:\n"""\n${input.priorAttempt.mermaid.slice(0, 2000)}\n"""\nFix exactly the reported problem; keep everything else.`,
+    );
+  }
+  parts.push('Produce the diagram JSON.');
+  return parts.join('\n\n');
 }

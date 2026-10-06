@@ -21,6 +21,7 @@ import { AiPromptRegistry } from './ai-prompt-registry.service';
 import { CourseContextBuilder } from './course-context-builder.service';
 import { CourseContextService } from './course-context.service';
 import { CourseResearchService } from './course-research.service';
+import { ConceptMedia } from './entities/concept-media.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UserRole } from '../../common/enums/user-role.enum';
 import {
@@ -35,6 +36,7 @@ const OUTLINE = {
   key_terms: [{ term: 'branch', definition: 'A movable pointer to a commit.' }],
   builds_on: [],
   recall_hooks: [],
+  diagrams: [],
   lesson_shape: {
     hook: 'h',
     intuition: 'i',
@@ -64,7 +66,12 @@ describe('ConceptCompiler (§8 course compiler)', () => {
   let conceptsService: { createConcept: jest.Mock };
   let roadmapsService: { attachConceptToModule: jest.Mock };
   let contextBuilder: { build: jest.Mock };
-  let research: { retrieveForOutline: jest.Mock; findSource: jest.Mock };
+  let research: {
+    retrieveForOutline: jest.Mock;
+    findSource: jest.Mock;
+    searchVideos: jest.Mock;
+  };
+  let mediaRepo: MockRepository;
 
   const developer = makeUser({ id: 'dev-1', role: UserRole.DEVELOPER });
   const creds = {
@@ -99,6 +106,7 @@ describe('ConceptCompiler (§8 course compiler)', () => {
       critique?: unknown;
       revise?: string;
       brief?: unknown;
+      diagram?: unknown;
     } = {},
   ) {
     const outline =
@@ -117,6 +125,9 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     const brief = overrides.brief ?? {
       brief: 'Branches are movable pointers.',
       key_points: ['pointer'],
+    };
+    const diagram = overrides.diagram ?? {
+      mermaid: 'flowchart TD\n  A[commit] --> B[branch pointer]',
     };
     clients.complete.mockImplementation(
       async (
@@ -141,6 +152,9 @@ describe('ConceptCompiler (§8 course compiler)', () => {
         }
         if (userPrompt.includes('fact-check JSON')) return text(factcheck);
         if (userPrompt.includes('brief JSON')) return text(brief);
+        if (userPrompt.includes('Produce the diagram JSON')) {
+          return text(diagram);
+        }
         if (userPrompt.includes('critique JSON')) return text(critique);
         if (userPrompt.includes('Must-fix')) return text(revise);
         return text('fallback');
@@ -187,6 +201,7 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     research = {
       retrieveForOutline: jest.fn(async () => ({ chunks: [], sourceIds: [] })),
       findSource: jest.fn(async () => null),
+      searchVideos: jest.fn(async () => []),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -225,6 +240,10 @@ describe('ConceptCompiler (§8 course compiler)', () => {
           useValue: createMockRepository(),
         },
         {
+          provide: getRepositoryToken(ConceptMedia),
+          useValue: createMockRepository(),
+        },
+        {
           provide: getRepositoryToken(CourseConceptCard),
           useValue: createMockRepository(),
         },
@@ -257,6 +276,7 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     }).compile();
 
     service = module.get(AiGenerateService);
+    mediaRepo = module.get(getRepositoryToken(ConceptMedia));
     logRepo = module.get(getRepositoryToken(AiGenerationLog));
     compilationRepo = module.get(getRepositoryToken(ConceptCompilation));
     cardRepo = module.get(getRepositoryToken(CourseConceptCard));
@@ -287,6 +307,13 @@ describe('ConceptCompiler (§8 course compiler)', () => {
 
   it('compiles cleanly: publishes, enriches the registry, bills one slot', async () => {
     stagePayloads();
+    // Key present (search itself mocked empty) → no video-skip warning.
+    configGet.mockImplementation((key: string) => {
+      if (key === 'COURSE_ENGINE_ENABLED') return 'true';
+      if (key === 'NVIDIA_API_KEY') return 'platform-key';
+      if (key === 'YOUTUBE_API_KEY') return 'yt-key';
+      return undefined;
+    });
     const out = await service.compileConcept(baseInput);
 
     expect(out.content).toContain('# Branches');
@@ -317,6 +344,7 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     expect(lastSave.stages.map((s: any) => s.stage)).toEqual([
       'outline',
       'research',
+      'media',
       'draft',
       'fact-check',
       'critique-revise',
@@ -376,6 +404,12 @@ describe('ConceptCompiler (§8 course compiler)', () => {
 
   it('re-runs update the same compilation row (retry idempotency)', async () => {
     stagePayloads();
+    configGet.mockImplementation((key: string) => {
+      if (key === 'COURSE_ENGINE_ENABLED') return 'true';
+      if (key === 'NVIDIA_API_KEY') return 'platform-key';
+      if (key === 'YOUTUBE_API_KEY') return 'yt-key';
+      return undefined;
+    });
     compilationRepo.findOne.mockResolvedValue({
       id: 'comp-1',
       jobId: 'job-1',
@@ -432,6 +466,12 @@ describe('ConceptCompiler (§8 course compiler)', () => {
 
     it('feeds the brief into draft + fact-check and records provenance', async () => {
       stagePayloads();
+      configGet.mockImplementation((key: string) => {
+        if (key === 'COURSE_ENGINE_ENABLED') return 'true';
+        if (key === 'NVIDIA_API_KEY') return 'platform-key';
+        if (key === 'YOUTUBE_API_KEY') return 'yt-key';
+        return undefined;
+      });
       research.retrieveForOutline.mockResolvedValue({
         chunks: [
           chunk('A closure bundles a function with its lexical environment.'),
@@ -521,6 +561,172 @@ describe('ConceptCompiler (§8 course compiler)', () => {
       expect(metas.length).toBeGreaterThan(1);
       const billable = metas.filter((m) => m.internal !== true);
       expect(billable).toHaveLength(1);
+    });
+  });
+
+  describe('media stage', () => {
+    const diagramOutline = {
+      ...OUTLINE,
+      diagrams: [
+        { id: 'branch-flow', caption: 'Branch pointer advances', kind: 'flowchart' },
+      ],
+    };
+
+    beforeEach(() => {
+      configGet.mockImplementation((key: string) => {
+        if (key === 'COURSE_ENGINE_ENABLED') return 'true';
+        if (key === 'NVIDIA_API_KEY') return 'platform-key';
+        if (key === 'YOUTUBE_API_KEY') return 'yt-key';
+        return undefined;
+      });
+    });
+
+    function diagramCalls(): string[] {
+      return clients.complete.mock.calls
+        .filter((call) => String(call[4]).includes('Produce the diagram JSON'))
+        .map((call) => String(call[4]));
+    }
+
+    it('stores valid diagrams, references them from the draft, bills nothing extra', async () => {
+      stagePayloads({
+        outline: diagramOutline,
+        draft: '# Branches\n\nSee {{diagram:branch-flow}} for the lifecycle.',
+      });
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(diagramCalls()).toHaveLength(1);
+      expect(mediaRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conceptId: 'c-new',
+          kind: 'diagram',
+          license: 'original-generated',
+        }),
+      );
+      const draftCall = clients.complete.mock.calls.find((call) =>
+        String(call[4]).includes('Approved Outline (realize every section)'),
+      );
+      expect(String(draftCall[4])).toContain('{{diagram:branch-flow}}');
+      expect(out.warnings).toEqual([]);
+      const billable = logRepo.save.mock.calls.filter(
+        (call) => call[0].internal !== true,
+      );
+      expect(billable).toHaveLength(1);
+    });
+
+    it('regenerates once on render failure, then skips the diagram without failing', async () => {
+      stagePayloads({
+        outline: diagramOutline,
+        draft: '# Branches\n\nProse without diagram references.',
+      });
+      clients.complete.mockImplementation(
+        async (
+          _provider: string,
+          _key: string,
+          _model: string,
+          _system: string,
+          userPrompt: string,
+        ) => {
+          const text = (payload: unknown) => ({
+            text:
+              typeof payload === 'string' ? payload : JSON.stringify(payload),
+            tokensIn: 1,
+            tokensOut: 2,
+          });
+          const prompt = String(userPrompt);
+          if (prompt.includes('Produce the outline JSON')) {
+            return text(diagramOutline);
+          }
+          if (prompt.includes('Produce the diagram JSON')) {
+            if (prompt.includes('failed validation')) {
+              return text({ mermaid: 'still not a diagram at all' });
+            }
+            return text({ mermaid: 'just some prose, no header' });
+          }
+          if (prompt.includes('fact-check JSON')) {
+            return text({ consistent: true, outline_drift: [], term_issues: [] });
+          }
+          if (prompt.includes('critique JSON')) {
+            return text({ blocking_issues: [], suggestions: [] });
+          }
+          return text('# Branches\n\nProse without diagram references.');
+        },
+      );
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(diagramCalls()).toHaveLength(2);
+      expect(
+        mediaRepo.save.mock.calls.filter((call) => call[0].kind === 'diagram'),
+      ).toHaveLength(0);
+      expect(
+        out.warnings.some((w) => w.includes('Diagram "branch-flow"')),
+      ).toBe(true);
+      expect(out.conceptId).toBe('c-new');
+    });
+
+    it('unresolvable references and orphan diagrams warn, never fail', async () => {
+      stagePayloads({
+        outline: diagramOutline,
+        draft: '# Branches\n\nSee {{diagram:ghost-diagram}} here.',
+      });
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(
+        out.warnings.some((w) => w.includes('no stored diagram: "ghost-diagram"')),
+      ).toBe(true);
+      expect(
+        out.warnings.some((w) => w.includes('never referenced from content: "branch-flow"')),
+      ).toBe(true);
+      expect(out.conceptId).toBe('c-new');
+    });
+
+    it('stores video rows with license notes and lists them to the draft', async () => {
+      stagePayloads({
+        draft: '# Branches\n\nContent referencing closures.',
+      });
+      research.searchVideos.mockResolvedValue([
+        {
+          videoId: 'abc123',
+          title: 'Closures Explained',
+          channel: 'JS Channel',
+          url: 'https://www.youtube.com/watch?v=abc123',
+          license: 'CC via YouTube creativeCommons filter',
+        },
+      ]);
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(mediaRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conceptId: 'c-new',
+          kind: 'video',
+          license: 'CC via YouTube creativeCommons filter',
+        }),
+      );
+      const draftCall = clients.complete.mock.calls.find((call) =>
+        String(call[4]).includes('Approved Outline (realize every section)'),
+      );
+      expect(String(draftCall[4])).toContain('Closures Explained');
+      expect(out.conceptId).toBe('c-new');
+    });
+
+    it('missing YOUTUBE_API_KEY degrades to a skip warning', async () => {
+      stagePayloads();
+      configGet.mockImplementation((key: string) => {
+        if (key === 'COURSE_ENGINE_ENABLED') return 'true';
+        if (key === 'NVIDIA_API_KEY') return 'platform-key';
+        return undefined;
+      });
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(research.searchVideos).not.toHaveBeenCalled();
+      expect(out.warnings).toEqual([
+        'Video search skipped: YOUTUBE_API_KEY not set.',
+      ]);
+      expect(out.conceptId).toBe('c-new');
     });
   });
 });

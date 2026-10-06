@@ -35,6 +35,7 @@ import { AiProviderKey } from '../modules/ai-generate/entities/ai-provider-key.e
 import { AiPromptVersion } from '../modules/ai-generate/entities/ai-prompt-version.entity';
 import { CourseSource } from '../modules/ai-generate/entities/course-source.entity';
 import { CourseSourceChunk } from '../modules/ai-generate/entities/course-source-chunk.entity';
+import { ConceptMedia } from '../modules/ai-generate/entities/concept-media.entity';
 import { CourseTerm } from '../modules/ai-generate/entities/course-term.entity';
 import { CourseConceptCard } from '../modules/ai-generate/entities/course-concept-card.entity';
 import { CourseConceptEdge } from '../modules/ai-generate/entities/course-concept-edge.entity';
@@ -74,6 +75,7 @@ export const entities = [
   ConceptCompilation,
   CourseSource,
   CourseSourceChunk,
+  ConceptMedia,
   Notification,
   Article,
   PasswordResetOtp,

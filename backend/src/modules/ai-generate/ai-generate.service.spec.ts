@@ -20,6 +20,7 @@ import { AiPromptRegistry } from './ai-prompt-registry.service';
 import { CourseContextBuilder } from './course-context-builder.service';
 import { CourseContextService } from './course-context.service';
 import { CourseResearchService } from './course-research.service';
+import { ConceptMedia } from './entities/concept-media.entity';
 import { ConceptCompilation } from './entities/concept-compilation.entity';
 import { CourseConceptCard } from './entities/course-concept-card.entity';
 import { CourseTerm } from './entities/course-term.entity';
@@ -48,7 +49,11 @@ describe('AiGenerateService', () => {
     configuredDefaultModel: jest.Mock;
   };
   let courseContext: { build: jest.Mock };
-  let courseResearch: { retrieveForOutline: jest.Mock; findSource: jest.Mock };
+  let courseResearch: {
+    retrieveForOutline: jest.Mock;
+    findSource: jest.Mock;
+    searchVideos: jest.Mock;
+  };
 
   const developer = makeUser({ id: 'dev-1', role: UserRole.DEVELOPER });
   const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
@@ -82,6 +87,7 @@ describe('AiGenerateService', () => {
     courseResearch = {
       retrieveForOutline: jest.fn(async () => ({ chunks: [], sourceIds: [] })),
       findSource: jest.fn(async () => null),
+      searchVideos: jest.fn(async () => []),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -150,6 +156,10 @@ describe('AiGenerateService', () => {
         },
         {
           provide: getRepositoryToken(CourseTerm),
+          useValue: createMockRepository(),
+        },
+        {
+          provide: getRepositoryToken(ConceptMedia),
           useValue: createMockRepository(),
         },
       ],
@@ -599,6 +609,7 @@ describe('AiGenerateService', () => {
       key_terms: [],
       builds_on: [],
       recall_hooks: [],
+      diagrams: [],
       lesson_shape: {
         hook: 'h',
         intuition: 'i',

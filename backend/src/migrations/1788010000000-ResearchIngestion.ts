@@ -2,21 +2,32 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * §8 research ingestion (RAG): lawful-sources corpus + chunk store for
- * pgvector top-k retrieval. The `vector` extension install is best-effort:
- * when unavailable the `embedding` column falls back to `text` and
- * similarity runs as JS cosine — the research stage degrades gracefully
- * either way and never fails a concept. The extension itself is never
- * dropped on down (it may be shared).
+ * pgvector top-k retrieval. The `vector` extension install is best-effort,
+ * probed via pg_available_extensions first (a failed CREATE would poison the
+ * migration transaction — a caught error cannot un-abort it): when
+ * unavailable the `embedding` column falls back to `text` and similarity
+ * runs as JS cosine — the research stage degrades gracefully either way and
+ * never fails a concept. The extension itself is never dropped on down (it
+ * may be shared).
  */
 export class ResearchIngestion1788010000000 implements MigrationInterface {
   name = 'ResearchIngestion1788010000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    let vectorAvailable = true;
-    try {
-      await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "vector"`);
-    } catch {
-      vectorAvailable = false;
+    // Probe first: a failed CREATE EXTENSION poisons the whole migration
+    // transaction (Postgres aborts everything after the first error, and a
+    // JS try/catch cannot un-abort it). A plain SELECT never fails, so the
+    // extension is only created when it is actually available.
+    const probe: Array<{ exists: boolean }> = await queryRunner.query(
+      `SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') AS "exists"`,
+    );
+    let vectorAvailable = probe[0]?.exists === true;
+    if (vectorAvailable) {
+      try {
+        await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "vector"`);
+      } catch {
+        vectorAvailable = false;
+      }
     }
     const embeddingType = vectorAvailable ? 'vector' : 'text';
     await queryRunner.query(

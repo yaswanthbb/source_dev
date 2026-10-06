@@ -67,6 +67,8 @@ const INGEST_TIMEOUT_MS = 15000;
 const MAX_INGEST_CHARS = 1_000_000;
 const MAX_RETRIEVAL_SCAN = 500;
 const MAX_QUERY_TEXTS = 8;
+const YOUTUBE_TIMEOUT_MS = 10000;
+const MAX_VIDEOS_PER_CONCEPT = 3;
 
 export interface IngestResult {
   source: CourseSource;
@@ -78,6 +80,15 @@ export interface RetrievedChunk {
   id: string;
   sourceId: string;
   content: string;
+}
+
+export interface VideoResult {
+  videoId: string;
+  title: string;
+  channel: string;
+  url: string;
+  /** Provenance note: how the license position was determined. */
+  license: string;
 }
 
 @Injectable()
@@ -231,6 +242,77 @@ export class CourseResearchService {
       license: OER_SEED_SOURCE.license,
       sourceType: OER_SEED_SOURCE.sourceType,
     });
+  }
+
+  /**
+   * Supplementary videos per concept (YouTube Data API v3, embed by
+   * reference — IDs and metadata only, content never downloaded or copied).
+   * No API key → empty (the compiler records a skip warning, never fails).
+   * CC-filtered results sort first, then standard embeds, capped at 3;
+   * any transport/API failure degrades to empty.
+   */
+  async searchVideos(
+    title: string,
+    keyTerms: string[],
+  ): Promise<VideoResult[]> {
+    const apiKey = this.configService.get<string>('YOUTUBE_API_KEY')?.trim();
+    if (!apiKey) return [];
+    const query = `${title} ${keyTerms.slice(0, 3).join(' ')}`.trim();
+    if (!query) return [];
+    const fetchPage = async (license: 'creativeCommons' | 'none') => {
+      const params = new URLSearchParams({
+        key: apiKey,
+        q: query,
+        part: 'snippet',
+        type: 'video',
+        maxResults: String(MAX_VIDEOS_PER_CONCEPT),
+        order: 'relevance',
+        videoEmbeddable: 'true',
+        safeSearch: 'strict',
+      });
+      if (license !== 'none') params.set('videoLicense', license);
+      const response = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+        { signal: AbortSignal.timeout(YOUTUBE_TIMEOUT_MS) },
+      );
+      if (!response.ok) return [];
+      const data = (await response.json()) as {
+        items?: Array<{
+          id?: { videoId?: string };
+          snippet?: { title?: string; channelTitle?: string };
+        }>;
+      };
+      const note =
+        license === 'none'
+          ? 'YouTube standard embed-only — no download or copy'
+          : 'CC via YouTube creativeCommons filter';
+      return (data.items ?? [])
+        .filter((item) => item.id?.videoId)
+        .map((item) => ({
+          videoId: item.id?.videoId as string,
+          title: item.snippet?.title ?? (item.id?.videoId as string),
+          channel: item.snippet?.channelTitle ?? 'unknown channel',
+          url: `https://www.youtube.com/watch?v=${item.id?.videoId}`,
+          license: note,
+        }));
+    };
+    try {
+      const [cc, general] = await Promise.all([
+        fetchPage('creativeCommons'),
+        fetchPage('none'),
+      ]);
+      const seen = new Set<string>();
+      const merged: VideoResult[] = [];
+      for (const video of [...cc, ...general]) {
+        if (seen.has(video.videoId)) continue;
+        seen.add(video.videoId);
+        merged.push(video);
+        if (merged.length >= MAX_VIDEOS_PER_CONCEPT) break;
+      }
+      return merged;
+    } catch {
+      return [];
+    }
   }
 
   /**

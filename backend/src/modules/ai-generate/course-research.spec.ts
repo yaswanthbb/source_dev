@@ -161,8 +161,7 @@ describe('CourseResearchService (§8 RAG ingestion + retrieval)', () => {
     });
   });
 
-  describe('retrieval', () => {
-    it('returns top-k by similarity through the JS fallback (no pgvector)', async () => {
+  describe('retrieval', () => {    it('returns top-k by similarity through the JS fallback (no pgvector)', async () => {
       chunks.query.mockRejectedValue(new Error('function does not exist'));
       chunks.find.mockResolvedValue([
         {
@@ -229,6 +228,61 @@ describe('CourseResearchService (§8 RAG ingestion + retrieval)', () => {
         undefined,
       );
       expect(out).toEqual({ chunks: [], sourceIds: [] });
+    });
+  });
+
+  describe('video search (embed by reference only)', () => {
+    const page = (ids: Array<{ videoId: string; title: string; channel: string }>) => ({
+      ok: true,
+      json: async () => ({
+        items: ids.map((v) => ({
+          id: { videoId: v.videoId },
+          snippet: { title: v.title, channelTitle: v.channel },
+        })),
+      }),
+    });
+
+    it('prefers CC results, dedupes, caps at 3, and logs license notes', async () => {
+      configGet.mockReturnValueOnce('yt-key');
+      fetchMock
+        .mockResolvedValueOnce(
+          page([
+            { videoId: 'cc1', title: 'CC Intro', channel: 'Edu' },
+            { videoId: 'dup', title: 'Dup CC', channel: 'Edu' },
+          ]),
+        )
+        .mockResolvedValueOnce(
+          page([
+            { videoId: 'dup', title: 'Dup Std', channel: 'Edu' },
+            { videoId: 'std1', title: 'Std One', channel: 'Coder' },
+            { videoId: 'std2', title: 'Std Two', channel: 'Coder' },
+            { videoId: 'std3', title: 'Std Three', channel: 'Coder' },
+          ]),
+        );
+
+      const out = await service.searchVideos('closures', ['closure']);
+
+      expect(out.map((v) => v.videoId)).toEqual(['cc1', 'dup', 'std1']);
+      expect(out[0].license).toContain('CC');
+      expect(out[2].license).toContain('embed-only');
+      expect(out[0].url).toBe('https://www.youtube.com/watch?v=cc1');
+      const firstUrl: string = fetchMock.mock.calls[0][0];
+      expect(firstUrl).toContain('videoEmbeddable=true');
+      expect(firstUrl).toContain('videoLicense=creativeCommons');
+    });
+
+    it('skips without a key (no fetch) and degrades on API failure', async () => {
+      configGet.mockReturnValue(undefined);
+      await expect(service.searchVideos('closures', ['closure'])).resolves.toEqual(
+        [],
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      configGet.mockReturnValue('yt-key');
+      fetchMock.mockResolvedValue({ ok: false, status: 403 });
+      await expect(service.searchVideos('closures', ['closure'])).resolves.toEqual(
+        [],
+      );
     });
   });
 });

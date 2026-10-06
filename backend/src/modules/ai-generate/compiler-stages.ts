@@ -20,12 +20,25 @@ export interface ConceptLessonShape {
   retrieval_questions: string;
 }
 
+/**
+ * §8 media: diagrams declared in the outline, referenced from content as
+ * {{diagram:<id>}}. `kind` is an open vocabulary (flowchart, sequence,
+ * mindmap, …) — the structural check matches known kinds strictly and
+ * accepts any other recognized Mermaid header for the rest.
+ */
+export interface OutlineDiagram {
+  id: string;
+  caption: string;
+  kind: string;
+}
+
 export interface ConceptOutline {
   title: string;
   objectives: string[];
   key_terms: ConceptKeyTerm[];
   builds_on: string[];
   recall_hooks: string[];
+  diagrams: OutlineDiagram[];
   /** RAG placeholder: always null until the research phase fills it. */
   research_brief: null;
   lesson_shape: ConceptLessonShape;
@@ -121,6 +134,45 @@ export function parseOutline(raw: string): ConceptOutline {
   if (!recallHooks) {
     throw stageFailure('outline', '"recall_hooks" must be a string array.');
   }
+  if (!Array.isArray(parsed['diagrams'])) {
+    throw stageFailure(
+      'outline',
+      '"diagrams" must be an array (possibly empty).',
+    );
+  }
+  const diagrams: OutlineDiagram[] = [];
+  const seenIds = new Set<string>();
+  for (const entry of parsed['diagrams'] as unknown[]) {
+    const record =
+      typeof entry === 'object' && entry !== null
+        ? (entry as Record<string, unknown>)
+        : null;
+    const id = record?.['id'];
+    const caption = record?.['caption'];
+    const kind = record?.['kind'];
+    if (
+      typeof id !== 'string' ||
+      !id.trim() ||
+      typeof caption !== 'string' ||
+      !caption.trim() ||
+      typeof kind !== 'string' ||
+      !kind.trim()
+    ) {
+      throw stageFailure(
+        'outline',
+        'every diagram needs non-empty string "id", "caption", and "kind".',
+      );
+    }
+    if (seenIds.has(id.trim())) {
+      throw stageFailure('outline', `duplicate diagram id "${id}".`);
+    }
+    seenIds.add(id.trim());
+    diagrams.push({
+      id: id.trim(),
+      caption: caption.trim(),
+      kind: kind.trim(),
+    });
+  }
   const shape = parsed['lesson_shape'] as Record<string, unknown> | undefined;
   if (typeof shape !== 'object' || shape === null) {
     throw stageFailure('outline', '"lesson_shape" must be an object.');
@@ -157,6 +209,7 @@ export function parseOutline(raw: string): ConceptOutline {
     key_terms: keyTerms,
     builds_on: buildsOn,
     recall_hooks: recallHooks,
+    diagrams,
     research_brief: null,
     lesson_shape: Object.fromEntries(
       LESSON_SHAPE_KEYS.map((k) => [k, (shape[k] as string).trim()]),
@@ -269,4 +322,137 @@ export function parseResearchBrief(raw: string): ResearchBrief {
     brief: parsed['brief'].trim(),
     key_points: keyPoints,
   };
+}
+
+export interface ParsedDiagram {
+  /** Fence-stripped Mermaid source, ready to store and render. */
+  mermaid: string;
+}
+
+/** Strict diagram parse: a JSON object carrying non-empty Mermaid source. */
+export function parseDiagram(raw: string): ParsedDiagram {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw stageFailure('diagram', 'response is not valid JSON.');
+  }
+  if (typeof parsed['mermaid'] !== 'string' || !parsed['mermaid'].trim()) {
+    throw stageFailure('diagram', '"mermaid" must be a non-empty string.');
+  }
+  const mermaid = parsed['mermaid']
+    .replace(/^```(?:mermaid)?\s*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .trim();
+  if (!mermaid) {
+    throw stageFailure('diagram', 'mermaid source is empty after cleanup.');
+  }
+  return { mermaid };
+}
+
+const DIAGRAM_REFERENCE_PATTERN =
+  /\{\{\s*diagram\s*:\s*([A-Za-z0-9_-]+)\s*\}\}/g;
+
+/** Content references to stored diagrams (`{{diagram:<id>}}`), deduplicated. */
+export function extractDiagramRefs(content: string): string[] {
+  const refs: string[] = [];
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
+  DIAGRAM_REFERENCE_PATTERN.lastIndex = 0;
+  while ((match = DIAGRAM_REFERENCE_PATTERN.exec(content)) !== null) {
+    if (!seen.has(match[1])) {
+      seen.add(match[1]);
+      refs.push(match[1]);
+    }
+  }
+  return refs;
+}
+
+/** Strict headers for the headline kinds; everything else takes any known header. */
+const STRICT_DIAGRAM_HEADERS: Record<string, RegExp> = {
+  flowchart: /^(flowchart|graph)\s+(TD|TB|BT|RL|LR)\s*$/,
+  sequence: /^sequenceDiagram\s*$/,
+  mindmap: /^mindmap\s*$/,
+};
+
+const KNOWN_DIAGRAM_HEADERS: RegExp[] = [
+  /^(flowchart|graph)\s+(TD|TB|BT|RL|LR)/,
+  /^sequenceDiagram/,
+  /^mindmap/,
+  /^gantt/,
+  /^pie(\s|$)/,
+  /^erDiagram/,
+  /^stateDiagram(-v2)?(\s|$)/,
+  /^classDiagram/,
+  /^journey/,
+  /^gitGraph/,
+  /^timeline/,
+  /^requirementDiagram/,
+  /^sankey-beta/,
+  /^xychart-beta/,
+  /^packet-beta/,
+];
+
+export interface MermaidCheck {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * Structural compile check — deterministic and dependency-free, so it runs
+ * in unit tests and any CI. It catches the common LLM failure modes (wrong
+ * header for the declared kind, fences left in, unbalanced delimiters,
+ * single-line stubs), not full layout semantics. A headless render
+ * (mermaid-cli/Kroki) can replace this seam when that infra exists; the
+ * regen-once contract around it stays the same.
+ */
+export function validateMermaid(mermaid: string, kind: string): MermaidCheck {
+  const text = mermaid.trim();
+  if (!text) return { ok: false, reason: 'empty mermaid source' };
+  if (/^```/.test(text) || /```\s*$/.test(text)) {
+    return { ok: false, reason: 'markdown fences left in mermaid source' };
+  }
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) {
+    return { ok: false, reason: 'diagram has fewer than 2 content lines' };
+  }
+  const strict = STRICT_DIAGRAM_HEADERS[kind.toLowerCase()];
+  if (strict) {
+    if (!strict.test(lines[0])) {
+      return {
+        ok: false,
+        reason: `first line "${lines[0]}" is not a ${kind} header`,
+      };
+    }
+  } else if (!KNOWN_DIAGRAM_HEADERS.some((re) => re.test(lines[0]))) {
+    return {
+      ok: false,
+      reason: `unrecognized diagram header "${lines[0]}"`,
+    };
+  }
+  // Delimiter balance, ignoring quoted label text (labels often contain
+  // brackets, e.g. A["x (y)"]).
+  const code = text.replace(/"[^"]*"/g, '""').replace(/'[^']*'/g, "''");
+  const pairs: Array<[string, string]> = [
+    ['(', ')'],
+    ['[', ']'],
+    ['{', '}'],
+  ];
+  for (const [open, close] of pairs) {
+    let depth = 0;
+    for (const char of code) {
+      if (char === open) depth += 1;
+      if (char === close) depth -= 1;
+      if (depth < 0) {
+        return { ok: false, reason: `unbalanced "${open}${close}" delimiters` };
+      }
+    }
+    if (depth !== 0) {
+      return { ok: false, reason: `unbalanced "${open}${close}" delimiters` };
+    }
+  }
+  return { ok: true };
 }

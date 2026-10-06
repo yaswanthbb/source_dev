@@ -28,7 +28,7 @@ export interface ProviderMeta {
 
 const NVIDIA_DEFAULT_MODEL = 'meta/llama-3.1-70b-instruct';
 const GEMINI_DEFAULT_MODEL = 'gemini-3.6-flash';
-const NVIDIA_DEFAULT_EMBEDDING_MODEL = 'nvidia/nv-embedqa-e5-v5';
+const NVIDIA_DEFAULT_EMBEDDING_MODEL = 'nvidia/nemotron-3-embed-1b';
 
 const CURATED_MODELS: Record<AiProvider, string[]> = {
   [AiProvider.NVIDIA]: [
