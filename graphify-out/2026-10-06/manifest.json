@@ -54,9 +54,9 @@
     "semantic_hash": "d41667340ddf50d41f530cba686fc9d4"
   },
   "backend/src/common/enums/ai-generation-type.enum.ts": {
-    "mtime": 1787567558.1959825,
-    "seen": 1787572136.2668898,
-    "ast_hash": "a1a3a25705b930179ce9214ea9047fd2",
+    "mtime": 1791262459.9042938,
+    "seen": 1791263532.9257812,
+    "ast_hash": "c83b86379f88a058664e4b466e4b8498",
     "semantic_hash": ""
   },
   "backend/src/common/enums/concept-difficulty.enum.ts": {
@@ -108,9 +108,9 @@
     "semantic_hash": "979664fd0cacda7c7d97f2738f09f9fc"
   },
   "backend/src/config/typeorm.config.ts": {
-    "mtime": 1791261128.2274528,
-    "seen": 1791261674.3536744,
-    "ast_hash": "dcb30d8a5dfa56a7b2a2f6857ed8009e",
+    "mtime": 1791263084.6655502,
+    "seen": 1791263532.9257996,
+    "ast_hash": "4f05daf8fc514322c4314a53a7b1378f",
     "semantic_hash": ""
   },
   "backend/src/main.ts": {
@@ -204,9 +204,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.ts": {
-    "mtime": 1791261250.175972,
-    "seen": 1791261674.3537173,
-    "ast_hash": "0de911cc6a5d81b947bbf4187e2f1f43",
+    "mtime": 1791262809.7623389,
+    "seen": 1791263532.9258277,
+    "ast_hash": "727e4faf78694b89d7f116c6dcb6831b",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.ts": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "source-dev-master-plan.md": {
-    "mtime": 1791261377.8314893,
-    "seen": 1791261674.3539937,
-    "ast_hash": "849e3147e1024acc2160249471ceba2a",
+    "mtime": 1791263306.5085795,
+    "seen": 1791263532.9259987,
+    "ast_hash": "cd2d8893d83bc27b5a8f6c48eb9c0475",
     "semantic_hash": ""
   },
   "frontend/screenshots/neofetch.png": {
@@ -1902,9 +1902,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-prompt-registry.service.ts": {
-    "mtime": 1791177242.4414458,
-    "seen": 1791187825.2343235,
-    "ast_hash": "e1c7740dc0c21065fb17d7592719d005",
+    "mtime": 1791262727.2931583,
+    "seen": 1791263532.9258323,
+    "ast_hash": "ab315cb907c2e31aa0b1153d7e79ffba",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/compiler-stages.spec.ts": {
@@ -2067,6 +2067,24 @@
     "mtime": 1791261070.6606882,
     "seen": 1791261674.3537488,
     "ast_hash": "eb1a17b1293bd4a1a90bd7e18855e668",
+    "semantic_hash": ""
+  },
+  "backend/src/migrations/1788030000000-StagePromptTasks.ts": {
+    "mtime": 1791262928.6358469,
+    "seen": 1791263532.925824,
+    "ast_hash": "331234c0bd990ad2a62f665eeecb3b7b",
+    "semantic_hash": ""
+  },
+  "backend/src/migrations/1788040000000-StagePromptSeeds.ts": {
+    "mtime": 1791262913.5036662,
+    "seen": 1791263532.9258249,
+    "ast_hash": "c7f5f21143b814f3e6e9a68609ab0098",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/stage-prompts.spec.ts": {
+    "mtime": 1791262770.3927906,
+    "seen": 1791263532.9258523,
+    "ast_hash": "6d139e1f03a5eb663a568bfed35e74c1",
     "semantic_hash": ""
   }
 }

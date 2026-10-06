@@ -204,15 +204,15 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.ts": {
-    "mtime": 1791262809.7623389,
-    "seen": 1791263532.9258277,
-    "ast_hash": "727e4faf78694b89d7f116c6dcb6831b",
+    "mtime": 1791267825.782914,
+    "seen": 1791269813.6582224,
+    "ast_hash": "90cf4a8df4abe598c61e3f0f8fb3b091",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.ts": {
-    "mtime": 1791261066.1087072,
-    "seen": 1791261674.3537319,
-    "ast_hash": "73db35a7efa6a4b43d9c4bb50244edb0",
+    "mtime": 1791267825.8269138,
+    "seen": 1791269813.6582317,
+    "ast_hash": "f09edf36a3883b9cb0c17f0f4741d977",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/dto/ai-generate.dto.ts": {
@@ -1740,9 +1740,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/authoring.test.mjs": {
-    "mtime": 1791172318.9024162,
-    "seen": 1791172489.043907,
-    "ast_hash": "9244fee4cc9fb0375d6485dc8e2523e2",
+    "mtime": 1791265921.2795186,
+    "seen": 1791269813.6583705,
+    "ast_hash": "f6f3410c357c323e7aec03b4c0c36155",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.test.mjs": {
@@ -1770,9 +1770,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/learning-commands.ts": {
-    "mtime": 1791172318.9032443,
-    "seen": 1791172489.0439095,
-    "ast_hash": "3cd85e61ff1c9c13a679fcaec8f26612",
+    "mtime": 1791265900.899477,
+    "seen": 1791269813.6583736,
+    "ast_hash": "b47437a5f57e3de9b54bd5c0390295e4",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/location.test.mjs": {
@@ -1842,9 +1842,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1791177242.43389,
-    "seen": 1791187825.2344851,
-    "ast_hash": "09747e2df53481662d65b26363afe7c2",
+    "mtime": 1791267711.0233412,
+    "seen": 1791269813.658387,
+    "ast_hash": "19dc5572bf74768e105f1685a1563a81",
     "semantic_hash": ""
   },
   "backend/write-tests-for-me.md": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "source-dev-master-plan.md": {
-    "mtime": 1791263306.5085795,
-    "seen": 1791263532.9259987,
-    "ast_hash": "cd2d8893d83bc27b5a8f6c48eb9c0475",
+    "mtime": 1791267836.9968739,
+    "seen": 1791269813.6583917,
+    "ast_hash": "593068ba798ff2858bf2c1e8b40a66ce",
     "semantic_hash": ""
   },
   "frontend/screenshots/neofetch.png": {
@@ -1908,21 +1908,21 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/compiler-stages.spec.ts": {
-    "mtime": 1791261272.7208853,
-    "seen": 1791261674.3537283,
-    "ast_hash": "bd6cb912a37396bbe476c6d48e71fca9",
+    "mtime": 1791267825.479915,
+    "seen": 1791269813.6582296,
+    "ast_hash": "aafc9521d4cb803e9bfd2e67d2c5618d",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/compiler-stages.ts": {
-    "mtime": 1791261365.2924478,
-    "seen": 1791261674.3537295,
-    "ast_hash": "e836efb38e701dbc86e51107a270b9db",
+    "mtime": 1791267825.4389153,
+    "seen": 1791269813.6582303,
+    "ast_hash": "86c6d5eec443e279b10f130aedc85a0e",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-compiler.spec.ts": {
-    "mtime": 1791261310.0357432,
-    "seen": 1791261674.3537328,
-    "ast_hash": "f1d2df06baf9f996edf3abb80aeeb457",
+    "mtime": 1791267825.5622816,
+    "seen": 1791269813.6582322,
+    "ast_hash": "33a7c49100cc56a893b1f1da8d0c9b3e",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-context-builder.service.ts": {
