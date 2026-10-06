@@ -1,7 +1,7 @@
 {"task":"concept_outline","promptVersion":"1.0.0","input":{"title":"What is a branch","difficulty":"easy","moduleTitle":"Branching Basics"},"expectContains":["What is a branch","outline JSON"]}
 {"task":"concept_draft","promptVersion":"1.0.0","input":{"outlineJson":"{\"title\":\"What is a branch\"}"},"expectContains":["Approved Outline","Markdown"]}
 {"task":"concept_factcheck","promptVersion":"1.0.0","input":{"outlineJson":"{\"title\":\"X\"}","draftContent":"Draft text.","registryTerms":"- branch: pointer"},"expectContains":["Approved Outline","fact-check JSON"]}
-{"task":"concept_critique","promptVersion":"1.0.0","input":{"title":"What is a branch","draftContent":"Draft text.","objectives":["Explain branches"],"difficulty":"easy"},"expectContains":["What is a branch","critique JSON"]}
+{"task":"concept_critique","promptVersion":"1.0.0","input":{"title":"What is a branch","draftContent":"Draft text.","objectives":["Explain branches"],"difficulty":"easy"},"expectContains":["What is a branch","critique JSON","chain-of-thought"]}
 {"task":"concept_revise","promptVersion":"1.0.0","input":{"draftContent":"Draft text.","blockingIssues":["Fix the example"],"factcheckFindings":[]},"expectContains":["Must-fix","revised article"]}
 {"task":"concept_research","promptVersion":"1.0.0","input":{"queries":["branch: movable pointer"],"chunks":[{"sourceTitle":"MDN Closures","content":"A closure bundles a function with its environment."}]},"expectContains":["Research queries","Retrieved excerpts","brief JSON"]}
 {"task":"concept_draft","promptVersion":"1.0.0","input":{"outlineJson":"{\"title\":\"What is a branch\"}","researchBrief":"Closures capture environments."},"expectContains":["Approved Outline","Private Research Brief"]}

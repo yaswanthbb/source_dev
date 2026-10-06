@@ -22,6 +22,7 @@ import type {
   ConceptProgressInfo,
 } from "@/lib/hooks/use-roadmap-progress";
 import type { CommandCtx, CommandSpec, TerminalAction } from "./commands";
+import { slugify } from "./resolve-location";
 
 /** The shortest input worth spending a metered AI generation on. Below this,
  *  or with no letters at all, the question is bounced before the request. */
@@ -1694,7 +1695,10 @@ async function cwdModuleId(ctx: CommandCtx): Promise<string | null> {
     `/roadmaps/${encodeURIComponent(roadmapId)}`,
   );
   const mod = (data.modules ?? []).find(
-    (m) => m.id === loc.module || m.title.toLowerCase() === loc.module.toLowerCase(),
+    (m) =>
+      m.id === loc.module ||
+      m.title.toLowerCase() === loc.module.toLowerCase() ||
+      slugify(m.title) === loc.module.toLowerCase(),
   );
   return mod?.id ?? null;
 }
@@ -1881,23 +1885,27 @@ const moduleNew: CommandSpec = {
 
 const conceptNew: CommandSpec = {
   name: "concept",
-  usage: "concept new <title>",
+  usage: "concept <new|ai> <title>",
   help: {
-    usage: "concept new <title>",
+    usage: "concept <new|ai> <title>",
     description: [
       "Write a lesson into the module on screen: pick a difficulty, then the",
       "body as heredoc. Created private and attached in one move.",
+      "The ai twin generates the body for you instead of asking for it.",
     ],
-    commands: [{ name: "new <title>", text: "Write and attach a lesson" }],
-    examples: ["concept new Event Loop"],
+    commands: [
+      { name: "new <title>", text: "Write and attach a lesson" },
+      { name: "ai <title>", text: "Generate the body with AI, then attach" },
+    ],
+    examples: ["concept new Event Loop", "concept ai Event Loop"],
   },
   summary: "write a lesson into this module",
   group: "author",
   run: async (ctx) => {
     const [kind, ...rest] = ctx.args;
     const title = rest.join(" ").trim();
-    if (kind !== "new" || !title) {
-      ctx.io.print("usage: concept new <title>", "dim");
+    if ((kind !== "new" && kind !== "ai") || !title) {
+      ctx.io.print("usage: concept <new|ai> <title>", "dim");
       return;
     }
     const moduleId = await cwdModuleId(ctx);
@@ -1910,10 +1918,43 @@ const conceptNew: CommandSpec = {
       return;
     }
     const difficulty = await pickDifficulty(ctx);
-    const content = await readHeredoc(ctx, "Body");
-    if (!content || content.length < 20) {
-      ctx.io.print("too short: a lesson needs at least 20 characters of body.", "err");
-      return;
+    let content: string;
+    if (kind === "ai") {
+      ctx.io.print("generating with AI (one quota slot)...", "dim");
+      try {
+        const roadmapId = await cwdRoadmapId(ctx);
+        let roadmapTitle: string | undefined;
+        let moduleTitle: string | undefined;
+        if (roadmapId) {
+          const { data } = await api.get<RoadmapDetail>(
+            `/roadmaps/${encodeURIComponent(roadmapId)}`,
+          );
+          roadmapTitle = data.title;
+          moduleTitle = (data.modules ?? []).find((m) => m.id === moduleId)?.title;
+        }
+        const { data } = await api.post<{ content: string }>(
+          "/ai-generate/concept-content",
+          { title, difficulty, roadmapTitle, moduleTitle },
+        );
+        content = data.content;
+      } catch (e) {
+        const msg =
+          (e as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message ?? "request failed";
+        ctx.io.print(`AI generation refused: ${msg}`, "err");
+        return;
+      }
+      if (!content || content.length < 20) {
+        ctx.io.print("AI returned too little to keep. Try again.", "err");
+        return;
+      }
+    } else {
+      const body = await readHeredoc(ctx, "Body");
+      if (!body || body.length < 20) {
+        ctx.io.print("too short: a lesson needs at least 20 characters of body.", "err");
+        return;
+      }
+      content = body;
     }
     const { data: created } = await api.post<{ id: string }>("/concepts", {
       title,

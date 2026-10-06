@@ -568,7 +568,11 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     const diagramOutline = {
       ...OUTLINE,
       diagrams: [
-        { id: 'branch-flow', caption: 'Branch pointer advances', kind: 'flowchart' },
+        {
+          id: 'branch-flow',
+          caption: 'Branch pointer advances',
+          kind: 'flowchart',
+        },
       ],
     };
 
@@ -644,7 +648,11 @@ describe('ConceptCompiler (§8 course compiler)', () => {
             return text({ mermaid: 'just some prose, no header' });
           }
           if (prompt.includes('fact-check JSON')) {
-            return text({ consistent: true, outline_drift: [], term_issues: [] });
+            return text({
+              consistent: true,
+              outline_drift: [],
+              term_issues: [],
+            });
           }
           if (prompt.includes('critique JSON')) {
             return text({ blocking_issues: [], suggestions: [] });
@@ -674,10 +682,14 @@ describe('ConceptCompiler (§8 course compiler)', () => {
       const out = await service.compileConcept(baseInput);
 
       expect(
-        out.warnings.some((w) => w.includes('no stored diagram: "ghost-diagram"')),
+        out.warnings.some((w) =>
+          w.includes('no stored diagram: "ghost-diagram"'),
+        ),
       ).toBe(true);
       expect(
-        out.warnings.some((w) => w.includes('never referenced from content: "branch-flow"')),
+        out.warnings.some((w) =>
+          w.includes('never referenced from content: "branch-flow"'),
+        ),
       ).toBe(true);
       expect(out.conceptId).toBe('c-new');
     });
@@ -726,6 +738,48 @@ describe('ConceptCompiler (§8 course compiler)', () => {
       expect(out.warnings).toEqual([
         'Video search skipped: YOUTUBE_API_KEY not set.',
       ]);
+      expect(out.conceptId).toBe('c-new');
+    });
+  });
+
+  describe('leakage lint', () => {
+    const leakingDraft = (tail: string) =>
+      `# Branches\n\nHere's a thinking process: first I considered the audience.\n\nA branch is a movable pointer to a commit. ${tail}`;
+
+    function mustFixCalls(): string[] {
+      return clients.complete.mock.calls
+        .filter((call) => String(call[4]).includes('Must-fix'))
+        .map((call) => String(call[4]));
+    }
+
+    it('routes a leak to one targeted revise and publishes resolved', async () => {
+      stagePayloads({ draft: leakingDraft('Clean body text here.') });
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(mustFixCalls()).toHaveLength(1);
+      expect(mustFixCalls()[0]).toContain('output only the finished article');
+      expect(
+        out.warnings.some((w) => w.includes('resolved by targeted revise')),
+      ).toBe(true);
+      expect(out.conceptId).toBe('c-new');
+    });
+
+    it('publishes with a loud warning when the leak survives the revise', async () => {
+      stagePayloads({
+        draft: leakingDraft('Body with leaked reasoning.'),
+        revise:
+          "# Branches\n\nHere's a thinking process again: still reasoning out loud.",
+      });
+
+      const out = await service.compileConcept(baseInput);
+
+      expect(mustFixCalls()).toHaveLength(1);
+      expect(
+        out.warnings.some((w) =>
+          w.includes('LEAKED CHAIN-OF-THOUGHT PUBLISHED'),
+        ),
+      ).toBe(true);
       expect(out.conceptId).toBe('c-new');
     });
   });

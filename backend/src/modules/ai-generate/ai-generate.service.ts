@@ -77,6 +77,7 @@ import {
   parseFactcheck,
   parseOutline,
   parseResearchBrief,
+  lintLeakage,
   validateMermaid,
   extractDiagramRefs,
 } from './compiler-stages';
@@ -98,11 +99,7 @@ import {
   isModelRetiredError,
   providerFailure,
 } from './ai-provider-clients';
-import {
-  CourseTaskKey,
-  resolveTierModel,
-  taskRouteFor,
-} from './task-routing';
+import { CourseTaskKey, resolveTierModel, taskRouteFor } from './task-routing';
 import { AiKeysService } from './ai-keys.service';
 import { AiPromptRegistry } from './ai-prompt-registry.service';
 import { CourseContextBuilder } from './course-context-builder.service';
@@ -357,7 +354,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
     return {
       provider: key.provider,
       apiKey: this.keysService.decryptForUse(key),
-      model: model || key.defaultModel || this.clients.configuredDefaultModel(key.provider),
+      model:
+        model ||
+        key.defaultModel ||
+        this.clients.configuredDefaultModel(key.provider),
       keyId: key.id,
       tier: 'own-key',
       limit: key.dailyLimit || OWN_KEY_DEFAULT_LIMIT,
@@ -435,11 +435,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     if (creds?.unlimited) {
       return { remaining: -1, limit: -1, unlimited: true };
     }
-    const { remaining, limit } = await this.readQuota(
-      userId,
-      timezone,
-      creds,
-    );
+    const { remaining, limit } = await this.readQuota(userId, timezone, creds);
 
     if (remaining < requiredSlots) {
       const help =
@@ -545,7 +541,11 @@ export class AiGenerateService implements OnApplicationBootstrap {
    */
   private routeParams(
     taskKey: CourseTaskKey,
-    legacy: { maxTokens: number; temperature: number; retryTemperature?: number },
+    legacy: {
+      maxTokens: number;
+      temperature: number;
+      retryTemperature?: number;
+    },
   ): { maxTokens: number; temperature: number; retryTemperature?: number } {
     if (!this.routingEnabled()) return legacy;
     return { ...taskRouteFor(taskKey) };
@@ -869,14 +869,17 @@ export class AiGenerateService implements OnApplicationBootstrap {
     );
 
     // 4. Fire-and-forget: run the generation without awaiting the HTTP response
-    void this.executeJob(job.id, jobType, targetId, user, targetLabel, creds).catch(
-      (err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(
-          `Unhandled error in generation job ${job.id}: ${msg}`,
-        );
-      },
-    );
+    void this.executeJob(
+      job.id,
+      jobType,
+      targetId,
+      user,
+      targetLabel,
+      creds,
+    ).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Unhandled error in generation job ${job.id}: ${msg}`);
+    });
 
     return { jobId: job.id };
   }
@@ -934,7 +937,12 @@ export class AiGenerateService implements OnApplicationBootstrap {
       }
       const remainingSlots = 6 - existingConceptTitles.length;
       // 1 title-list call + up to remainingSlots content calls
-      await this.checkRateLimit(user.id, remainingSlots + 1, user.timezone, creds);
+      await this.checkRateLimit(
+        user.id,
+        remainingSlots + 1,
+        user.timezone,
+        creds,
+      );
     } else {
       // MODULE_MCQS
       await this.checkRateLimit(user.id, 1, user.timezone, creds);
@@ -1359,21 +1367,33 @@ export class AiGenerateService implements OnApplicationBootstrap {
       AiGenerationType.ROADMAP_MODULES,
       ROADMAP_MODULES_SYSTEM_PROMPT,
     );
-    const { text: responseText, tokensIn: ti1, tokensOut: to1, latencyMs: lm1, model: m1 } = await this.complete(creds,
+    const {
+      text: responseText,
+      tokensIn: ti1,
+      tokensOut: to1,
+      latencyMs: lm1,
+      model: m1,
+    } = await this.complete(
+      creds,
       sysModules.text,
       userPrompt,
       this.routeParams('roadmap_titles', { maxTokens: 400, temperature: 0.5 }),
       'roadmap_titles',
     );
 
-    await this.logGeneration(user.id, AiGenerationType.ROADMAP_MODULES, creds.keyId, {
+    await this.logGeneration(
+      user.id,
+      AiGenerationType.ROADMAP_MODULES,
+      creds.keyId,
+      {
         model: m1,
         provider: creds.provider,
         promptVersion: sysModules.version,
         tokensIn: ti1,
         tokensOut: to1,
         latencyMs: lm1,
-      });
+      },
+    );
 
     const parsedTitles = this.parseStringArray(responseText);
     const moduleTitles = parsedTitles.slice(0, remainingCount);
@@ -1475,21 +1495,36 @@ export class AiGenerateService implements OnApplicationBootstrap {
       AiGenerationType.MODULE_CONCEPTS,
       MODULE_CONCEPTS_SYSTEM_PROMPT,
     );
-    const { text: titlesResponse, tokensIn: ti2, tokensOut: to2, latencyMs: lm2, model: m2 } = await this.complete(creds,
+    const {
+      text: titlesResponse,
+      tokensIn: ti2,
+      tokensOut: to2,
+      latencyMs: lm2,
+      model: m2,
+    } = await this.complete(
+      creds,
       sysConcepts.text,
       userPrompt,
-      this.routeParams('module_concept_titles', { maxTokens: 400, temperature: 0.5 }),
+      this.routeParams('module_concept_titles', {
+        maxTokens: 400,
+        temperature: 0.5,
+      }),
       'module_concept_titles',
     );
 
-    await this.logGeneration(user.id, AiGenerationType.MODULE_CONCEPTS, creds.keyId, {
+    await this.logGeneration(
+      user.id,
+      AiGenerationType.MODULE_CONCEPTS,
+      creds.keyId,
+      {
         model: m2,
         provider: creds.provider,
         promptVersion: sysConcepts.version,
         tokensIn: ti2,
         tokensOut: to2,
         latencyMs: lm2,
-      });
+      },
+    );
 
     const parsedTitles = this.parseStringArray(titlesResponse);
     const conceptTitles = parsedTitles.slice(0, remainingSlots);
@@ -1563,33 +1598,51 @@ export class AiGenerateService implements OnApplicationBootstrap {
             siblingConceptTitles: cumulativeSiblingTitles,
           });
 
-          const { text: generatedContent, tokensIn: ti3, tokensOut: to3, latencyMs: lm3, model: m3 } = await this.complete(creds,
+          const {
+            text: generatedContent,
+            tokensIn: ti3,
+            tokensOut: to3,
+            latencyMs: lm3,
+            model: m3,
+          } = await this.complete(
+            creds,
             sysContent.text,
             contentPrompt,
-            this.routeParams('concept_draft', { maxTokens: 3000, temperature: 0.6 }),
+            this.routeParams('concept_draft', {
+              maxTokens: 3000,
+              temperature: 0.6,
+            }),
             'concept_draft',
           );
 
-          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-          model: m3,
-          provider: creds.provider,
-          promptVersion: sysContent.version,
-          tokensIn: ti3,
-          tokensOut: to3,
-          latencyMs: lm3,
-        });
+          await this.logGeneration(
+            user.id,
+            AiGenerationType.CONCEPT_CONTENT,
+            creds.keyId,
+            {
+              model: m3,
+              provider: creds.provider,
+              promptVersion: sysContent.version,
+              tokensIn: ti3,
+              tokensOut: to3,
+              latencyMs: lm3,
+            },
+          );
 
           // Validate any links generated in the markdown before persisting
           const sanitizedContent =
             await this.validateAndSanitizeConceptLinks(generatedContent);
 
           // Create concept using existing service
-          const createdConcept = await this.conceptsService.createConcept(user, {
-            title,
-            content: sanitizedContent,
-            difficulty: ConceptDifficulty.MEDIUM,
-            isAiGenerated: true,
-          });
+          const createdConcept = await this.conceptsService.createConcept(
+            user,
+            {
+              title,
+              content: sanitizedContent,
+              difficulty: ConceptDifficulty.MEDIUM,
+              isAiGenerated: true,
+            },
+          );
 
           // Attach concept to module using existing service (inherits order index & prerequisite logic)
           await this.roadmapsService.attachConceptToModule(moduleId, user, {
@@ -1720,26 +1773,41 @@ export class AiGenerateService implements OnApplicationBootstrap {
               temperature: 0.3,
               retryTemperature: 0.4,
             });
-            const { text: responseText, tokensIn: ti4, tokensOut: to4, latencyMs: lm4, model: m4 } = await this.complete(creds,
+            const {
+              text: responseText,
+              tokensIn: ti4,
+              tokensOut: to4,
+              latencyMs: lm4,
+              model: m4,
+            } = await this.complete(
+              creds,
               sysMcq.text,
               userPrompt,
               {
                 maxTokens: mcqParams.maxTokens,
-                temperature: attempt === 1 ? mcqParams.temperature : (mcqParams.retryTemperature ?? 0.4),
+                temperature:
+                  attempt === 1
+                    ? mcqParams.temperature
+                    : (mcqParams.retryTemperature ?? 0.4),
                 responseFormat: { type: 'json_object' },
               },
               'module_mcqs',
             );
 
             if (attempt === 1) {
-              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS, creds.keyId, {
-        model: m4,
-        provider: creds.provider,
-        promptVersion: sysMcq.version,
-        tokensIn: ti4,
-        tokensOut: to4,
-        latencyMs: lm4,
-      });
+              await this.logGeneration(
+                user.id,
+                AiGenerationType.CONCEPT_MCQS,
+                creds.keyId,
+                {
+                  model: m4,
+                  provider: creds.provider,
+                  promptVersion: sysMcq.version,
+                  tokensIn: ti4,
+                  tokensOut: to4,
+                  latencyMs: lm4,
+                },
+              );
             }
 
             parsedQuestions = this.parseMcqQuestions(
@@ -1999,31 +2067,49 @@ export class AiGenerateService implements OnApplicationBootstrap {
             AiGenerationType.CONCEPT_CONTENT,
             CONCEPT_CONTENT_SYSTEM_PROMPT,
           );
-          const { text: generatedContent, tokensIn: ti5, tokensOut: to5, latencyMs: lm5, model: m5 } = await this.complete(creds,
+          const {
+            text: generatedContent,
+            tokensIn: ti5,
+            tokensOut: to5,
+            latencyMs: lm5,
+            model: m5,
+          } = await this.complete(
+            creds,
             sysRetryContent.text,
             contentPrompt,
-            this.routeParams('concept_draft', { maxTokens: 3000, temperature: 0.6 }),
+            this.routeParams('concept_draft', {
+              maxTokens: 3000,
+              temperature: 0.6,
+            }),
             'concept_draft',
           );
 
-          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-          model: m5,
-          provider: creds.provider,
-          promptVersion: sysRetryContent.version,
-          tokensIn: ti5,
-          tokensOut: to5,
-          latencyMs: lm5,
-        });
+          await this.logGeneration(
+            user.id,
+            AiGenerationType.CONCEPT_CONTENT,
+            creds.keyId,
+            {
+              model: m5,
+              provider: creds.provider,
+              promptVersion: sysRetryContent.version,
+              tokensIn: ti5,
+              tokensOut: to5,
+              latencyMs: lm5,
+            },
+          );
 
           const sanitizedContent =
             await this.validateAndSanitizeConceptLinks(generatedContent);
 
-          const createdConcept = await this.conceptsService.createConcept(user, {
-            title,
-            content: sanitizedContent,
-            difficulty: ConceptDifficulty.MEDIUM,
-            isAiGenerated: true,
-          });
+          const createdConcept = await this.conceptsService.createConcept(
+            user,
+            {
+              title,
+              content: sanitizedContent,
+              difficulty: ConceptDifficulty.MEDIUM,
+              isAiGenerated: true,
+            },
+          );
 
           await this.roadmapsService.attachConceptToModule(moduleId, user, {
             conceptId: createdConcept.id,
@@ -2161,26 +2247,41 @@ export class AiGenerateService implements OnApplicationBootstrap {
               temperature: 0.3,
               retryTemperature: 0.4,
             });
-            const { text: responseText, tokensIn: ti6, tokensOut: to6, latencyMs: lm6, model: m6 } = await this.complete(creds,
+            const {
+              text: responseText,
+              tokensIn: ti6,
+              tokensOut: to6,
+              latencyMs: lm6,
+              model: m6,
+            } = await this.complete(
+              creds,
               sysRetryMcq.text,
               userPrompt,
               {
                 maxTokens: retryMcqParams.maxTokens,
-                temperature: attempt === 1 ? retryMcqParams.temperature : (retryMcqParams.retryTemperature ?? 0.4),
+                temperature:
+                  attempt === 1
+                    ? retryMcqParams.temperature
+                    : (retryMcqParams.retryTemperature ?? 0.4),
                 responseFormat: { type: 'json_object' },
               },
               'module_mcqs',
             );
 
             if (attempt === 1) {
-              await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS, creds.keyId, {
-        model: m6,
-        provider: creds.provider,
-        promptVersion: sysRetryMcq.version,
-        tokensIn: ti6,
-        tokensOut: to6,
-        latencyMs: lm6,
-      });
+              await this.logGeneration(
+                user.id,
+                AiGenerationType.CONCEPT_MCQS,
+                creds.keyId,
+                {
+                  model: m6,
+                  provider: creds.provider,
+                  promptVersion: sysRetryMcq.version,
+                  tokensIn: ti6,
+                  tokensOut: to6,
+                  latencyMs: lm6,
+                },
+              );
             }
 
             parsedQuestions = this.parseMcqQuestions(
@@ -2387,7 +2488,11 @@ export class AiGenerateService implements OnApplicationBootstrap {
     user: User;
     creds: ResolvedAiCredentials;
     onStage?: (done: number, total: number) => Promise<void> | void;
-  }): Promise<{ content: string; warnings: string[]; conceptId: string | null }> {
+  }): Promise<{
+    content: string;
+    warnings: string[];
+    conceptId: string | null;
+  }> {
     const { user, creds } = input;
     const total = AiGenerateService.COMPILER_STAGES_PER_CONCEPT;
     const warnings: string[] = [];
@@ -2466,23 +2571,11 @@ export class AiGenerateService implements OnApplicationBootstrap {
           true,
         );
       let outlineRaw = await outlineWithContext();
-      await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-        model: outlineRaw.model,
-        provider: creds.provider,
-        promptVersion: sysOutline.version,
-        tokensIn: outlineRaw.tokensIn,
-        tokensOut: outlineRaw.tokensOut,
-        latencyMs: outlineRaw.latencyMs,
-        internal: outlineRaw.internal,
-      });
-      let outline: ConceptOutline;
-      try {
-        outline = parseOutline(outlineRaw.text);
-      } catch {
-        // One re-ask for malformed outlines (MCQ-retry precedent), then fail.
-        this.logger.warn(`Outline parse failed for "${input.title}". Retrying once...`);
-        outlineRaw = await outlineWithContext();
-        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
+      await this.logGeneration(
+        user.id,
+        AiGenerationType.CONCEPT_CONTENT,
+        creds.keyId,
+        {
           model: outlineRaw.model,
           provider: creds.provider,
           promptVersion: sysOutline.version,
@@ -2490,7 +2583,31 @@ export class AiGenerateService implements OnApplicationBootstrap {
           tokensOut: outlineRaw.tokensOut,
           latencyMs: outlineRaw.latencyMs,
           internal: outlineRaw.internal,
-        });
+        },
+      );
+      let outline: ConceptOutline;
+      try {
+        outline = parseOutline(outlineRaw.text);
+      } catch {
+        // One re-ask for malformed outlines (MCQ-retry precedent), then fail.
+        this.logger.warn(
+          `Outline parse failed for "${input.title}". Retrying once...`,
+        );
+        outlineRaw = await outlineWithContext();
+        await this.logGeneration(
+          user.id,
+          AiGenerationType.CONCEPT_CONTENT,
+          creds.keyId,
+          {
+            model: outlineRaw.model,
+            provider: creds.provider,
+            promptVersion: sysOutline.version,
+            tokensIn: outlineRaw.tokensIn,
+            tokensOut: outlineRaw.tokensOut,
+            latencyMs: outlineRaw.latencyMs,
+            internal: outlineRaw.internal,
+          },
+        );
         outline = parseOutline(outlineRaw.text);
       }
       // builds_on ids must already exist as cards; new key_terms register.
@@ -2536,7 +2653,9 @@ export class AiGenerateService implements OnApplicationBootstrap {
           const titles = new Map<string, string>();
           for (const chunk of retrieved.chunks) {
             if (!titles.has(chunk.sourceId)) {
-              const source = await this.courseResearch.findSource(chunk.sourceId);
+              const source = await this.courseResearch.findSource(
+                chunk.sourceId,
+              );
               titles.set(chunk.sourceId, source?.title ?? chunk.sourceId);
             }
           }
@@ -2566,15 +2685,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
             undefined,
             true,
           );
-          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-            model: briefRaw.model,
-            provider: creds.provider,
-            promptVersion: sysResearch.version,
-            tokensIn: briefRaw.tokensIn,
-            tokensOut: briefRaw.tokensOut,
-            latencyMs: briefRaw.latencyMs,
-            internal: briefRaw.internal,
-          });
+          await this.logGeneration(
+            user.id,
+            AiGenerationType.CONCEPT_CONTENT,
+            creds.keyId,
+            {
+              model: briefRaw.model,
+              provider: creds.provider,
+              promptVersion: sysResearch.version,
+              tokensIn: briefRaw.tokensIn,
+              tokensOut: briefRaw.tokensOut,
+              latencyMs: briefRaw.latencyMs,
+              internal: briefRaw.internal,
+            },
+          );
           try {
             researchBrief = parseResearchBrief(briefRaw.text).brief;
           } catch {
@@ -2599,7 +2723,9 @@ export class AiGenerateService implements OnApplicationBootstrap {
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        warnings.push(`Research unavailable (${msg}); continuing without a brief.`);
+        warnings.push(
+          `Research unavailable (${msg}); continuing without a brief.`,
+        );
         researchBrief = null;
         researchChunkTexts = [];
         await note('research', false, msg);
@@ -2641,15 +2767,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
           );
         try {
           let diagramRaw = await attemptDiagram();
-          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-            model: diagramRaw.model,
-            provider: creds.provider,
-            promptVersion: sysDiagram.version,
-            tokensIn: diagramRaw.tokensIn,
-            tokensOut: diagramRaw.tokensOut,
-            latencyMs: diagramRaw.latencyMs,
-            internal: diagramRaw.internal,
-          });
+          await this.logGeneration(
+            user.id,
+            AiGenerationType.CONCEPT_CONTENT,
+            creds.keyId,
+            {
+              model: diagramRaw.model,
+              provider: creds.provider,
+              promptVersion: sysDiagram.version,
+              tokensIn: diagramRaw.tokensIn,
+              tokensOut: diagramRaw.tokensOut,
+              latencyMs: diagramRaw.latencyMs,
+              internal: diagramRaw.internal,
+            },
+          );
           let mermaid = parseDiagram(diagramRaw.text).mermaid;
           let check = validateMermaid(mermaid, spec.kind);
           if (!check.ok) {
@@ -2658,15 +2789,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
               mermaid,
               error: check.reason ?? 'invalid diagram',
             });
-            await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-              model: diagramRaw.model,
-              provider: creds.provider,
-              promptVersion: sysDiagram.version,
-              tokensIn: diagramRaw.tokensIn,
-              tokensOut: diagramRaw.tokensOut,
-              latencyMs: diagramRaw.latencyMs,
-              internal: diagramRaw.internal,
-            });
+            await this.logGeneration(
+              user.id,
+              AiGenerationType.CONCEPT_CONTENT,
+              creds.keyId,
+              {
+                model: diagramRaw.model,
+                provider: creds.provider,
+                promptVersion: sysDiagram.version,
+                tokensIn: diagramRaw.tokensIn,
+                tokensOut: diagramRaw.tokensOut,
+                latencyMs: diagramRaw.latencyMs,
+                internal: diagramRaw.internal,
+              },
+            );
             mermaid = parseDiagram(diagramRaw.text).mermaid;
             check = validateMermaid(mermaid, spec.kind);
           }
@@ -2768,15 +2904,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
         { ...draftParams },
         'concept_draft',
       );
-      await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-        model: draftRaw.model,
-        provider: creds.provider,
-        promptVersion: sysDraft.version,
-        tokensIn: draftRaw.tokensIn,
-        tokensOut: draftRaw.tokensOut,
-        latencyMs: draftRaw.latencyMs,
-        internal: draftRaw.internal,
-      });
+      await this.logGeneration(
+        user.id,
+        AiGenerationType.CONCEPT_CONTENT,
+        creds.keyId,
+        {
+          model: draftRaw.model,
+          provider: creds.provider,
+          promptVersion: sysDraft.version,
+          tokensIn: draftRaw.tokensIn,
+          tokensOut: draftRaw.tokensOut,
+          latencyMs: draftRaw.latencyMs,
+          internal: draftRaw.internal,
+        },
+      );
       let current = draftRaw.text;
       await note('draft', true);
 
@@ -2804,15 +2945,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
             undefined,
             true,
           );
-          await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-            model: paraphraseRaw.model,
-            provider: creds.provider,
-            promptVersion: sysDraft.version,
-            tokensIn: paraphraseRaw.tokensIn,
-            tokensOut: paraphraseRaw.tokensOut,
-            latencyMs: paraphraseRaw.latencyMs,
-            internal: paraphraseRaw.internal,
-          });
+          await this.logGeneration(
+            user.id,
+            AiGenerationType.CONCEPT_CONTENT,
+            creds.keyId,
+            {
+              model: paraphraseRaw.model,
+              provider: creds.provider,
+              promptVersion: sysDraft.version,
+              tokensIn: paraphraseRaw.tokensIn,
+              tokensOut: paraphraseRaw.tokensOut,
+              latencyMs: paraphraseRaw.latencyMs,
+              internal: paraphraseRaw.internal,
+            },
+          );
           current = paraphraseRaw.text;
           const recheck = verbatimOverlap(current, researchChunkTexts);
           if (recheck.triggered) {
@@ -2848,15 +2994,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
         undefined,
         true,
       );
-      await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-        model: factRaw.model,
-        provider: creds.provider,
-        promptVersion: sysFact.version,
-        tokensIn: factRaw.tokensIn,
-        tokensOut: factRaw.tokensOut,
-        latencyMs: factRaw.latencyMs,
-        internal: factRaw.internal,
-      });
+      await this.logGeneration(
+        user.id,
+        AiGenerationType.CONCEPT_CONTENT,
+        creds.keyId,
+        {
+          model: factRaw.model,
+          provider: creds.provider,
+          promptVersion: sysFact.version,
+          tokensIn: factRaw.tokensIn,
+          tokensOut: factRaw.tokensOut,
+          latencyMs: factRaw.latencyMs,
+          internal: factRaw.internal,
+        },
+      );
       let factFindings: string[] = [];
       try {
         const factcheck = parseFactcheck(factRaw.text);
@@ -2905,15 +3056,20 @@ export class AiGenerateService implements OnApplicationBootstrap {
           undefined,
           true,
         );
-        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-          model: critiqueRaw.model,
-          provider: creds.provider,
-          promptVersion: sysCritique.version,
-          tokensIn: critiqueRaw.tokensIn,
-          tokensOut: critiqueRaw.tokensOut,
-          latencyMs: critiqueRaw.latencyMs,
-          internal: critiqueRaw.internal,
-        });
+        await this.logGeneration(
+          user.id,
+          AiGenerationType.CONCEPT_CONTENT,
+          creds.keyId,
+          {
+            model: critiqueRaw.model,
+            provider: creds.provider,
+            promptVersion: sysCritique.version,
+            tokensIn: critiqueRaw.tokensIn,
+            tokensOut: critiqueRaw.tokensOut,
+            latencyMs: critiqueRaw.latencyMs,
+            internal: critiqueRaw.internal,
+          },
+        );
         critiques += 1;
         try {
           blocking = parseCritique(critiqueRaw.text).blocking_issues;
@@ -2936,23 +3092,34 @@ export class AiGenerateService implements OnApplicationBootstrap {
           undefined,
           true,
         );
-        await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
-          model: reviseRaw.model,
-          provider: creds.provider,
-          promptVersion: sysRevise.version,
-          tokensIn: reviseRaw.tokensIn,
-          tokensOut: reviseRaw.tokensOut,
-          latencyMs: reviseRaw.latencyMs,
-          internal: reviseRaw.internal,
-        });
+        await this.logGeneration(
+          user.id,
+          AiGenerationType.CONCEPT_CONTENT,
+          creds.keyId,
+          {
+            model: reviseRaw.model,
+            provider: creds.provider,
+            promptVersion: sysRevise.version,
+            tokensIn: reviseRaw.tokensIn,
+            tokensOut: reviseRaw.tokensOut,
+            latencyMs: reviseRaw.latencyMs,
+            internal: reviseRaw.internal,
+          },
+        );
         current = reviseRaw.text;
         revises += 1;
         factFindings = [];
       }
       for (const issue of blocking) {
-        warnings.push(`Unresolved blocking issue published as draft: "${issue}"`);
+        warnings.push(
+          `Unresolved blocking issue published as draft: "${issue}"`,
+        );
       }
-      await note('critique-revise', true, `${critiques} critique(s), ${revises} revise(s)`);
+      await note(
+        'critique-revise',
+        true,
+        `${critiques} critique(s), ${revises} revise(s)`,
+      );
 
       // Stage 6: validate — machine checks only, no model call.
       const knownTitles = await this.roadmapConceptTitles(input.roadmapId);
@@ -2966,9 +3133,12 @@ export class AiGenerateService implements OnApplicationBootstrap {
         const hit =
           knownTerms.some((t) => t.includes(needle) || needle.includes(t)) ||
           knownTitles.some(
-            (t) => t.toLowerCase().includes(needle) || needle.includes(t.toLowerCase()),
+            (t) =>
+              t.toLowerCase().includes(needle) ||
+              needle.includes(t.toLowerCase()),
           );
-        if (!hit) warnings.push(`Recall hook has no registry target: "${hook}"`);
+        if (!hit)
+          warnings.push(`Recall hook has no registry target: "${hook}"`);
       }
       for (const keyTerm of outline.key_terms) {
         if (!knownTerms.includes(keyTerm.term.toLowerCase())) {
@@ -2992,7 +3162,55 @@ export class AiGenerateService implements OnApplicationBootstrap {
       }
       for (const id of storedDiagramIds) {
         if (!extractDiagramRefs(current).includes(id)) {
-          warnings.push(`Stored diagram never referenced from content: "${id}"`);
+          warnings.push(
+            `Stored diagram never referenced from content: "${id}"`,
+          );
+        }
+      }
+      // Thinking-leakage lint (live incident): reasoning traces or echoed
+      // instructions route to exactly one targeted revise; a repeat leak
+      // publishes with a loud warning per the no-hard-fail rule.
+      const leak = lintLeakage(current);
+      if (leak.leaked) {
+        const leakReviseRaw = await this.complete(
+          creds,
+          sysDraft.text,
+          buildReviseUserPrompt({
+            draftContent: current,
+            blockingIssues: [
+              'Remove all reasoning and meta-commentary (thinking-process blocks, planning notes, echoed instructions) — output only the finished article, starting with its first heading.',
+            ],
+            factcheckFindings: [],
+          }),
+          { ...reviseParams },
+          'concept_draft',
+          undefined,
+          true,
+        );
+        await this.logGeneration(
+          user.id,
+          AiGenerationType.CONCEPT_CONTENT,
+          creds.keyId,
+          {
+            model: leakReviseRaw.model,
+            provider: creds.provider,
+            promptVersion: sysDraft.version,
+            tokensIn: leakReviseRaw.tokensIn,
+            tokensOut: leakReviseRaw.tokensOut,
+            latencyMs: leakReviseRaw.latencyMs,
+            internal: leakReviseRaw.internal,
+          },
+        );
+        current = leakReviseRaw.text;
+        const recheck = lintLeakage(current);
+        if (recheck.leaked) {
+          warnings.push(
+            `LEAKED CHAIN-OF-THOUGHT PUBLISHED (${recheck.hits.join(', ')}) — manual cleanup advised.`,
+          );
+        } else {
+          warnings.push(
+            `Leakage lint hit (${leak.hits.join(', ')}) — resolved by targeted revise.`,
+          );
         }
       }
       await note('validate', true);
@@ -3008,9 +3226,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
           isAiGenerated: true,
         });
         if (input.moduleId) {
-          await this.roadmapsService.attachConceptToModule(input.moduleId, user, {
-            conceptId: createdConcept.id,
-          });
+          await this.roadmapsService.attachConceptToModule(
+            input.moduleId,
+            user,
+            {
+              conceptId: createdConcept.id,
+            },
+          );
         }
         conceptId = createdConcept.id;
       }
@@ -3045,7 +3267,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
       }
       await note('publish', true);
 
-      await finish(warnings.length > 0 ? 'succeeded_with_warnings' : 'succeeded', conceptId);
+      await finish(
+        warnings.length > 0 ? 'succeeded_with_warnings' : 'succeeded',
+        conceptId,
+      );
       return { content: current, warnings, conceptId };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -3120,21 +3345,33 @@ export class AiGenerateService implements OnApplicationBootstrap {
       }
     }
 
-    const { text: rawContent, tokensIn: ti7, tokensOut: to7, latencyMs: lm7, model: m7 } = await this.complete(creds,
+    const {
+      text: rawContent,
+      tokensIn: ti7,
+      tokensOut: to7,
+      latencyMs: lm7,
+      model: m7,
+    } = await this.complete(
+      creds,
       systemPrompt,
       userPrompt,
       this.routeParams('concept_draft', { maxTokens: 3000, temperature: 0.6 }),
       'concept_draft',
     );
 
-    await this.logGeneration(user.id, AiGenerationType.CONCEPT_CONTENT, creds.keyId, {
+    await this.logGeneration(
+      user.id,
+      AiGenerationType.CONCEPT_CONTENT,
+      creds.keyId,
+      {
         model: m7,
         provider: creds.provider,
         promptVersion: sysSingleContent.version,
         tokensIn: ti7,
         tokensOut: to7,
         latencyMs: lm7,
-      });
+      },
+    );
 
     const content = await this.validateAndSanitizeConceptLinks(rawContent);
 
@@ -3175,12 +3412,16 @@ export class AiGenerateService implements OnApplicationBootstrap {
           temperature: 0.3,
           retryTemperature: 0.4,
         });
-        const retryResult = await this.complete(creds,
+        const retryResult = await this.complete(
+          creds,
           systemPrompt,
           userPrompt,
           {
             maxTokens: singleMcqParams.maxTokens,
-            temperature: attempt === 1 ? singleMcqParams.temperature : (singleMcqParams.retryTemperature ?? 0.4),
+            temperature:
+              attempt === 1
+                ? singleMcqParams.temperature
+                : (singleMcqParams.retryTemperature ?? 0.4),
             responseFormat: { type: 'json_object' },
           },
           'single_concept_mcqs',
@@ -3188,14 +3429,19 @@ export class AiGenerateService implements OnApplicationBootstrap {
         lastResponseText = retryResult.text;
 
         if (attempt === 1) {
-          await this.logGeneration(user.id, AiGenerationType.CONCEPT_MCQS, creds.keyId, {
-        model: retryResult.model,
-        provider: creds.provider,
-        promptVersion: sysSingleMcq.version,
-        tokensIn: retryResult.tokensIn,
-        tokensOut: retryResult.tokensOut,
-        latencyMs: retryResult.latencyMs,
-      });
+          await this.logGeneration(
+            user.id,
+            AiGenerationType.CONCEPT_MCQS,
+            creds.keyId,
+            {
+              model: retryResult.model,
+              provider: creds.provider,
+              promptVersion: sysSingleMcq.version,
+              tokensIn: retryResult.tokensIn,
+              tokensOut: retryResult.tokensOut,
+              latencyMs: retryResult.latencyMs,
+            },
+          );
         }
 
         parsedQuestions = this.parseMcqQuestions(lastResponseText, dto.title);
@@ -3248,7 +3494,14 @@ export class AiGenerateService implements OnApplicationBootstrap {
       questionBody,
     );
 
-    const { text: answer, tokensIn: ti8, tokensOut: to8, latencyMs: lm8, model: m8 } = await this.complete(creds,
+    const {
+      text: answer,
+      tokensIn: ti8,
+      tokensOut: to8,
+      latencyMs: lm8,
+      model: m8,
+    } = await this.complete(
+      creds,
       systemPrompt,
       userPrompt,
       this.routeParams('qa_answer', { maxTokens: 1500, temperature: 0.5 }),
@@ -3256,13 +3509,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
     );
 
     await this.logGeneration(user.id, AiGenerationType.QA_ANSWER, creds.keyId, {
-        model: m8,
-        provider: creds.provider,
-        promptVersion: sysQa.version,
-        tokensIn: ti8,
-        tokensOut: to8,
-        latencyMs: lm8,
-      });
+      model: m8,
+      provider: creds.provider,
+      promptVersion: sysQa.version,
+      tokensIn: ti8,
+      tokensOut: to8,
+      latencyMs: lm8,
+    });
 
     return answer;
   }

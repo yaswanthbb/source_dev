@@ -22,6 +22,9 @@
 - Visibility is a single shared predicate (approved + published placement, author/admin bypass) enforced on reads AND writes (list/ask/answer). Any new endpoint touching concept content must pass it.
 - Secrets: AES-256-GCM envelope, decrypt only server-side at call time, metadata-only API responses. Production refuses to boot without the master secret.
 
+## Backend env debugging
+- File-level env checks can all pass while the app still fails: a stale duplicate backend may hold the API port. Always `ss -tlnp` the port and inspect THAT pid's environ (`/proc/<pid>/environ`), never an assumed pid. Kill the stale holder, restart fresh with env set.
+
 ## Verification bar
 - Backend: `npx tsc --noEmit` + `npx jest` (unit specs colocated `*.spec.ts`). Pre-existing failures live in progress/quiz specs — verify against clean HEAD via `git stash` before attributing.
 - Frontend: `npx tsc --noEmit` + `node --test lib/terminal/*.test.mjs` + `npx eslint` on touched files + `npm run build` for route-level issues. Contract tests auto-cover new commands in the registry; update pinned lists (learn-group membership, graveyard names) deliberately, never silently.

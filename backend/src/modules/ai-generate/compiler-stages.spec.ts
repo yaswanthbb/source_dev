@@ -7,6 +7,7 @@ import {
   parseResearchBrief,
   validateMermaid,
   extractDiagramRefs,
+  lintLeakage,
 } from './compiler-stages';
 import {
   CONCEPT_DIAGRAM_SYSTEM_PROMPT,
@@ -138,6 +139,47 @@ describe('compiler stage contracts (§8)', () => {
     });
   });
 
+  describe('lintLeakage', () => {
+    const cases: Array<[string, string]> = [
+      ['reasoning marker', "Here's a thinking process: first I considered..."],
+      ['request analysis', 'Let me analyze your request before answering.'],
+      ['request analysis', 'I will analyze the request step by step.'],
+      ['first-person planning', 'I need to cover three sections here.'],
+      ['first-person planning', 'I will start with the definition.'],
+      ['first-person planning', 'I should mention edge cases.'],
+      ['planning note', 'Let me plan the article structure.'],
+      ['planning note', 'Let me re-read the outline requirements.'],
+      ['echoed instruction block', 'STRICTLY FORBIDDEN: filler phrases.'],
+      [
+        'echoed instruction block',
+        'Do not output preamble before the article.',
+      ],
+    ];
+    for (const [label, text] of cases) {
+      it(`flags ${label}: ${text.slice(0, 40)}…`, () => {
+        const out = lintLeakage(`# Branches\n\nClean intro.\n\n${text}`);
+        expect(out.leaked).toBe(true);
+        expect(out.hits).toContain(label);
+      });
+    }
+
+    it('passes a real article shape without tripping', () => {
+      const article = [
+        '## What is a branch',
+        '',
+        'A branch is a movable pointer to a commit. Teams use branches to',
+        'isolate work before merging it back to the main line.',
+        '',
+        '### Creating a branch',
+        '',
+        'Run `git branch feature` to create one, then `git switch feature`',
+        'to move onto it. Merging combines histories; conflicts need a',
+        'manual resolution before the merge completes.',
+      ].join('\n');
+      expect(lintLeakage(article)).toEqual({ leaked: false, hits: [] });
+    });
+  });
+
   describe('outline diagrams contract', () => {
     it('rejects missing diagrams, malformed entries, and duplicate ids', () => {
       const raw = outlineJson();
@@ -145,9 +187,7 @@ describe('compiler stage contracts (§8)', () => {
       delete parsed['diagrams'];
       expect(() => parseOutline(JSON.stringify(parsed))).toThrow();
       expect(() =>
-        parseOutline(
-          outlineJson({ diagrams: [{ id: 'd1', caption: 'c' }] }),
-        ),
+        parseOutline(outlineJson({ diagrams: [{ id: 'd1', caption: 'c' }] })),
       ).toThrow();
       expect(() =>
         parseOutline(
@@ -204,7 +244,8 @@ describe('compiler stage contracts (§8)', () => {
   describe('validateMermaid', () => {
     it('accepts well-formed diagrams of the declared kind', () => {
       expect(
-        validateMermaid('flowchart TD\n  A[commit] --> B[branch]', 'flowchart').ok,
+        validateMermaid('flowchart TD\n  A[commit] --> B[branch]', 'flowchart')
+          .ok,
       ).toBe(true);
       expect(
         validateMermaid(
@@ -217,7 +258,8 @@ describe('compiler stage contracts (§8)', () => {
       ).toBe(true);
       // Open kinds accept any recognized header.
       expect(
-        validateMermaid('pie title Pets\n  "Dogs" : 5\n  "Cats" : 3', 'radial').ok,
+        validateMermaid('pie title Pets\n  "Dogs" : 5\n  "Cats" : 3', 'radial')
+          .ok,
       ).toBe(true);
     });
 
@@ -226,7 +268,8 @@ describe('compiler stage contracts (§8)', () => {
         validateMermaid('sequenceDiagram\n  A->>B: x', 'flowchart').ok,
       ).toBe(false);
       expect(
-        validateMermaid('```mermaid\nflowchart TD\n  A-->B\n```', 'flowchart').ok,
+        validateMermaid('```mermaid\nflowchart TD\n  A-->B\n```', 'flowchart')
+          .ok,
       ).toBe(false);
       expect(validateMermaid('flowchart TD', 'flowchart').ok).toBe(false);
       expect(
@@ -235,7 +278,8 @@ describe('compiler stage contracts (§8)', () => {
       expect(validateMermaid('just some prose', 'flowchart').ok).toBe(false);
       // Quoted label brackets must not trip the balance check.
       expect(
-        validateMermaid('flowchart TD\n  A["x (y)"] --> B["z"]', 'flowchart').ok,
+        validateMermaid('flowchart TD\n  A["x (y)"] --> B["z"]', 'flowchart')
+          .ok,
       ).toBe(true);
     });
   });

@@ -456,3 +456,36 @@ export function validateMermaid(mermaid: string, kind: string): MermaidCheck {
   }
   return { ok: true };
 }
+
+/**
+ * Thinking-leakage lint (live incident: a published lesson contained a full
+ * "Here's a thinking process:" block plus echoed system-prompt guidelines).
+ * One constant so the pattern list grows without code changes. Each entry
+ * carries a short label used in warnings and the targeted revise prompt.
+ */
+export const THINKING_LEAK_PATTERNS: Array<{ label: string; pattern: RegExp }> =
+  [
+    { label: 'reasoning marker', pattern: /thinking process/i },
+    { label: 'request analysis', pattern: /analyze (the|your|user) request/i },
+    { label: 'first-person planning', pattern: /^i (need|will|should) /im },
+    { label: 'planning note', pattern: /let me (plan|re-read|outline)/i },
+    { label: 'echoed instruction block', pattern: /strictly forbidden/i },
+    { label: 'echoed instruction block', pattern: /do not output preamble/i },
+  ];
+
+export interface LeakageLint {
+  leaked: boolean;
+  /** Labels of the matched patterns (deduplicated). */
+  hits: string[];
+}
+
+export function lintLeakage(content: string): LeakageLint {
+  const hits: string[] = [];
+  for (const { label, pattern } of THINKING_LEAK_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(content) && !hits.includes(label)) {
+      hits.push(label);
+    }
+  }
+  return { leaked: hits.length > 0, hits };
+}

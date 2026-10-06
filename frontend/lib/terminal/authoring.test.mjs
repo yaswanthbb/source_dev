@@ -39,7 +39,10 @@ const DB = {
   detail: {
     id: "r1",
     title: "JS",
-    modules: [{ id: "m1", title: "Scope" }],
+    modules: [
+      { id: "m1", title: "Scope" },
+      { id: "m2", title: "VOIP Basics" },
+    ],
   },
   concepts: [{ id: "c1", title: "Closures", slug: "closures" }],
 };
@@ -117,6 +120,9 @@ request.api.post = async (url, body) => {
   if (url === "/roadmaps/r1/modules") return { data: { id: "m9" } };
   if (url === "/concepts") return { data: { id: "c9" } };
   if (url === "/modules/m1/concepts") return { data: { id: "mc9" } };
+  if (url === "/modules/m2/concepts") return { data: { id: "mc8" } };
+  if (url === "/ai-generate/concept-content")
+    return { data: { content: "AI wrote this lesson body for you here." } };
   if (url === "/articles") return { data: { id: "art9" } };
   if (url === "/roadmaps/r1/submit")
     return { data: { id: "r1", reviewStatus: "submitted" } };
@@ -204,6 +210,70 @@ test("concept new writes with difficulty and attaches", async () => {
   const attached = calls.find(([m, u]) => m === "POST" && u === "/modules/m1/concepts");
   assert.ok(attached, "expected attach to current module");
   assert.equal(attached[2].conceptId, "c9");
+});
+
+test("concept new resolves a slugified module dir (multi-word title)", async () => {
+  // Regression: VFS dirs are slugify(title) ("VOIP Basics" -> "voip-basics")
+  // but cwdModuleId compared the slug against the raw title and found
+  // nothing, printing "No module on screen" from inside a module.
+  const host = recorder(
+    ["voip transmits voice over networks", "sip handles the signaling", "."],
+    { kind: "module", roadmap: "js", module: "voip-basics" },
+  );
+  await runCommand("concept new Learn VOIP Basics", ctx(host));
+  const attached = calls.find(([m, u]) => m === "POST" && u === "/modules/m2/concepts");
+  assert.ok(attached, "expected attach to the slugified module m2");
+  assert.equal(attached[2].conceptId, "c9");
+});
+
+test("concept ai generates the body and attaches", async () => {
+  const host = recorder(
+    [],
+    { kind: "module", roadmap: "js", module: "voip-basics" },
+  );
+  await runCommand("concept ai Learn VOIP Basics", ctx(host));
+  const generated = calls.find(
+    ([m, u]) => m === "POST" && u === "/ai-generate/concept-content",
+  );
+  assert.ok(generated, "expected POST /ai-generate/concept-content");
+  assert.equal(generated[2].title, "Learn VOIP Basics");
+  assert.equal(generated[2].difficulty, "medium");
+  const created = calls
+    .filter(([m, u]) => m === "POST" && u === "/concepts")
+    .at(-1);
+  assert.ok(created, "expected POST /concepts");
+  assert.match(created[2].content, /AI wrote this lesson body/);
+  const attachedAi = calls.find(
+    ([m, u]) => m === "POST" && u === "/modules/m2/concepts",
+  );
+  assert.ok(attachedAi, "expected attach of the AI lesson to m2");
+  assert.match(text(host.lines), /private until published/);
+});
+
+test("concept ai surfaces quota refusal without creating", async () => {
+  const before = calls.filter(([m, u]) => m === "POST" && u === "/concepts").length;
+  const origPost = request.api.post;
+  const err = new Error("refused");
+  err.response = { data: { message: "Daily AI generation limit reached." } };
+  request.api.post = async (url, body) => {
+    calls.push(["POST", url, body]);
+    if (url === "/ai-generate/concept-content") throw err;
+    return origPost(url, body);
+  };
+  try {
+    const host = recorder(
+      [],
+      { kind: "module", roadmap: "js", module: "voip-basics" },
+    );
+    await runCommand("concept ai Learn VOIP Basics", ctx(host));
+    assert.match(text(host.lines), /AI generation refused.*limit reached/);
+    assert.equal(
+      calls.filter(([m, u]) => m === "POST" && u === "/concepts").length,
+      before,
+    );
+  } finally {
+    request.api.post = origPost;
+  }
 });
 
 test("concept new refuses a stub body", async () => {

@@ -250,7 +250,9 @@ export function buildOutlineUserPrompt(input: {
     );
   }
   if (input.registryContext) {
-    parts.push(`Registry Context (valid builds_on ids and known terms):\n${input.registryContext}`);
+    parts.push(
+      `Registry Context (valid builds_on ids and known terms):\n${input.registryContext}`,
+    );
   }
   parts.push('Produce the outline JSON for this concept.');
   return parts.join('\n\n');
@@ -274,7 +276,9 @@ export function buildDraftUserPrompt(input: {
   diagrams?: Array<{ id: string; caption: string }>;
   videos?: Array<{ title: string; channel: string; url: string }>;
 }): string {
-  const parts = [`Approved Outline (realize every section):\n"""\n${input.outlineJson}\n"""`];
+  const parts = [
+    `Approved Outline (realize every section):\n"""\n${input.outlineJson}\n"""`,
+  ];
   if (input.diagrams && input.diagrams.length > 0) {
     parts.push(
       `Diagrams available (reference each where it teaches, using {{diagram:<id>}} exactly — never invent ids, never leave a listed diagram unreferenced):\n${input.diagrams.map((d) => `- {{diagram:${d.id}}}: ${d.caption}`).join('\n')}`,
@@ -296,7 +300,9 @@ export function buildDraftUserPrompt(input: {
   if (input.personaLines) {
     parts.push(`Teacher Persona:\n${input.personaLines}`);
   }
-  parts.push('Write the complete educational article content in Markdown for this concept.');
+  parts.push(
+    'Write the complete educational article content in Markdown for this concept.',
+  );
   return parts.join('\n\n');
 }
 
@@ -330,7 +336,9 @@ export function buildFactcheckUserPrompt(input: {
       `Private Research Brief (flag draft claims that contradict it):\n"""\n${input.researchBrief.slice(0, 4000)}\n"""`,
     );
   }
-  parts.push('Check the draft against the outline and registry. Output ONLY the fact-check JSON.');
+  parts.push(
+    'Check the draft against the outline and registry. Output ONLY the fact-check JSON.',
+  );
   return parts.join('\n\n');
 }
 
@@ -357,6 +365,7 @@ export function buildCritiqueUserPrompt(input: {
     `Concept: "${input.title}" (target difficulty: ${input.difficulty})`,
     `Objectives the draft must teach:\n${input.objectives.map((o) => `- ${o}`).join('\n')}`,
     `Draft Article:\n"""\n${input.draftContent.slice(0, 8000)}\n"""`,
+    'Hard requirement: no leaked chain-of-thought and no echoed system-prompt text — the output must be only the article. Treat any reasoning trace, planning note, or repeated instruction text as blocking.',
     'Judge the draft against the rubric. Output ONLY the critique JSON.',
   ].join('\n\n');
 }
