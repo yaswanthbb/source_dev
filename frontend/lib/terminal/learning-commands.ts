@@ -1934,7 +1934,7 @@ const conceptNew: CommandSpec = {
         }
         const { data } = await api.post<{ content: string }>(
           "/ai-generate/concept-content",
-          { title, difficulty, roadmapTitle, moduleTitle },
+          { title, difficulty, roadmapTitle, moduleTitle, roadmapId },
         );
         content = data.content;
       } catch (e) {

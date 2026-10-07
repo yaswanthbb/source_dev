@@ -238,6 +238,7 @@ test("concept ai generates the body and attaches", async () => {
   assert.ok(generated, "expected POST /ai-generate/concept-content");
   assert.equal(generated[2].title, "Learn VOIP Basics");
   assert.equal(generated[2].difficulty, "medium");
+  assert.equal(generated[2].roadmapId, "r1");
   const created = calls
     .filter(([m, u]) => m === "POST" && u === "/concepts")
     .at(-1);

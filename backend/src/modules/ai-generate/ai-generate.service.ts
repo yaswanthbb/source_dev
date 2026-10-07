@@ -213,6 +213,17 @@ export class AiGenerateService implements OnApplicationBootstrap {
         `Marked ${result.affected} orphaned AI generation job(s) as failed after restart.`,
       );
     }
+    // Ops visibility: every §8 stage (compiler, research, media,
+    // leakage-lint, per-stage prompts) is gated behind this flag. When it
+    // is off the API silently runs legacy single-shot paths — say so loudly
+    // at boot so nobody mistakes legacy output for compiler output.
+    if (!this.routingEnabled()) {
+      this.logger.warn(
+        'COURSE_ENGINE_ENABLED is not "true" — compiler, research, media, and leakage-lint stages are OFF; all generation runs legacy single-shot.',
+      );
+    } else {
+      this.logger.log('COURSE_ENGINE_ENABLED=true — staged compiler pipeline active.');
+    }
   }
 
   /**
