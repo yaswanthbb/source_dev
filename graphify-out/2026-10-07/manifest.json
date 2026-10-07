@@ -204,9 +204,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.ts": {
-    "mtime": 1791274460.5342379,
-    "seen": 1791352403.736943,
-    "ast_hash": "a76862f7059228085e3b790b06ca7957",
+    "mtime": 1791267825.782914,
+    "seen": 1791269813.6582224,
+    "ast_hash": "90cf4a8df4abe598c61e3f0f8fb3b091",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.ts": {
@@ -1740,9 +1740,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/authoring.test.mjs": {
-    "mtime": 1791275111.6009228,
-    "seen": 1791352403.7374048,
-    "ast_hash": "4b15a51b8d7b291416b654d7fef857b9",
+    "mtime": 1791265921.2795186,
+    "seen": 1791269813.6583705,
+    "ast_hash": "f6f3410c357c323e7aec03b4c0c36155",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/commands.test.mjs": {
@@ -1770,9 +1770,9 @@
     "semantic_hash": ""
   },
   "frontend/lib/terminal/learning-commands.ts": {
-    "mtime": 1791275106.3699236,
-    "seen": 1791352403.7374144,
-    "ast_hash": "0f7beeed27ae4a4dc9adabbf67d16c4e",
+    "mtime": 1791265900.899477,
+    "seen": 1791269813.6583736,
+    "ast_hash": "b47437a5f57e3de9b54bd5c0390295e4",
     "semantic_hash": ""
   },
   "frontend/lib/terminal/location.test.mjs": {
