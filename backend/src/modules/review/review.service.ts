@@ -3,18 +3,34 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual } from 'typeorm';
+import { Repository, LessThanOrEqual, In } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { ReviewItem } from './entities/review-item.entity';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
 import { XpEvent } from '../gamification/entities/xp-event.entity';
 import { XpSource } from '../../common/enums/xp-source.enum';
 import { AnswerReviewItemDto } from './dto/answer-review-item.dto';
 import { relativeDayIn, todayIn } from '../../common/utils/timezone.util';
+import {
+  FsrsScheduler,
+  LegacyDoublingScheduler,
+  gradeForAnswer,
+  seedLegacyMemory,
+} from './review-scheduler';
+import { ModuleConcept } from '../content/entities/module-concept.entity';
+import { UserRole } from '../../common/enums/user-role.enum';
+import { canSeeConcept, canSeeRoadmap } from '../content/utils/visibility.util';
+import { orderReviewSession } from './review-queue';
 
 @Injectable()
 export class ReviewService {
+  private readonly logger = new Logger(ReviewService.name);
+  private readonly legacy = new LegacyDoublingScheduler();
+  private fsrsCache?: FsrsScheduler;
   constructor(
     @InjectRepository(ReviewItem)
     private readonly reviewItemRepository: Repository<ReviewItem>,
@@ -22,7 +38,149 @@ export class ReviewService {
     private readonly mcqQuestionRepository: Repository<McqQuestion>,
     @InjectRepository(XpEvent)
     private readonly xpEventRepository: Repository<XpEvent>,
+    @Optional() private readonly configService?: ConfigService,
+    @Optional()
+    @InjectRepository(ModuleConcept)
+    private readonly placementRepository?: Repository<ModuleConcept>,
   ) {}
+
+  private fsrsEnabled(): boolean {
+    return this.configService?.get<string>('FSRS_ENABLED') === 'true';
+  }
+
+  private configNumber(
+    key: string,
+    fallback: number,
+    min: number,
+    max: number,
+    integer = false,
+  ): number {
+    const raw = this.configService?.get<string>(key);
+    const value = raw == null || raw === '' ? fallback : Number(raw);
+    if (
+      !Number.isFinite(value) ||
+      value < min ||
+      value > max ||
+      (integer && !Number.isInteger(value))
+    )
+      throw new Error(
+        `${key} must be ${integer ? 'an integer ' : ''}between ${min} and ${max}`,
+      );
+    return value;
+  }
+
+  private fsrs(): FsrsScheduler {
+    const retention = this.configNumber(
+      'FSRS_REQUEST_RETENTION',
+      0.9,
+      0.7,
+      0.99,
+    );
+    if (!this.fsrsCache || this.fsrsCache.retention !== retention)
+      this.fsrsCache = new FsrsScheduler(retention);
+    return this.fsrsCache;
+  }
+
+  private leechThreshold(): number {
+    return this.configNumber('FSRS_LEECH_THRESHOLD', 8, 1, 100, true);
+  }
+
+  private queueCap(): number {
+    return this.configNumber('FSRS_REVIEW_SESSION_CAP', 50, 1, 500, true);
+  }
+
+  private remediation(item: ReviewItem) {
+    const isLeech = (item.lapses ?? 0) >= this.leechThreshold();
+    const conceptId = item.mcqQuestion?.conceptId;
+    return {
+      isLeech,
+      remediation:
+        isLeech && conceptId
+          ? {
+              message:
+                'This question has been difficult to retain. Revisit the lesson before trying again.',
+              conceptId,
+              href: `/developer/terminal?concept=${encodeURIComponent(conceptId)}`,
+            }
+          : null,
+    };
+  }
+
+  private async availableItems(
+    items: ReviewItem[],
+    userId: string,
+    role: UserRole,
+  ): Promise<ReviewItem[]> {
+    const sourced = items.filter((item) => !!item.mcqQuestion?.concept);
+    if (!sourced.length) return [];
+    if (!this.placementRepository)
+      throw new Error(
+        'FSRS review visibility requires the ModuleConcept repository',
+      );
+    const placements = await this.placementRepository.find({
+      where: {
+        conceptId: In([
+          ...new Set(sourced.map((item) => item.mcqQuestion!.conceptId)),
+        ]),
+      },
+      relations: ['module', 'module.roadmap'],
+    });
+    return sourced.filter((item) => {
+      const question = item.mcqQuestion!;
+      return canSeeConcept(
+        question.concept,
+        placements
+          .filter((p) => p.conceptId === question.conceptId)
+          .map((p) => ({
+            // Honor effective unpublish/deletion dates through the existing shared predicate.
+            roadmapReviewStatus:
+              p.module?.roadmap && canSeeRoadmap(p.module.roadmap, undefined)
+                ? p.module.roadmap.reviewStatus
+                : null,
+          })),
+        { id: userId, role },
+      );
+    });
+  }
+
+  private async prepareQueue(
+    items: ReviewItem[],
+    userId: string,
+    role: UserRole,
+  ) {
+    const available = await this.availableItems(items, userId, role);
+    const scheduler = this.fsrs();
+    const now = new Date();
+    const ranked = available.map((item) => ({
+      item,
+      id: item.id,
+      dueDate: item.dueDate,
+      conceptId: item.mcqQuestion!.conceptId,
+      createdAt: item.createdAt,
+      retrievability: scheduler.retrievability(item, now),
+    }));
+    const session = orderReviewSession(ranked, this.queueCap()).map(
+      ({ item }) => item,
+    );
+    const heldBackCount = available.length - session.length;
+    const unavailableCount = items.length - available.length;
+    const leechCount = available.filter(
+      (item) => (item.lapses ?? 0) >= this.leechThreshold(),
+    ).length;
+    this.logger.debug(
+      JSON.stringify({
+        event: 'review_queue',
+        userId,
+        scheduler: scheduler.version,
+        totalDue: items.length,
+        sessionCount: session.length,
+        heldBackCount,
+        unavailableCount,
+        leechCount,
+      }),
+    );
+    return { items: session, heldBackCount, unavailableCount, leechCount };
+  }
 
   /**
    * Review scheduling is a civil-date concept: an item due "tomorrow" means
@@ -54,6 +212,7 @@ export class ReviewService {
   ): Promise<void> {
     const questions = await this.mcqQuestionRepository.find({
       where: { conceptId },
+      ...(this.fsrsEnabled() ? { relations: ['concept'] } : {}),
     });
 
     if (!questions || questions.length === 0) {
@@ -73,6 +232,19 @@ export class ReviewService {
           intervalDays: 1,
           correctStreak: 0,
           dueDate: tomorrowStr,
+          ...(this.fsrsEnabled()
+            ? {
+                ...seedLegacyMemory({
+                  intervalDays: 1,
+                  correctStreak: 0,
+                  dueDate: tomorrowStr,
+                  lastReviewedAt: null,
+                }),
+                sourceQuestionId: question.id,
+                sourceConceptId: conceptId,
+                sourceConceptTitle: question.concept?.title ?? null,
+              }
+            : {}),
         })
         .orIgnore() // Respect unique constraint on (userId, mcqQuestionId)
         .execute();
@@ -83,10 +255,14 @@ export class ReviewService {
    * Returns all ReviewItems for current user where dueDate <= today (due today or overdue).
    * Strips isCorrect from options (student-facing).
    */
-  async getDueReviewItems(userId: string, timezone?: string | null) {
+  async getDueReviewItems(
+    userId: string,
+    timezone?: string | null,
+    role = UserRole.DEVELOPER,
+  ) {
     const todayStr = this.getTodayDateString(timezone);
 
-    const items = await this.reviewItemRepository.find({
+    let items = await this.reviewItemRepository.find({
       where: {
         userId,
         dueDate: LessThanOrEqual(todayStr),
@@ -95,29 +271,50 @@ export class ReviewService {
       order: { dueDate: 'ASC', createdAt: 'ASC' },
     });
 
-    return items.map((item) => ({
-      id: item.id,
-      userId: item.userId,
-      mcqQuestionId: item.mcqQuestionId,
-      intervalDays: item.intervalDays,
-      correctStreak: item.correctStreak,
-      dueDate: item.dueDate,
-      lastReviewedAt: item.lastReviewedAt,
-      question: {
-        id: item.mcqQuestion.id,
-        conceptId: item.mcqQuestion.conceptId,
-        conceptTitle: item.mcqQuestion.concept?.title || 'Concept',
-        questionText: item.mcqQuestion.questionText,
-        orderIndex: item.mcqQuestion.orderIndex,
-        options: (item.mcqQuestion.options || [])
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-          .map((opt) => ({
-            id: opt.id,
-            optionText: opt.optionText,
-            orderIndex: opt.orderIndex,
-          })),
-      },
-    }));
+    if (this.fsrsEnabled()) {
+      const queue = await this.prepareQueue(items, userId, role);
+      items = queue.items;
+    } else {
+      // Retained histories have no answerable source. Keep them counted and never dereference null.
+      const missing = items.filter((item) => !item.mcqQuestion).length;
+      if (missing)
+        this.logger.warn(
+          JSON.stringify({
+            event: 'review_source_unavailable',
+            userId,
+            count: missing,
+          }),
+        );
+      items = items.filter((item) => item.mcqQuestion);
+    }
+
+    return items.map((item) => {
+      const question = item.mcqQuestion!;
+      return {
+        id: item.id,
+        userId: item.userId,
+        mcqQuestionId: item.mcqQuestionId,
+        intervalDays: item.intervalDays,
+        correctStreak: item.correctStreak,
+        dueDate: item.dueDate,
+        lastReviewedAt: item.lastReviewedAt,
+        ...(this.fsrsEnabled() ? this.remediation(item) : {}),
+        question: {
+          id: question.id,
+          conceptId: question.conceptId,
+          conceptTitle: question.concept?.title || 'Concept',
+          questionText: question.questionText,
+          orderIndex: question.orderIndex,
+          options: (question.options || [])
+            .sort((a, b) => a.orderIndex - b.orderIndex)
+            .map((opt) => ({
+              id: opt.id,
+              optionText: opt.optionText,
+              orderIndex: opt.orderIndex,
+            })),
+        },
+      };
+    });
   }
 
   /**
@@ -126,8 +323,32 @@ export class ReviewService {
   async getDueCount(
     userId: string,
     timezone?: string | null,
-  ): Promise<{ count: number; dueCount: number }> {
+    role = UserRole.DEVELOPER,
+  ): Promise<{
+    count: number;
+    dueCount: number;
+    sessionCount?: number;
+    heldBackCount?: number;
+    unavailableCount?: number;
+    leechCount?: number;
+  }> {
     const todayStr = this.getTodayDateString(timezone);
+    if (this.fsrsEnabled()) {
+      const items = await this.reviewItemRepository.find({
+        where: { userId, dueDate: LessThanOrEqual(todayStr) },
+        relations: ['mcqQuestion', 'mcqQuestion.concept'],
+        order: { dueDate: 'ASC', createdAt: 'ASC' },
+      });
+      const queue = await this.prepareQueue(items, userId, role);
+      return {
+        count: items.length,
+        dueCount: items.length,
+        sessionCount: queue.items.length,
+        heldBackCount: queue.heldBackCount,
+        unavailableCount: queue.unavailableCount,
+        leechCount: queue.leechCount,
+      };
+    }
     const count = await this.reviewItemRepository.count({
       where: {
         userId,
@@ -146,10 +367,15 @@ export class ReviewService {
     userId: string,
     dto: AnswerReviewItemDto,
     timezone?: string | null,
+    role = UserRole.DEVELOPER,
   ) {
     const item = await this.reviewItemRepository.findOne({
       where: { id: reviewItemId },
-      relations: ['mcqQuestion', 'mcqQuestion.options'],
+      relations: [
+        'mcqQuestion',
+        'mcqQuestion.options',
+        ...(this.fsrsEnabled() ? ['mcqQuestion.concept'] : []),
+      ],
     });
 
     if (!item) {
@@ -171,6 +397,18 @@ export class ReviewService {
       );
     }
 
+    if (!item.mcqQuestion || !item.mcqQuestionId)
+      throw new NotFoundException(
+        'Review source is no longer available; history has been retained',
+      );
+    if (
+      this.fsrsEnabled() &&
+      !(await this.availableItems([item], userId, role)).length
+    )
+      throw new NotFoundException(
+        'Review source is currently unavailable; history has been retained',
+      );
+
     const options = item.mcqQuestion.options || [];
     const correctOption = options.find((opt) => opt.isCorrect);
     const selectedOption = options.find(
@@ -182,16 +420,25 @@ export class ReviewService {
     }
 
     const isCorrect = selectedOption.isCorrect === true;
-    let newIntervalDays = 1;
-    let nextDueDateStr = '';
+    const now = new Date();
+    const enabled = this.fsrsEnabled();
+    const scheduler = enabled ? this.fsrs() : this.legacy;
+    const threshold = enabled ? this.leechThreshold() : 0;
+    const wasLeech = enabled && (item.lapses ?? 0) >= threshold;
+    const scheduled = scheduler.schedule(
+      item,
+      gradeForAnswer(isCorrect),
+      now,
+      timezone,
+    );
+    const newIntervalDays = scheduled.intervalDays;
+    const nextDueDateStr = scheduled.dueDate;
+    item.correctStreak = scheduled.correctStreak;
+    item.intervalDays = newIntervalDays;
+    item.dueDate = nextDueDateStr;
+    if (scheduled.memory) Object.assign(item, scheduled.memory);
 
     if (isCorrect) {
-      item.correctStreak += 1;
-      newIntervalDays = Math.min(item.intervalDays * 2, 60);
-      item.intervalDays = newIntervalDays;
-      nextDueDateStr = this.getFutureDateString(newIntervalDays, timezone);
-      item.dueDate = nextDueDateStr;
-
       // Award 2 XP via XpEvent (isolated from streaks/badges)
       const xpEvent = this.xpEventRepository.create({
         userId,
@@ -200,16 +447,34 @@ export class ReviewService {
         xpAmount: 2,
       });
       await this.xpEventRepository.save(xpEvent);
-    } else {
-      item.correctStreak = 0;
-      newIntervalDays = 1;
-      item.intervalDays = 1;
-      nextDueDateStr = this.getTomorrowDateString(timezone);
-      item.dueDate = nextDueDateStr;
     }
 
-    item.lastReviewedAt = new Date();
+    item.lastReviewedAt = now;
     await this.reviewItemRepository.save(item);
+    this.logger.log(
+      JSON.stringify({
+        event: 'review_scheduled',
+        userId,
+        reviewItemId,
+        fsrsEnabled: enabled,
+        scheduler: scheduler.version,
+        grade: gradeForAnswer(isCorrect),
+        intervalDays: newIntervalDays,
+        dueDate: nextDueDateStr,
+        state: enabled ? item.state : null,
+        rebased: scheduled.rebased ?? false,
+      }),
+    );
+    if (enabled && !wasLeech && (item.lapses ?? 0) >= threshold)
+      this.logger.warn(
+        JSON.stringify({
+          event: 'review_leech',
+          userId,
+          reviewItemId,
+          conceptId: item.mcqQuestion.conceptId,
+          lapses: item.lapses,
+        }),
+      );
 
     return {
       isCorrect,
@@ -217,6 +482,7 @@ export class ReviewService {
       newIntervalDays,
       nextDueDate: nextDueDateStr,
       xpAwarded: isCorrect ? 2 : 0,
+      ...(enabled ? this.remediation(item) : {}),
     };
   }
 }

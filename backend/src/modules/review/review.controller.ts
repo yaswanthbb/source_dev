@@ -18,14 +18,19 @@ export class ReviewController {
 
   @Get('due')
   @ApiOperation({
-    summary: 'Get all review items due today or overdue for the current user',
+    summary: "Get the current user's due review session",
   })
   @ApiResponse({
     status: 200,
-    description: 'Due review items with questions and options retrieved.',
+    description:
+      'Due items with redacted options. FSRS caps and interleaves the session; use due-count for held-back and unavailable totals. FSRS items include isLeech and remediation.',
   })
   async getDueReviewItems(@CurrentUser() user: User) {
-    return this.reviewService.getDueReviewItems(user.id, user.timezone);
+    return this.reviewService.getDueReviewItems(
+      user.id,
+      user.timezone,
+      user.role,
+    );
   }
 
   @Get('due-count')
@@ -34,10 +39,11 @@ export class ReviewController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Count of due items retrieved.',
+    description:
+      'count and dueCount include all due histories. FSRS additionally returns sessionCount, heldBackCount, unavailableCount and leechCount.',
   })
   async getDueCount(@CurrentUser() user: User) {
-    return this.reviewService.getDueCount(user.id, user.timezone);
+    return this.reviewService.getDueCount(user.id, user.timezone, user.role);
   }
 
   @Post(':reviewItemId/answer')
@@ -63,6 +69,7 @@ export class ReviewController {
       user.id,
       dto,
       user.timezone,
+      user.role,
     );
   }
 }
