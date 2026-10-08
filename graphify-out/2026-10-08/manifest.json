@@ -54,9 +54,9 @@
     "semantic_hash": "d41667340ddf50d41f530cba686fc9d4"
   },
   "backend/src/common/enums/ai-generation-type.enum.ts": {
-    "mtime": 1791262459.9042938,
-    "seen": 1791263532.9257812,
-    "ast_hash": "c83b86379f88a058664e4b466e4b8498",
+    "mtime": 1791434505.5640574,
+    "seen": 1791437625.2898886,
+    "ast_hash": "3ac0f460a82a83aba2eff2c1c1221750",
     "semantic_hash": ""
   },
   "backend/src/common/enums/concept-difficulty.enum.ts": {
@@ -204,9 +204,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-generate.service.ts": {
-    "mtime": 1791274460.5342379,
-    "seen": 1791352403.736943,
-    "ast_hash": "a76862f7059228085e3b790b06ca7957",
+    "mtime": 1791435480.563649,
+    "seen": 1791437625.2899768,
+    "ast_hash": "2e3d5046ec8e7e14a8e308328a484b74",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/constants/prompts.ts": {
@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/dto/ai-generate.dto.ts": {
-    "mtime": 1791180626.0082998,
-    "seen": 1791187825.2343302,
-    "ast_hash": "651a7cdbfd315936a9bfd6857822a6c6",
+    "mtime": 1791435441.770318,
+    "seen": 1791437625.2900107,
+    "ast_hash": "77c24d517953f20a6eee229fd00fabcf",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/entities/ai-generation-log.entity.ts": {
@@ -642,16 +642,16 @@
     "semantic_hash": ""
   },
   "backend/src/modules/quiz/dto/create-option.dto.ts": {
-    "mtime": 1786536924.1099882,
-    "seen": 1787327437.294439,
-    "ast_hash": "4632365a739f832b53c74eeb8bf417cc",
-    "semantic_hash": "4632365a739f832b53c74eeb8bf417cc"
+    "mtime": 1791435358.4683084,
+    "seen": 1791437625.29017,
+    "ast_hash": "062acd80a5864bb03f11c557084dcd9d",
+    "semantic_hash": ""
   },
   "backend/src/modules/quiz/dto/create-question.dto.ts": {
-    "mtime": 1786536924.1099882,
-    "seen": 1787327437.2944422,
-    "ast_hash": "ad8e85eb40ad96a5218cf3206e2d4e6a",
-    "semantic_hash": "ad8e85eb40ad96a5218cf3206e2d4e6a"
+    "mtime": 1791435092.1902719,
+    "seen": 1791437625.290171,
+    "ast_hash": "55caea1e7e2b31311ba9b0ecb0e7b284",
+    "semantic_hash": ""
   },
   "backend/src/modules/quiz/dto/submit-attempt.dto.ts": {
     "mtime": 1786536924.1099882,
@@ -678,16 +678,16 @@
     "semantic_hash": "38d60452f5f3d0f6c5611c8dbacc4a89"
   },
   "backend/src/modules/quiz/entities/mcq-option.entity.ts": {
-    "mtime": 1786436687.1156144,
-    "seen": 1787327437.2944574,
-    "ast_hash": "6d3104ae6b7e83ac954cb9c669f22420",
-    "semantic_hash": "6d3104ae6b7e83ac954cb9c669f22420"
+    "mtime": 1791434374.0784576,
+    "seen": 1791437625.2901778,
+    "ast_hash": "acfd58ddf828f983eb277698fef72e2d",
+    "semantic_hash": ""
   },
   "backend/src/modules/quiz/entities/mcq-question.entity.ts": {
-    "mtime": 1786436683.4876168,
-    "seen": 1787327437.2944605,
-    "ast_hash": "4194763739eba8a3d3b631faa1f230a0",
-    "semantic_hash": "4194763739eba8a3d3b631faa1f230a0"
+    "mtime": 1791434374.0374584,
+    "seen": 1791437625.2901788,
+    "ast_hash": "7a4a3dd32ebff1f76f01d971326d8bae",
+    "semantic_hash": ""
   },
   "backend/src/modules/quiz/quiz.controller.ts": {
     "mtime": 1786537082.9291916,
@@ -696,15 +696,15 @@
     "semantic_hash": "6d01236d961f70b2d988cf233fb6ef14"
   },
   "backend/src/modules/quiz/quiz.module.ts": {
-    "mtime": 1786536924.1129882,
-    "seen": 1787327437.294484,
-    "ast_hash": "d4b821281d82b7a551515bada11b0672",
-    "semantic_hash": "d4b821281d82b7a551515bada11b0672"
+    "mtime": 1791435092.28327,
+    "seen": 1791437625.2901814,
+    "ast_hash": "b8be29dbbedb78f9b835203427d2363f",
+    "semantic_hash": ""
   },
   "backend/src/modules/quiz/quiz.service.ts": {
-    "mtime": 1791172318.887455,
-    "seen": 1791172319.4611156,
-    "ast_hash": "e400bb4a5c4e7e21550b7c46624ca40c",
+    "mtime": 1791435358.5183136,
+    "seen": 1791437625.2901838,
+    "ast_hash": "c1a87f660952fbf37c4ec2db7ece7025",
     "semantic_hash": ""
   },
   "backend/src/modules/review/dto/answer-review-item.dto.ts": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "source-dev-master-plan.md": {
-    "mtime": 1791267836.9968739,
-    "seen": 1791269813.6583917,
-    "ast_hash": "593068ba798ff2858bf2c1e8b40a66ce",
+    "mtime": 1791435430.5413089,
+    "seen": 1791437625.290332,
+    "ast_hash": "5f64a01a519251ee1a6c09ef7eb286c1",
     "semantic_hash": ""
   },
   "frontend/screenshots/neofetch.png": {
@@ -1902,9 +1902,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-prompt-registry.service.ts": {
-    "mtime": 1791262727.2931583,
-    "seen": 1791263532.9258323,
-    "ast_hash": "ab315cb907c2e31aa0b1153d7e79ffba",
+    "mtime": 1791435441.7305677,
+    "seen": 1791437625.2899852,
+    "ast_hash": "61ac0e1d519cff08f87a8ed759e95333",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/compiler-stages.spec.ts": {
@@ -1980,21 +1980,21 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/golden.spec.ts": {
-    "mtime": 1791261136.6545746,
-    "seen": 1791261674.3537557,
-    "ast_hash": "c1459a78c92096a9dd14b69838176b59",
+    "mtime": 1791435480.4946432,
+    "seen": 1791437625.290028,
+    "ast_hash": "b11e7cb6933165b14ce6e7c544fc08e3",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/task-routing.spec.ts": {
-    "mtime": 1791261024.362882,
-    "seen": 1791261674.3537595,
-    "ast_hash": "22448fbb0fb90fe93ad80cd5a83d563d",
+    "mtime": 1791435441.7553167,
+    "seen": 1791437625.2900367,
+    "ast_hash": "3b67c8c4308f0d4d046f38c22b4c5d3a",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/task-routing.ts": {
-    "mtime": 1791261008.4819493,
-    "seen": 1791261674.3537602,
-    "ast_hash": "a776f7ee71a1dc9ec7b5b611170da3a4",
+    "mtime": 1791435441.7403154,
+    "seen": 1791437625.290038,
+    "ast_hash": "e556cecdd0b9d2a150ddd114ea5f1fa8",
     "semantic_hash": ""
   },
   "AI Course Generation R&D.html": {
@@ -2085,6 +2085,78 @@
     "mtime": 1791262770.3927906,
     "seen": 1791263532.9258523,
     "ast_hash": "6d139e1f03a5eb663a568bfed35e74c1",
+    "semantic_hash": ""
+  },
+  "backend/src/migrations/1788050000000-AssessmentColumns.ts": {
+    "mtime": 1791435358.4523067,
+    "seen": 1791437625.2899685,
+    "ast_hash": "c748d75aad1e2b49cd29ab22a4ee73ac",
+    "semantic_hash": ""
+  },
+  "backend/src/migrations/1788060000000-AssessmentPromptTasks.ts": {
+    "mtime": 1791435358.4583075,
+    "seen": 1791437625.28997,
+    "ast_hash": "bcb561c85dd962002fa952b9c2b9869c",
+    "semantic_hash": ""
+  },
+  "backend/src/migrations/1788070000000-AssessmentPromptSeeds.ts": {
+    "mtime": 1791435358.4632397,
+    "seen": 1791437625.289971,
+    "ast_hash": "01624b1dc1d768b0cb06dff85536109f",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/assessment-migrations.spec.ts": {
+    "mtime": 1791435358.2743537,
+    "seen": 1791437625.2899892,
+    "ast_hash": "6f6f668a820104035e56c4f2b37fdcc5",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/assessment-pipeline.spec.ts": {
+    "mtime": 1791435358.3072917,
+    "seen": 1791437625.2899904,
+    "ast_hash": "693bc21170df23ee3578786fff90f4b9",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/assessment-pipeline.ts": {
+    "mtime": 1791435480.45864,
+    "seen": 1791437625.2899919,
+    "ast_hash": "d4901e95959d0d530657efa40825168d",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/assessment-service.spec.ts": {
+    "mtime": 1791435358.3983011,
+    "seen": 1791437625.289993,
+    "ast_hash": "1382619bb1aadb291488c7bca7d6794a",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/assessment.ts": {
+    "mtime": 1791435358.4110894,
+    "seen": 1791437625.289994,
+    "ast_hash": "65b525d612ad6eeebf9162e475adbde9",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/constants/assessment-prompts.ts": {
+    "mtime": 1791435480.8946884,
+    "seen": 1791437625.2899978,
+    "ast_hash": "934cd4c44d5142a7c6122d08d7b3d69d",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/mcq-lint.service.spec.ts": {
+    "mtime": 1791435358.4251432,
+    "seen": 1791437625.2900293,
+    "ast_hash": "2af78d762f3a1937cd47c6ec17ca7082",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/ai-generate/mcq-lint.service.ts": {
+    "mtime": 1791435358.4441135,
+    "seen": 1791437625.2900302,
+    "ast_hash": "18b082df7abe13c8a92a723589afb28c",
+    "semantic_hash": ""
+  },
+  "backend/assessment-factory.md": {
+    "mtime": 1791435430.5843127,
+    "seen": 1791437625.2903256,
+    "ast_hash": "69e7b46c85bafbfcaf60e2674e6ddee2",
     "semantic_hash": ""
   }
 }

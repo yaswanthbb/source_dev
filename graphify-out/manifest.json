@@ -12,9 +12,9 @@
     "semantic_hash": "b6c9c4b64b7092bea720263a47b574cf"
   },
   "backend/package.json": {
-    "mtime": 1791190264.3805447,
-    "seen": 1791194078.126121,
-    "ast_hash": "97a13e8ed17d9f5c9d97b05dd605801f",
+    "mtime": 1791438186.9692175,
+    "seen": 1791439459.5995333,
+    "ast_hash": "e2d9e46cdd4215806fef403170e91534",
     "semantic_hash": ""
   },
   "backend/src/app.controller.spec.ts": {
@@ -714,27 +714,27 @@
     "semantic_hash": "c257ef4b32f08c7fa17c14507e8e0627"
   },
   "backend/src/modules/review/entities/review-item.entity.ts": {
-    "mtime": 1786958007.4564896,
-    "seen": 1787327437.2944932,
-    "ast_hash": "b4e7abf566291612b400a20dc0ab8148",
-    "semantic_hash": "b4e7abf566291612b400a20dc0ab8148"
+    "mtime": 1791438442.1529162,
+    "seen": 1791439459.5997565,
+    "ast_hash": "74a4abc19a43eec79663512d6734aecc",
+    "semantic_hash": ""
   },
   "backend/src/modules/review/review.controller.ts": {
-    "mtime": 1791172318.887455,
-    "seen": 1791172319.4611194,
-    "ast_hash": "61bc3a7c605b3adb8cd44d0336dada16",
+    "mtime": 1791439161.9633718,
+    "seen": 1791439459.5997624,
+    "ast_hash": "dd410d021d6d4c87b79e8eb27be1bc39",
     "semantic_hash": ""
   },
   "backend/src/modules/review/review.module.ts": {
-    "mtime": 1786957267.7826526,
-    "seen": 1787327437.2944992,
-    "ast_hash": "ef382c99d3535d57ca12eb8a6de481a6",
-    "semantic_hash": "ef382c99d3535d57ca12eb8a6de481a6"
+    "mtime": 1791438874.1510468,
+    "seen": 1791439459.5997632,
+    "ast_hash": "61362fc0b26d8f40768efa06574f1c2c",
+    "semantic_hash": ""
   },
   "backend/src/modules/review/review.service.ts": {
-    "mtime": 1791172318.887455,
-    "seen": 1791172319.4611225,
-    "ast_hash": "3f076be7add127bfcb2e843b2124db8e",
+    "mtime": 1791438874.0815146,
+    "seen": 1791439459.5997648,
+    "ast_hash": "ef71a3d039ee325216f2423c1f36fda6",
     "semantic_hash": ""
   },
   "backend/src/modules/users/dto/change-password.dto.ts": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "source-dev-master-plan.md": {
-    "mtime": 1791435430.5413089,
-    "seen": 1791437625.290332,
-    "ast_hash": "5f64a01a519251ee1a6c09ef7eb286c1",
+    "mtime": 1791439401.8026943,
+    "seen": 1791439459.5998642,
+    "ast_hash": "538576154646cc29f9dfe7d7f2a02855",
     "semantic_hash": ""
   },
   "frontend/screenshots/neofetch.png": {
@@ -2157,6 +2157,60 @@
     "mtime": 1791435430.5843127,
     "seen": 1791437625.2903256,
     "ast_hash": "69e7b46c85bafbfcaf60e2674e6ddee2",
+    "semantic_hash": ""
+  },
+  "backend/src/migrations/1788080000000-FsrsReviewState.ts": {
+    "mtime": 1791439065.8762496,
+    "seen": 1791439459.5996094,
+    "ast_hash": "3b718181ecd0d43ebf6fb22d2ebd23bf",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/review/fsrs-migration.spec.ts": {
+    "mtime": 1791438874.1310468,
+    "seen": 1791439459.5997577,
+    "ast_hash": "5cac3c201a8611c636cc6dce03ccaf9a",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/review/fsrs-review.service.spec.ts": {
+    "mtime": 1791439161.940121,
+    "seen": 1791439459.5997586,
+    "ast_hash": "24c6c0b2a1ab775a98b3c948d7ba0beb",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/review/review-queue.spec.ts": {
+    "mtime": 1791438874.0309925,
+    "seen": 1791439459.5997593,
+    "ast_hash": "4b1db0804c1dbc3e62b68d1c8e44afd9",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/review/review-queue.ts": {
+    "mtime": 1791438874.0210466,
+    "seen": 1791439459.59976,
+    "ast_hash": "a9591b24ee69f6f6f110749ee66fe387",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/review/review-scheduler.spec.ts": {
+    "mtime": 1791438874.0080466,
+    "seen": 1791439459.599761,
+    "ast_hash": "010f53ae3d98c2f304ee0c75c68c6695",
+    "semantic_hash": ""
+  },
+  "backend/src/modules/review/review-scheduler.ts": {
+    "mtime": 1791438873.9836214,
+    "seen": 1791439459.5997617,
+    "ast_hash": "345d626896704caae0ab654082778358",
+    "semantic_hash": ""
+  },
+  "backend/test/fsrs-migration.roundtrip.ts": {
+    "mtime": 1791439161.8570461,
+    "seen": 1791439459.5997758,
+    "ast_hash": "9351000ee27750a599f1922945c38ce0",
+    "semantic_hash": ""
+  },
+  "backend/fsrs-review-upgrade.md": {
+    "mtime": 1791439401.7356951,
+    "seen": 1791439459.5998602,
+    "ast_hash": "dc1cc1b00170b2938e0e824895ed9e32",
     "semantic_hash": ""
   }
 }
