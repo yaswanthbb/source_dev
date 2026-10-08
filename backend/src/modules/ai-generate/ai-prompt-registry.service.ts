@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EvalPromptRelease } from '../eval/entities/eval-prompt-release.entity';
+import { hashText } from '../eval/eval-hash';
+import { goldenSetHash, loadEvalGoldens } from '../eval/eval-goldens';
+import { EVAL_JUDGE_SYSTEM_PROMPT } from '../eval/eval-rubric';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createHash } from 'crypto';
@@ -43,6 +48,10 @@ export class AiPromptRegistry implements OnModuleInit {
   constructor(
     @InjectRepository(AiPromptVersion)
     private readonly promptRepository: Repository<AiPromptVersion>,
+    @Optional() private readonly config?: ConfigService,
+    @Optional()
+    @InjectRepository(EvalPromptRelease)
+    private readonly releases?: Repository<EvalPromptRelease>,
   ) {}
 
   /**
@@ -53,6 +62,7 @@ export class AiPromptRegistry implements OnModuleInit {
    */
   async onModuleInit(): Promise<void> {
     const live: Array<[AiGenerationType, string]> = [
+      [AiGenerationType.EVAL_JUDGE, EVAL_JUDGE_SYSTEM_PROMPT],
       [AiGenerationType.ROADMAP_MODULES, ROADMAP_MODULES_SYSTEM_PROMPT],
       [AiGenerationType.MODULE_CONCEPTS, MODULE_CONCEPTS_SYSTEM_PROMPT],
       [AiGenerationType.CONCEPT_CONTENT, CONCEPT_CONTENT_SYSTEM_PROMPT],
@@ -110,7 +120,64 @@ export class AiPromptRegistry implements OnModuleInit {
     task: AiGenerationType,
     fallback: string,
   ): Promise<ResolvedPrompt> {
-    const row = await this.getProduction(task);
+    let row = await this.getProduction(task);
+    // Config opt-in only; no learner bucketing/experiments, and rollback never mutates the baseline.
+    if (row && this.config?.get('EVAL_PROMPT_SELECTION_ENABLED') === 'true') {
+      try {
+        const selection: unknown = JSON.parse(
+          this.config.get<string>('EVAL_PROMPT_VERSIONS') ?? '{}',
+        );
+        if (
+          !selection ||
+          typeof selection !== 'object' ||
+          Array.isArray(selection) ||
+          Object.entries(selection).some(
+            ([key, value]) =>
+              !Object.values(AiGenerationType).includes(
+                key as AiGenerationType,
+              ) || typeof value !== 'string',
+          )
+        )
+          throw new Error('Invalid per-task version config');
+        const selected = (selection as Record<string, string>)[task];
+        if (selected && selected !== row.version) {
+          const candidate = await this.promptRepository.findOne({
+            where: { task, version: selected },
+          });
+          const approval =
+            candidate &&
+            (await this.releases?.findOne({
+              where: {
+                task,
+                baselinePromptId: row.id,
+                candidatePromptId: candidate.id,
+                status: 'approved',
+              },
+            }));
+          if (
+            !candidate ||
+            candidate.status === AiPromptStatus.ARCHIVED ||
+            !approval ||
+            approval.baselineHash !== hashText(row.systemTemplate) ||
+            approval.candidateHash !== hashText(candidate.systemTemplate) ||
+            approval.goldenSetHash !==
+              goldenSetHash(
+                loadEvalGoldens().filter(
+                  (g) => (g.registryTask ?? g.task) === task,
+                ),
+              )
+          )
+            throw new Error(
+              'Candidate lacks a current fingerprint-matching eval approval',
+            );
+          row = candidate;
+        }
+      } catch {
+        this.logger.warn(
+          `Eval prompt selection refused for ${task}; serving the unchanged production baseline.`,
+        );
+      }
+    }
     if (!row) {
       return {
         version: 'legacy-static',

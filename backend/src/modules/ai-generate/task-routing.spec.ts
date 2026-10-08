@@ -10,9 +10,10 @@ import {
 import { isModelRetiredError } from './ai-provider-clients';
 
 describe('task routing table (§8 per-task routing)', () => {
-  it('covers all fourteen task keys (including assessment extraction and verification)', () => {
+  it('covers all fifteen task keys (including the internal eval judge)', () => {
     expect([...COURSE_TASK_KEYS].sort()).toEqual(
       [
+        'eval_judge',
         'roadmap_titles',
         'module_concept_titles',
         'concept_outline',
@@ -45,6 +46,7 @@ describe('task routing table (§8 per-task routing)', () => {
     }
     for (const key of [
       'concept_outline',
+      'eval_judge',
       'concept_draft',
       'concept_factcheck',
       'concept_critique',

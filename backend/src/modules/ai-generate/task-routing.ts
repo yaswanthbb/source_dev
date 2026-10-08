@@ -13,6 +13,7 @@ import { AiProvider } from '../../common/enums/ai-provider.enum';
  * params, not models, until an operator sets a strong override.
  */
 export type CourseTaskKey =
+  | 'eval_judge'
   | 'roadmap_titles'
   | 'module_concept_titles'
   | 'concept_outline'
@@ -39,6 +40,7 @@ export interface TaskRoute {
 }
 
 export const TASK_ROUTES: Record<CourseTaskKey, TaskRoute> = {
+  eval_judge: { tier: 'strong', maxTokens: 6000, temperature: 0 },
   concept_misconceptions: { tier: 'fast', maxTokens: 600, temperature: 0.3 },
   concept_mcq_verify: { tier: 'strong', maxTokens: 600, temperature: 0.1 },
   // Title lists and grounded extraction → cheap/fast.

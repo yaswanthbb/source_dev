@@ -3,10 +3,11 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, IsNull } from 'typeorm';
 import { McqQuestion } from './entities/mcq-question.entity';
 import { McqOption } from './entities/mcq-option.entity';
 import { McqAttempt } from './entities/mcq-attempt.entity';
@@ -62,11 +63,24 @@ export class QuizService {
     );
   }
 
+  private async assertEditable(question: McqQuestion): Promise<void> {
+    if (
+      question.retiredAt ||
+      (await this.mcqAttemptRepository.count({
+        where: { questionId: question.id },
+      })) > 0
+    )
+      throw new ConflictException(
+        'Answered question versions are immutable; create a linked replacement instead',
+      );
+  }
+
   async createQuestion(
     conceptId: string,
     user: Omit<User, 'passwordHash'>,
     dto: CreateQuestionDto,
     assessment?: AssessmentItem,
+    provenance?: Record<string, unknown>,
   ): Promise<McqQuestion> {
     const concept = await this.conceptRepository.findOne({
       where: { id: conceptId },
@@ -92,6 +106,7 @@ export class QuizService {
       questionText: dto.questionText,
       orderIndex: dto.orderIndex,
       createdById: user.id,
+      ...(provenance ? { generationProvenance: provenance } : {}),
       ...(assessment
         ? {
             bloomLevel: assessment.bloomLevel,
@@ -156,7 +171,7 @@ export class QuizService {
     }
 
     const questions = await this.mcqQuestionRepository.find({
-      where: { conceptId },
+      where: { conceptId, retiredAt: IsNull() },
       relations: ['options'],
       order: { orderIndex: 'ASC' },
     });
@@ -208,6 +223,8 @@ export class QuizService {
     }
     this.checkOwnership(question.concept.authorId, user);
 
+    await this.assertEditable(question);
+
     if (dto.questionText !== undefined) {
       question.questionText = dto.questionText;
     }
@@ -234,6 +251,7 @@ export class QuizService {
     this.checkOwnership(question.concept.authorId, user);
 
     const conceptId = question.conceptId;
+    await this.assertEditable(question);
     await this.mcqQuestionRepository.remove(question);
     await this.resetConceptReviewStatus(conceptId);
   }
@@ -252,6 +270,8 @@ export class QuizService {
       throw new NotFoundException('Question not found');
     }
     this.checkOwnership(question.concept.authorId, user);
+
+    await this.assertEditable(question);
 
     const option = await this.mcqOptionRepository.findOne({
       where: { id: optionId, questionId },
@@ -295,7 +315,7 @@ export class QuizService {
     timezone?: string | null,
   ): Promise<void> {
     const allQuestions = await this.mcqQuestionRepository.find({
-      where: { conceptId },
+      where: { conceptId, retiredAt: IsNull() },
     });
     if (allQuestions.length === 0) {
       return;
@@ -341,6 +361,10 @@ export class QuizService {
     if (!question) {
       throw new NotFoundException('Question not found');
     }
+    if (question.retiredAt)
+      throw new ConflictException(
+        'Question has a newer version; reload the quiz',
+      );
 
     const existingAttempts = await this.mcqAttemptRepository.find({
       where: { questionId, studentId: user.id },
@@ -405,7 +429,7 @@ export class QuizService {
     }
 
     const questions = await this.mcqQuestionRepository.find({
-      where: { conceptId },
+      where: { conceptId, retiredAt: IsNull() },
       relations: ['options'],
       order: { orderIndex: 'ASC' },
     });

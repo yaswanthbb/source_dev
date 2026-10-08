@@ -6,6 +6,17 @@ import { McqOption } from './mcq-option.entity';
 
 @Entity('mcq_questions')
 export class McqQuestion extends BaseEntity {
+  @Column({ name: 'predecessor_id', type: 'uuid', nullable: true })
+  predecessorId: string | null;
+  @ManyToOne(() => McqQuestion, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'predecessor_id' })
+  predecessor: McqQuestion | null;
+  @Column({ name: 'version_number', type: 'int', default: 1 })
+  versionNumber: number;
+  @Column({ name: 'retired_at', type: 'timestamptz', nullable: true })
+  retiredAt: Date | null;
+  @Column({ name: 'generation_provenance', type: 'jsonb', nullable: true })
+  generationProvenance: Record<string, unknown> | null;
   @Column({ name: 'concept_id' })
   conceptId: string;
 

@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { AiProvider } from '../../common/enums/ai-provider.enum';
 
 export interface CompletionOptions {
+  /** Eval-only reproducibility hint; omitted by every existing generation call. */
+  seed?: number;
   maxTokens?: number;
   temperature?: number;
   responseFormat?: { type: 'json_object' | 'text' };
@@ -121,10 +123,7 @@ function isAuthFailure(status: number): boolean {
 export function isModelRetiredError(err: unknown): boolean {
   if (err instanceof HttpException) {
     const response = err.getResponse() as
-      | { code?: unknown }
-      | string
-      | null
-      | undefined;
+      { code?: unknown } | string | null | undefined;
     return (
       typeof response === 'object' &&
       response !== null &&
@@ -296,6 +295,7 @@ export class AiProviderClients {
     if (options?.responseFormat) {
       body.response_format = options.responseFormat;
     }
+    if (options?.seed !== undefined) body.seed = options.seed;
 
     let response: globalThis.Response;
     try {
@@ -379,6 +379,7 @@ export class AiProviderClients {
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: [{ parts: [{ text: userPrompt }] }],
       generationConfig: {
+        ...(options?.seed !== undefined ? { seed: options.seed } : {}),
         temperature: options?.temperature ?? 0.6,
         maxOutputTokens: options?.maxTokens ?? 2048,
         responseMimeType:

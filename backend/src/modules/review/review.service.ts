@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual, In } from 'typeorm';
+import { Repository, LessThanOrEqual, In, IsNull } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { ReviewItem } from './entities/review-item.entity';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
@@ -211,7 +211,7 @@ export class ReviewService {
     timezone?: string | null,
   ): Promise<void> {
     const questions = await this.mcqQuestionRepository.find({
-      where: { conceptId },
+      where: { conceptId, retiredAt: IsNull() },
       ...(this.fsrsEnabled() ? { relations: ['concept'] } : {}),
     });
 

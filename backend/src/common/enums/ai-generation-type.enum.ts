@@ -14,4 +14,5 @@ export enum AiGenerationType {
   CONCEPT_MISCONCEPTIONS = 'concept_misconceptions',
   CONCEPT_MCQ_DRAFT = 'concept_mcq_draft',
   CONCEPT_MCQ_VERIFY = 'concept_mcq_verify',
+  EVAL_JUDGE = 'eval_judge',
 }

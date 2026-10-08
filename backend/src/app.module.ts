@@ -16,6 +16,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ArticlesModule } from './modules/articles/articles.module';
 import { ReviewModule } from './modules/review/review.module';
 import { AiGenerateModule } from './modules/ai-generate/ai-generate.module';
+import { EvalModule } from './modules/eval/eval.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -41,6 +42,7 @@ import { AppService } from './app.service';
     ArticlesModule,
     ReviewModule,
     AiGenerateModule,
+    EvalModule,
   ],
   controllers: [AppController],
   providers: [AppService],

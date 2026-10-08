@@ -30,6 +30,7 @@ import { CourseResearchService } from './course-research.service';
 import { AiKeysController } from './ai-keys.controller';
 import { AiKeyCryptoService } from './ai-key-crypto.service';
 import { AiProviderClients } from './ai-provider-clients';
+import { EvalPromptRelease } from '../eval/entities/eval-prompt-release.entity';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AiProviderClients } from './ai-provider-clients';
       AiGenerationJob,
       AiProviderKey,
       AiPromptVersion,
+      EvalPromptRelease,
       CourseTerm,
       CourseConceptCard,
       CourseConceptEdge,
@@ -67,6 +69,14 @@ import { AiProviderClients } from './ai-provider-clients';
     CourseContextBuilder,
     CourseResearchService,
   ],
-  exports: [AiGenerateService, AiKeysService, CourseContextService, CourseContextBuilder, CourseResearchService],
+  exports: [
+    AiGenerateService,
+    AiKeysService,
+    CourseContextService,
+    CourseContextBuilder,
+    CourseResearchService,
+    AiProviderClients,
+    AiPromptRegistry,
+  ],
 })
 export class AiGenerateModule {}

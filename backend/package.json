@@ -5,6 +5,8 @@
   "author": "",
   "private": true,
   "scripts": {
+    "eval:regression": "jest eval --runInBand --verbose",
+    "eval:live": "node -r ts-node/register test/eval-live.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start --watch",

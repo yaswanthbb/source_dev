@@ -1,3 +1,5 @@
+import { sanitizeConceptLinks } from './concept-links';
+import { hashText, hashValue } from '../eval/eval-hash';
 import {
   Injectable,
   HttpException,
@@ -2692,7 +2694,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
       for (const objective of objectivesWithoutBloomVerb(outline.objectives)) {
         warnings.push(`Objective without a Bloom verb: "${objective}"`);
       }
-      await note('outline', true);
+      await note('outline', true, {
+        promptVersion: sysOutline.version,
+        model: outlineRaw.model,
+        conceptRefs: outline.builds_on,
+        termRefs: outline.key_terms.map((term) => term.term),
+        callbackRefs: outline.recall_hooks,
+      });
 
       // Stage 1.5: research (internal) — "AI reads sources and reports to
       // itself" before drafting. Degrades to brief=null on empty corpus,
@@ -2979,7 +2987,18 @@ export class AiGenerateService implements OnApplicationBootstrap {
         },
       );
       let current = draftRaw.text;
-      await note('draft', true);
+      let provenance = {
+        task: AiGenerationType.CONCEPT_DRAFT,
+        promptVersion: sysDraft.version,
+        promptHash: hashText(sysDraft.text),
+        model: draftRaw.model,
+        seed: null,
+      };
+      await note('draft', true, {
+        promptVersion: sysDraft.version,
+        model: draftRaw.model,
+        artifactHash: hashText(current),
+      });
 
       // Copyright guard: verbatim 8-gram overlap vs retrieved chunks above
       // threshold → warning + regenerate once with a paraphrase instruction,
@@ -3020,6 +3039,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
             },
           );
           current = paraphraseRaw.text;
+          provenance = { ...provenance, model: paraphraseRaw.model };
           const recheck = verbatimOverlap(current, researchChunkTexts);
           if (recheck.triggered) {
             warnings.push(
@@ -3167,6 +3187,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
           },
         );
         current = reviseRaw.text;
+        provenance = {
+          task: AiGenerationType.CONCEPT_REVISE,
+          promptVersion: sysRevise.version,
+          promptHash: hashText(sysRevise.text),
+          model: reviseRaw.model,
+          seed: null,
+        };
         revises += 1;
         factFindings = [];
       }
@@ -3262,6 +3289,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
           },
         );
         current = leakReviseRaw.text;
+        provenance = {
+          task: AiGenerationType.CONCEPT_DRAFT,
+          promptVersion: sysDraft.version,
+          promptHash: hashText(sysDraft.text),
+          model: leakReviseRaw.model,
+          seed: null,
+        };
         const recheck = lintLeakage(current);
         if (recheck.leaked) {
           warnings.push(
@@ -3325,7 +3359,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
           }
         }
       }
-      await note('publish', true);
+      await note('publish', true, {
+        artifactHash: hashText(current),
+        ...provenance,
+      });
 
       await finish(
         warnings.length > 0 ? 'succeeded_with_warnings' : 'succeeded',
@@ -3527,6 +3564,18 @@ export class AiGenerateService implements OnApplicationBootstrap {
         billableRecorded = true;
         if (input.billing) input.billing.recorded = true;
       }
+      trace.stages.push({
+        stage: 'model-call',
+        ok: true,
+        detail: {
+          task: promptTask,
+          promptVersion: system.version,
+          promptHash: hashText(system.text),
+          model: result.model,
+          seed: null,
+          outputHash: hashText(result.text),
+        },
+      });
       return result.text;
     };
     try {
@@ -3634,6 +3683,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
               options: q.options.map((o, j) => ({ ...o, orderIndex: j + 1 })),
             },
             q,
+            {
+              compilationId: compilation.id,
+              artifactHash: hashValue(q),
+              calls: trace.stages
+                .filter((stage) => stage.stage === 'model-call')
+                .map((stage) => stage.detail),
+            },
           );
         }
       }
@@ -3922,68 +3978,17 @@ export class AiGenerateService implements OnApplicationBootstrap {
    * Cleans up empty "## Practice & Further Reading" section if all links fail.
    */
   async validateAndSanitizeConceptLinks(content: string): Promise<string> {
-    if (!content) return content;
-
-    const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    const urlsToValidate = new Set<string>();
-    let match: RegExpExecArray | null;
-
-    while ((match = markdownLinkRegex.exec(content)) !== null) {
-      urlsToValidate.add(match[2]);
-    }
-
-    if (urlsToValidate.size === 0) {
-      return content;
-    }
-
-    this.logger.log(
-      `Validating ${urlsToValidate.size} external links in concept content...`,
+    return sanitizeConceptLinks(
+      content,
+      (url) => this.checkUrlResolves(url),
+      (count) =>
+        this.logger.log(
+          `Validating ${count} external links in concept content...`,
+        ),
+      (url) =>
+        this.logger.warn(
+          `Stripped invalid link from concept content: "${url}"`,
+        ),
     );
-
-    // Validate URLs concurrently
-    const urlValidationResults = new Map<string, boolean>();
-    await Promise.all(
-      Array.from(urlsToValidate).map(async (url) => {
-        const isValid = await this.checkUrlResolves(url);
-        urlValidationResults.set(url, isValid);
-        if (!isValid) {
-          this.logger.warn(
-            `Stripped invalid link from concept content: "${url}"`,
-          );
-        }
-      }),
-    );
-
-    // Filter lines: remove any line that contains an invalid URL
-    const lines = content.split('\n');
-    const sanitizedLines: string[] = [];
-
-    for (const line of lines) {
-      let lineValid = true;
-      const lineLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-      let lineMatch: RegExpExecArray | null;
-
-      while ((lineMatch = lineLinkRegex.exec(line)) !== null) {
-        const url = lineMatch[2];
-        if (urlValidationResults.get(url) === false) {
-          lineValid = false;
-          break;
-        }
-      }
-
-      if (lineValid) {
-        sanitizedLines.push(line);
-      }
-    }
-
-    let sanitizedContent = sanitizedLines.join('\n');
-
-    // If "## Practice & Further Reading" has no links remaining under it, clean up empty heading
-    sanitizedContent = sanitizedContent.replace(
-      /##\s+(?:Practice\s*(?:&|and)\s*Further\s*Reading|Further\s*Reading|Practice\s*Resources)\s*(?:\n\s*)*(?=\n##|\s*$)/i,
-      '',
-    );
-
-    return sanitizedContent.trim();
   }
 }

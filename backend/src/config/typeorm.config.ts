@@ -8,7 +8,6 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: process.env.ENV_FILE_PATH || '.env' });
 
-
 import { User } from '../modules/users/entities/user.entity';
 import { Roadmap } from '../modules/content/entities/roadmap.entity';
 import { Module as ModuleEntity } from '../modules/content/entities/module.entity';
@@ -43,8 +42,16 @@ import { ConceptCompilation } from '../modules/ai-generate/entities/concept-comp
 import { Notification } from '../modules/notifications/entities/notification.entity';
 import { Article } from '../modules/articles/entities/article.entity';
 import { PasswordResetOtp } from '../modules/auth/entities/password-reset-otp.entity';
+import { EvalRun } from '../modules/eval/entities/eval-run.entity';
+import { EvalComparison } from '../modules/eval/entities/eval-comparison.entity';
+import { EvalPromptRelease } from '../modules/eval/entities/eval-prompt-release.entity';
+import { EvalExpertReview } from '../modules/eval/entities/eval-expert-review.entity';
 
 export const entities = [
+  EvalRun,
+  EvalComparison,
+  EvalPromptRelease,
+  EvalExpertReview,
   User,
   AccountDeletionRequest,
   Roadmap,
