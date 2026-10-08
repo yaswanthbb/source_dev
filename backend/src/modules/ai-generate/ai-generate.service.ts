@@ -111,6 +111,13 @@ import { CourseTerm } from './entities/course-term.entity';
 import { CourseEdgeType } from '../../common/enums/course-edge-type.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../../common/enums/notification-type.enum';
+import { AssessmentItem, bloomTarget } from './assessment';
+import { AssessmentPipeline, AssessmentTrace } from './assessment-pipeline';
+import {
+  ASSESSMENT_DRAFT_PROMPT,
+  ASSESSMENT_VERIFY_PROMPT,
+  MISCONCEPTIONS_PROMPT,
+} from './constants/assessment-prompts';
 
 interface ParsedMcqOption {
   optionText?: string;
@@ -222,7 +229,9 @@ export class AiGenerateService implements OnApplicationBootstrap {
         'COURSE_ENGINE_ENABLED is not "true" — compiler, research, media, and leakage-lint stages are OFF; all generation runs legacy single-shot.',
       );
     } else {
-      this.logger.log('COURSE_ENGINE_ENABLED=true — staged compiler pipeline active.');
+      this.logger.log(
+        'COURSE_ENGINE_ENABLED=true — staged compiler pipeline active.',
+      );
     }
   }
 
@@ -1752,6 +1761,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
     let generatedCount = 0;
     let skippedCount = 0;
     let processed = 0;
+    const assessmentBilling = { recorded: false };
     const sysMcq = await this.systemFor(
       AiGenerationType.CONCEPT_MCQS,
       CONCEPT_MCQ_SYSTEM_PROMPT,
@@ -1760,13 +1770,32 @@ export class AiGenerateService implements OnApplicationBootstrap {
     for (const concept of conceptsNeedingMcqs) {
       // Check quota before each concept MCQ generation
       try {
-        await this.checkRateLimit(user.id, 1, user.timezone, creds);
+        if (!this.routingEnabled() || !assessmentBilling.recorded)
+          await this.checkRateLimit(user.id, 1, user.timezone, creds);
       } catch {
         skippedCount = conceptsNeedingMcqs.length - processed;
         break;
       }
 
       try {
+        if (this.routingEnabled()) {
+          await this.generateAssessment({
+            title: concept.title,
+            content: concept.content,
+            conceptId: concept.id,
+            roadmapId: moduleEntity.roadmapId,
+            jobId,
+            publish: true,
+            user,
+            creds,
+            taskKey: 'module_mcqs',
+            billing: assessmentBilling,
+          });
+          generatedCount++;
+          processed++;
+          await this.bumpProgress(jobId, processed);
+          continue;
+        }
         const userPrompt = buildConceptMcqUserPrompt(
           concept.title,
           concept.content,
@@ -2226,17 +2255,37 @@ export class AiGenerateService implements OnApplicationBootstrap {
     let generatedCount = 0;
     let skippedCount = 0;
     let processed = 0;
+    const assessmentBilling = { recorded: false };
 
     for (const concept of conceptsNeedingMcqs) {
       // Check quota before each concept MCQ generation.
       try {
-        await this.checkRateLimit(user.id, 1, user.timezone, creds);
+        if (!this.routingEnabled() || !assessmentBilling.recorded)
+          await this.checkRateLimit(user.id, 1, user.timezone, creds);
       } catch {
         skippedCount = conceptsNeedingMcqs.length - processed;
         break;
       }
 
       try {
+        if (this.routingEnabled()) {
+          await this.generateAssessment({
+            title: concept.title,
+            content: concept.content,
+            conceptId: concept.id,
+            roadmapId: moduleEntity.roadmapId,
+            jobId,
+            publish: true,
+            user,
+            creds,
+            taskKey: 'module_mcqs',
+            billing: assessmentBilling,
+          });
+          generatedCount++;
+          processed++;
+          await this.bumpProgress(jobId, processed);
+          continue;
+        }
         const userPrompt = buildConceptMcqUserPrompt(
           concept.title,
           concept.content,
@@ -3389,9 +3438,230 @@ export class AiGenerateService implements OnApplicationBootstrap {
     return { content };
   }
 
-  /**
-   * Non-streaming single concept MCQs generation helper
-   */
+  /** Assessment trace is a separate compilation row; never overwrites the article compiler trace. */
+  async generateAssessment(input: {
+    title: string;
+    content?: string;
+    conceptId?: string;
+    roadmapId?: string;
+    jobId?: string;
+    publish: boolean;
+    user: User;
+    creds: ResolvedAiCredentials;
+    taskKey: 'module_mcqs' | 'single_concept_mcqs';
+    billing?: { recorded: boolean };
+  }): Promise<AssessmentItem[]> {
+    const trace: AssessmentTrace = { stages: [], warnings: [] };
+    const compilation = this.compilationRepository.create({
+      title: `assessment:${input.conceptId ?? ''}:${input.title}`.slice(0, 300),
+      jobId: input.jobId ?? null,
+      roadmapId: input.roadmapId ?? null,
+      conceptId: input.conceptId ?? null,
+      status: 'running',
+      stages: [],
+      warnings: [],
+    });
+    // Reuse job traces on retries, using an assessment namespace.
+    const existing = input.jobId
+      ? await this.compilationRepository.findOne({
+          where: {
+            jobId: input.jobId,
+            title: compilation.title,
+          },
+        })
+      : null;
+    if (existing) compilation.id = existing.id;
+    await this.compilationRepository.save(compilation);
+    let billableRecorded = input.billing?.recorded ?? false;
+    const call = async (
+      task: CourseTaskKey,
+      promptTask: AiGenerationType,
+      fallback: string,
+      request: string,
+      internal: boolean,
+      attempt = 1,
+    ) => {
+      const system = await this.systemFor(promptTask, fallback);
+      const params = taskRouteFor(task);
+      // Honor explicit/BYOK model for the draft, independently route verification/extraction tiers.
+      const stageCreds =
+        task === input.taskKey
+          ? input.creds
+          : {
+              ...input.creds,
+              model: resolveTierModel(
+                input.creds.provider,
+                params.tier,
+                (key) => this.configService.get<string>(key),
+                (provider) => this.clients.configuredDefaultModel(provider),
+              ),
+            };
+      const result = await this.complete(
+        stageCreds,
+        system.text,
+        request,
+        {
+          maxTokens: params.maxTokens,
+          temperature:
+            attempt > 1
+              ? (params.retryTemperature ?? params.temperature)
+              : params.temperature,
+          responseFormat: { type: 'json_object' },
+        },
+        task,
+        undefined,
+        internal,
+      );
+      await this.logGeneration(
+        input.user.id,
+        AiGenerationType.CONCEPT_MCQS,
+        input.creds.keyId,
+        {
+          ...result,
+          provider: stageCreds.provider,
+          promptVersion: system.version,
+          internal,
+        },
+      );
+      if (!internal) {
+        billableRecorded = true;
+        if (input.billing) input.billing.recorded = true;
+      }
+      return result.text;
+    };
+    try {
+      let misconceptions: string[] = [];
+      const card = input.conceptId
+        ? await this.conceptCardRepository.findOne({
+            where: { conceptId: input.conceptId },
+          })
+        : null;
+      const inventoryRoadmapId = card?.roadmapId ?? input.roadmapId;
+      if (card?.misconceptions?.length) misconceptions = card.misconceptions;
+      else {
+        try {
+          const raw = await call(
+            'concept_misconceptions',
+            AiGenerationType.CONCEPT_MISCONCEPTIONS,
+            MISCONCEPTIONS_PROMPT,
+            JSON.stringify({
+              title: input.title,
+              content: input.content ?? '',
+            }),
+            true,
+          );
+          const parsed = JSON.parse(raw) as { misconceptions?: unknown };
+          if (
+            !Array.isArray(parsed.misconceptions) ||
+            !parsed.misconceptions.every(
+              (m) => typeof m === 'string' && m.trim(),
+            )
+          )
+            throw new Error('Invalid inventory');
+          misconceptions = [
+            ...new Set(
+              (parsed.misconceptions as string[]).map((m) => m.trim()),
+            ),
+          ];
+          if (misconceptions.length < 3 || misconceptions.length > 6)
+            throw new Error('Expected 3–6 misconceptions');
+          if (input.conceptId && inventoryRoadmapId)
+            await this.courseContexts.upsertCard(
+              inventoryRoadmapId,
+              input.conceptId,
+              { misconceptions },
+            );
+          else if (input.conceptId)
+            trace.warnings.push(
+              'MISCONCEPTIONS_NOT_PERSISTED: concept has no roadmap placement',
+            );
+        } catch {
+          misconceptions = [];
+          trace.warnings.push(
+            'MISCONCEPTIONS_UNAVAILABLE: drafting without inventory',
+          );
+        }
+      }
+      trace.stages.push({
+        stage: 'misconceptions',
+        ok: misconceptions.length > 0,
+        detail: {
+          count: misconceptions.length,
+          persisted: !!(input.conceptId && inventoryRoadmapId),
+        },
+      });
+      const questions = await new AssessmentPipeline().run(
+        {
+          title: input.title,
+          content: input.content,
+          misconceptions,
+          target: bloomTarget(
+            this.configService.get('ASSESSMENT_BLOOM_TARGET_PERCENT'),
+          ),
+        },
+        {
+          draft: (request, internal, attempt) =>
+            call(
+              input.taskKey,
+              AiGenerationType.CONCEPT_MCQ_DRAFT,
+              ASSESSMENT_DRAFT_PROMPT,
+              request,
+              billableRecorded || (internal && attempt === 1),
+              attempt,
+            ),
+          verify: (request) =>
+            call(
+              'concept_mcq_verify',
+              AiGenerationType.CONCEPT_MCQ_VERIFY,
+              ASSESSMENT_VERIFY_PROMPT,
+              request,
+              true,
+            ),
+          parse: (raw) => this.parseMcqQuestions(raw, input.title),
+          isTerminalError: isModelRetiredError,
+        },
+        trace,
+      );
+      if (input.publish && input.conceptId) {
+        for (let i = 0; i < questions.length; i++) {
+          const q = questions[i];
+          await this.quizService.createQuestion(
+            input.conceptId,
+            input.user,
+            {
+              questionText: q.questionText,
+              orderIndex: i + 1,
+              options: q.options.map((o, j) => ({ ...o, orderIndex: j + 1 })),
+            },
+            q,
+          );
+        }
+      }
+      trace.stages.push({
+        stage: 'publish',
+        ok: true,
+        detail: { persisted: input.publish, count: questions.length },
+      });
+      compilation.status = trace.warnings.length
+        ? 'succeeded_with_warnings'
+        : 'succeeded';
+      return questions;
+    } catch (error) {
+      compilation.status = 'failed';
+      trace.warnings.push(
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
+    } finally {
+      compilation.stages = trace.stages;
+      compilation.warnings = trace.warnings;
+      await this.compilationRepository.save(compilation);
+      for (const warning of trace.warnings)
+        this.logger.warn(`Assessment "${input.title}": ${warning}`);
+    }
+  }
+
+  /** Non-streaming single concept MCQs generation helper. */
   async generateSingleConceptMcqs(
     dto: GenerateConceptMcqsDto,
     user: User,
@@ -3402,6 +3672,42 @@ export class AiGenerateService implements OnApplicationBootstrap {
       taskKey: 'single_concept_mcqs',
     });
     await this.checkRateLimit(user.id, 1, user.timezone, creds);
+
+    if (this.routingEnabled()) {
+      let conceptId: string | undefined;
+      let roadmapId: string | undefined;
+      let title = dto.title;
+      let content = dto.content;
+      if (dto.conceptId) {
+        const concept = await this.conceptRepository.findOne({
+          where: { id: dto.conceptId },
+        });
+        if (
+          !concept ||
+          (user.role !== UserRole.ADMIN && concept.authorId !== user.id)
+        )
+          throw new NotFoundException('Concept not found');
+        const placement = await this.moduleConceptRepository.findOne({
+          where: { conceptId: concept.id },
+          relations: ['module'],
+        });
+        conceptId = concept.id;
+        roadmapId = placement?.module?.roadmapId;
+        title = concept.title;
+        content = concept.content;
+      }
+      const questions = await this.generateAssessment({
+        title,
+        content,
+        conceptId,
+        roadmapId,
+        publish: false,
+        user,
+        creds,
+        taskKey: 'single_concept_mcqs',
+      });
+      return { rawText: JSON.stringify(questions, null, 2) };
+    }
 
     const sysSingleMcq = await this.systemFor(
       AiGenerationType.CONCEPT_MCQS,

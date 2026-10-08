@@ -24,6 +24,8 @@ export type CourseTaskKey =
   | 'concept_diagram'
   | 'module_mcqs'
   | 'single_concept_mcqs'
+  | 'concept_misconceptions'
+  | 'concept_mcq_verify'
   | 'qa_answer';
 
 export type TaskModelTier = 'fast' | 'strong';
@@ -37,18 +39,20 @@ export interface TaskRoute {
 }
 
 export const TASK_ROUTES: Record<CourseTaskKey, TaskRoute> = {
+  concept_misconceptions: { tier: 'fast', maxTokens: 600, temperature: 0.3 },
+  concept_mcq_verify: { tier: 'strong', maxTokens: 600, temperature: 0.1 },
   // Title lists and grounded extraction → cheap/fast.
   roadmap_titles: { tier: 'fast', maxTokens: 400, temperature: 0.5 },
   module_concept_titles: { tier: 'fast', maxTokens: 400, temperature: 0.5 },
   module_mcqs: {
     tier: 'fast',
-    maxTokens: 2000,
+    maxTokens: 4000,
     temperature: 0.3,
     retryTemperature: 0.4,
   },
   single_concept_mcqs: {
     tier: 'fast',
-    maxTokens: 2000,
+    maxTokens: 4000,
     temperature: 0.3,
     retryTemperature: 0.4,
   },
@@ -94,9 +98,7 @@ export function resolveTierModel(
   globalDefault: (provider: AiProvider) => string,
 ): string {
   if (tier === 'strong') {
-    const override = get(
-      `${provider.toUpperCase()}_STRONG_MODEL_ID`,
-    )?.trim();
+    const override = get(`${provider.toUpperCase()}_STRONG_MODEL_ID`)?.trim();
     if (override) return override;
   }
   return globalDefault(provider);

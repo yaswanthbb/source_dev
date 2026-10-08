@@ -11,4 +11,7 @@ export enum AiGenerationType {
   CONCEPT_FACTCHECK = 'concept_factcheck',
   CONCEPT_CRITIQUE = 'concept_critique',
   CONCEPT_REVISE = 'concept_revise',
+  CONCEPT_MISCONCEPTIONS = 'concept_misconceptions',
+  CONCEPT_MCQ_DRAFT = 'concept_mcq_draft',
+  CONCEPT_MCQ_VERIFY = 'concept_mcq_verify',
 }

@@ -16,6 +16,21 @@ export class McqQuestion extends BaseEntity {
   @Column({ type: 'text', name: 'question_text' })
   questionText: string;
 
+  @Column({ name: 'bloom_level', type: 'text', nullable: true })
+  bloomLevel: string | null;
+
+  @Column({ name: 'intended_difficulty', type: 'text', nullable: true })
+  intendedDifficulty: string | null;
+
+  @Column({ name: 'correct_rationale', type: 'text', nullable: true })
+  correctRationale: string | null;
+
+  @Column({ name: 'lint_result', type: 'jsonb', nullable: true })
+  lintResult: Record<string, unknown> | null;
+
+  @Column({ name: 'verification_result', type: 'jsonb', nullable: true })
+  verificationResult: Record<string, unknown> | null;
+
   @Column({ type: 'int', name: 'order_index' })
   orderIndex: number;
 

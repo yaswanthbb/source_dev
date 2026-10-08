@@ -10,7 +10,7 @@ import {
 import { isModelRetiredError } from './ai-provider-clients';
 
 describe('task routing table (§8 per-task routing)', () => {
-  it('covers all twelve task keys (paths + compiler + research + media stages)', () => {
+  it('covers all fourteen task keys (including assessment extraction and verification)', () => {
     expect([...COURSE_TASK_KEYS].sort()).toEqual(
       [
         'roadmap_titles',
@@ -22,6 +22,8 @@ describe('task routing table (§8 per-task routing)', () => {
         'concept_style',
         'concept_research',
         'concept_diagram',
+        'concept_misconceptions',
+        'concept_mcq_verify',
         'module_mcqs',
         'single_concept_mcqs',
         'qa_answer',
@@ -56,7 +58,9 @@ describe('task routing table (§8 per-task routing)', () => {
     // No hardcodes: fast honors NVIDIA_MODEL_ID via configuredDefaultModel,
     // strong honors NVIDIA_STRONG_MODEL_ID, both fall back to the default.
     const globalDefault = (p: AiProvider) =>
-      p === AiProvider.GEMINI ? 'gemini-2.0-flash' : 'meta/llama-3.1-70b-instruct';
+      p === AiProvider.GEMINI
+        ? 'gemini-2.0-flash'
+        : 'meta/llama-3.1-70b-instruct';
     for (const key of COURSE_TASK_KEYS) {
       const plain = resolveTierModel(
         AiProvider.NVIDIA,

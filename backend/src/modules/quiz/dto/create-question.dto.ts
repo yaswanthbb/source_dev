@@ -4,6 +4,9 @@ import {
   IsInt,
   IsNotEmpty,
   IsString,
+  IsOptional,
+  IsIn,
+  IsObject,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -12,6 +15,26 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CreateOptionDto } from './create-option.dto';
 
 export class CreateQuestionDto {
+  @IsOptional()
+  @IsIn(['Remember', 'Understand', 'Apply', 'Analyze', 'Evaluate', 'Create'])
+  bloomLevel?: string;
+
+  @IsOptional()
+  @IsIn(['easy', 'medium', 'hard'])
+  intendedDifficulty?: string;
+
+  @IsOptional()
+  @IsString()
+  correctRationale?: string;
+
+  @IsOptional()
+  @IsObject()
+  lintResult?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  verificationResult?: Record<string, unknown>;
+
   @ApiProperty({
     example: 'What language is NestJS written in?',
     description: 'MCQ Question text',

@@ -14,6 +14,12 @@ export class McqOption extends BaseEntity {
   @Column({ type: 'text', name: 'option_text' })
   optionText: string;
 
+  @Column({ type: 'text', nullable: true })
+  misconception: string | null;
+
+  @Column({ name: 'distractor_rationale', type: 'text', nullable: true })
+  distractorRationale: string | null;
+
   @Column({ type: 'boolean', name: 'is_correct', default: false })
   isCorrect: boolean;
 

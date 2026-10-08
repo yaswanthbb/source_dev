@@ -4,6 +4,11 @@ import { Repository } from 'typeorm';
 import { createHash } from 'crypto';
 import { AiPromptVersion } from './entities/ai-prompt-version.entity';
 import { AiGenerationType } from '../../common/enums/ai-generation-type.enum';
+import {
+  ASSESSMENT_DRAFT_PROMPT,
+  ASSESSMENT_VERIFY_PROMPT,
+  MISCONCEPTIONS_PROMPT,
+} from './constants/assessment-prompts';
 import { AiPromptStatus } from '../../common/enums/ai-prompt-status.enum';
 import {
   ROADMAP_MODULES_SYSTEM_PROMPT,
@@ -58,6 +63,9 @@ export class AiPromptRegistry implements OnModuleInit {
       [AiGenerationType.CONCEPT_FACTCHECK, CONCEPT_FACTCHECK_SYSTEM_PROMPT],
       [AiGenerationType.CONCEPT_CRITIQUE, CONCEPT_CRITIQUE_SYSTEM_PROMPT],
       [AiGenerationType.CONCEPT_REVISE, CONCEPT_REVISE_SYSTEM_PROMPT],
+      [AiGenerationType.CONCEPT_MISCONCEPTIONS, MISCONCEPTIONS_PROMPT],
+      [AiGenerationType.CONCEPT_MCQ_DRAFT, ASSESSMENT_DRAFT_PROMPT],
+      [AiGenerationType.CONCEPT_MCQ_VERIFY, ASSESSMENT_VERIFY_PROMPT],
     ];
     let checked = 0;
     try {
@@ -67,7 +75,9 @@ export class AiPromptRegistry implements OnModuleInit {
         });
         if (!row) continue;
         checked++;
-        const liveHash = createHash('sha256').update(text, 'utf8').digest('hex');
+        const liveHash = createHash('sha256')
+          .update(text, 'utf8')
+          .digest('hex');
         const storedHash = createHash('sha256')
           .update(row.systemTemplate, 'utf8')
           .digest('hex');
@@ -78,7 +88,9 @@ export class AiPromptRegistry implements OnModuleInit {
         }
       }
       if (checked > 0) {
-        this.logger.log(`Prompt seed integrity checked against ${checked} v1 row(s).`);
+        this.logger.log(
+          `Prompt seed integrity checked against ${checked} v1 row(s).`,
+        );
       }
     } catch (err: unknown) {
       // Table may not exist yet (migrations pending) — never fail boot.
@@ -100,9 +112,17 @@ export class AiPromptRegistry implements OnModuleInit {
   ): Promise<ResolvedPrompt> {
     const row = await this.getProduction(task);
     if (!row) {
-      return { version: 'legacy-static', systemTemplate: fallback, fromRegistry: false };
+      return {
+        version: 'legacy-static',
+        systemTemplate: fallback,
+        fromRegistry: false,
+      };
     }
-    return { version: row.version, systemTemplate: row.systemTemplate, fromRegistry: true };
+    return {
+      version: row.version,
+      systemTemplate: row.systemTemplate,
+      fromRegistry: true,
+    };
   }
 
   renderSystem(template: string, vars: Record<string, string> = {}): string {

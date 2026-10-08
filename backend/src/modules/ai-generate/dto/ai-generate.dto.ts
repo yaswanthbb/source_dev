@@ -129,6 +129,14 @@ export class GenerateConceptContentDto extends AiGenerationOptions {
 }
 
 export class GenerateConceptMcqsDto extends AiGenerationOptions {
+  @ApiPropertyOptional({
+    description:
+      'Existing concept to scope inventory storage; author/admin only',
+  })
+  @IsOptional()
+  @IsUUID()
+  conceptId?: string;
+
   @ApiProperty({
     description: 'Title of the concept for assessment MCQ generation',
     example: 'Database Isolation Levels & Concurrency Control',

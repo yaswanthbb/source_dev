@@ -7,9 +7,11 @@ import { Concept } from '../content/entities/concept.entity';
 import { ProgressModule } from '../progress/progress.module';
 import { QuizService } from './quiz.service';
 import { QuizController } from './quiz.controller';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
+    ConfigModule,
     ProgressModule,
     TypeOrmModule.forFeature([McqQuestion, McqOption, McqAttempt, Concept]),
   ],

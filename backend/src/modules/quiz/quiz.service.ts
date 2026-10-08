@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -19,6 +20,8 @@ import { UpdateOptionDto } from './dto/update-option.dto';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
 
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
+import type { AssessmentItem } from '../ai-generate/assessment';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class QuizService {
@@ -32,6 +35,7 @@ export class QuizService {
     @InjectRepository(Concept)
     private readonly conceptRepository: Repository<Concept>,
     private readonly progressService: ProgressService,
+    @Optional() private readonly configService?: ConfigService,
   ) {}
 
   private async resetConceptReviewStatus(conceptId: string): Promise<void> {
@@ -62,6 +66,7 @@ export class QuizService {
     conceptId: string,
     user: Omit<User, 'passwordHash'>,
     dto: CreateQuestionDto,
+    assessment?: AssessmentItem,
   ): Promise<McqQuestion> {
     const concept = await this.conceptRepository.findOne({
       where: { id: conceptId },
@@ -87,15 +92,49 @@ export class QuizService {
       questionText: dto.questionText,
       orderIndex: dto.orderIndex,
       createdById: user.id,
+      ...(assessment
+        ? {
+            bloomLevel: assessment.bloomLevel,
+            intendedDifficulty: assessment.intendedDifficulty,
+            correctRationale: assessment.correctRationale,
+            lintResult: assessment.lintResult,
+            verificationResult: assessment.verificationResult,
+          }
+        : this.configService?.get('COURSE_ENGINE_ENABLED') === 'true' &&
+            dto.bloomLevel
+          ? {
+              bloomLevel: dto.bloomLevel,
+              intendedDifficulty: dto.intendedDifficulty,
+              correctRationale: dto.correctRationale,
+              lintResult: dto.lintResult,
+              verificationResult: dto.verificationResult,
+            }
+          : {}),
     });
     const savedQuestion = await this.mcqQuestionRepository.save(question);
 
-    const options = dto.options.map((opt) =>
+    const options = dto.options.map((opt, index) =>
       this.mcqOptionRepository.create({
         questionId: savedQuestion.id,
         optionText: opt.optionText,
         isCorrect: opt.isCorrect,
         orderIndex: opt.orderIndex,
+        ...(assessment ||
+        (this.configService?.get('COURSE_ENGINE_ENABLED') === 'true' &&
+          dto.bloomLevel)
+          ? {
+              misconception: opt.isCorrect
+                ? null
+                : (assessment?.options[index]?.misconception ??
+                  opt.misconception ??
+                  null),
+              distractorRationale: opt.isCorrect
+                ? null
+                : (assessment?.options[index]?.distractorRationale ??
+                  opt.distractorRationale ??
+                  null),
+            }
+          : {}),
       }),
     );
     savedQuestion.options = await this.mcqOptionRepository.save(options);
@@ -140,9 +179,16 @@ export class QuizService {
           if (isStudent) {
             const studentOpt = { ...opt } as Record<string, unknown>;
             delete studentOpt.isCorrect;
+            delete studentOpt.misconception;
+            delete studentOpt.distractorRationale;
             return studentOpt;
           }
-          return opt;
+          // Keep legacy author responses unchanged when metadata is absent.
+          const authorOpt = { ...opt } as Record<string, unknown>;
+          if (authorOpt.misconception == null) delete authorOpt.misconception;
+          if (authorOpt.distractorRationale == null)
+            delete authorOpt.distractorRationale;
+          return authorOpt;
         }),
       };
     });

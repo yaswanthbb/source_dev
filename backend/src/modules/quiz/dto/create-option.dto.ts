@@ -1,7 +1,22 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  Min,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateOptionDto {
+  @IsOptional()
+  @IsString()
+  misconception?: string | null;
+
+  @IsOptional()
+  @IsString()
+  distractorRationale?: string | null;
+
   @ApiProperty({ example: 'TypeScript', description: 'Option text' })
   @IsString()
   @IsNotEmpty()

@@ -14,6 +14,7 @@ import {
   buildResearchBriefUserPrompt,
   buildDiagramUserPrompt,
 } from './constants/prompts';
+import { buildAssessmentUserPrompt } from './constants/assessment-prompts';
 
 interface GoldenCase {
   task: string;
@@ -46,6 +47,8 @@ function render(task: string, input: any): string {
       return buildConceptContentUserPrompt(input);
     case 'concept_mcqs':
       return buildConceptMcqUserPrompt(input.title, input.content);
+    case 'concept_mcq_draft':
+      return buildAssessmentUserPrompt(input, { action: 'draft', count: 5 });
     case 'qa_answer':
       return buildQaAnswerUserPrompt(
         input.conceptTitle,
@@ -82,6 +85,7 @@ describe('golden baselines (§8 Phase 1: v2 has something to beat)', () => {
     expect(files).toEqual([
       'compiler_stages.v1.jsonl',
       'concept_content.v1.jsonl',
+      'concept_mcq_draft.v1.jsonl',
       'concept_mcqs.v1.jsonl',
       'module_concepts.v1.jsonl',
       'qa_answer.v1.jsonl',
