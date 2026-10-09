@@ -1,0 +1,782 @@
+.experiment.experiment {
+  --lab-highlight: #ffd0a6;
+  --lab-highlight-ink: #422715;
+  --lab-marker: #ffd0a6;
+  --lab-grid: #e5d9cc;
+  --lab-note: var(--gui-muted);
+}
+:global(html.dark) .experiment.experiment {
+  --lab-highlight: #ffb77d;
+  --lab-marker: #633018;
+  --lab-grid: #514236;
+}
+.experiment :is(h1, h2, h3) {
+  font-family: var(--font-space-grotesk), var(--font-inter), sans-serif;
+}
+.experiment .brandIcon {
+  width: 32px;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.hero {
+  max-width: 1200px;
+  margin: auto;
+  padding: 68px 30px 55px;
+  display: grid;
+  grid-template-columns: 1.04fr 1fr;
+  gap: 50px;
+  align-items: center;
+}
+.heroCopy {
+  min-width: 0;
+  padding-bottom: 15px;
+}
+.heroKicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: var(--gui-muted);
+  animation: arrive 600ms var(--gui-ease) both;
+}
+.heroKicker span {
+  width: 7px;
+  height: 7px;
+  background: var(--gui-accent);
+  border-radius: 50%;
+}
+.experiment .hero h1 {
+  font-size: clamp(56px, 6.1vw, 82px);
+  font-weight: 500;
+  letter-spacing: -4.6px;
+  line-height: 1.05;
+  margin: 25px 0 29px;
+  animation: arrive 700ms 80ms var(--gui-ease) both;
+}
+.hero h1 > span {
+  position: relative;
+  display: inline-block;
+  z-index: 0;
+}
+.hero h1 > span::before {
+  content: "";
+  position: absolute;
+  inset: 66% -8px 0 -6px;
+  background: var(--lab-marker);
+  z-index: -1;
+  transform: rotate(-2deg);
+  border-radius: 45% 13% 43% 9%;
+}
+.experiment .heroCopy > p {
+  font-size: 15px;
+  line-height: 1.9;
+  max-width: 400px;
+  color: var(--gui-muted);
+  animation: arrive 700ms 160ms var(--gui-ease) both;
+}
+.heroActions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 31px;
+  align-items: center;
+  animation: arrive 700ms 220ms var(--gui-ease) both;
+}
+.quietLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--gui-ink);
+  min-height: 46px;
+  border-bottom: 1px solid var(--gui-border);
+}
+.quietLink:hover {
+  border-color: var(--gui-ink);
+}
+.heroFootnote {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 27px;
+  color: var(--gui-muted);
+  font-size: 11px;
+  animation: arrive 700ms 300ms var(--gui-ease) both;
+}
+.heroFootnote svg {
+  color: var(--gui-accent);
+}
+.lab {
+  min-width: 0;
+  position: relative;
+  border: 1px solid var(--gui-border);
+  background: var(--gui-surface);
+  border-radius: 24px 24px 8px 24px;
+  box-shadow: 7px 7px 0 var(--gui-soft);
+  animation: arrive 900ms 180ms var(--gui-ease) both;
+  transform: rotate(1deg);
+}
+.labHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 23px 0;
+}
+.labLabel {
+  font-family: monospace;
+  font-size: 9px;
+  letter-spacing: 1.25px;
+}
+.labStamp {
+  font-size: 10px;
+  color: var(--gui-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.map {
+  aspect-ratio: 500 / 390;
+  position: relative;
+  margin: 15px 16px 0;
+  background-image: radial-gradient(var(--lab-grid) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.mapPaths {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  fill: none;
+  stroke: var(--gui-border);
+  stroke-width: 2;
+}
+.mapPaths path {
+  transition: stroke 220ms;
+}
+.mapPaths .pathActive {
+  stroke: var(--gui-accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 650;
+  stroke-dashoffset: 650;
+  animation: trace 850ms var(--gui-ease) forwards;
+}
+.mapPaths .returnPath {
+  stroke: var(--lab-note);
+  stroke-dasharray: 4 7;
+  opacity: 0.65;
+}
+.mapPaths .mapArrow {
+  stroke: var(--lab-note);
+}
+.mapAnnotation {
+  position: absolute;
+  top: 3%;
+  left: 12%;
+  font-family: var(--font-rubik), sans-serif;
+  font-size: 12px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--lab-note);
+  line-height: 1.6;
+  transform: rotate(-7deg);
+}
+.mapSource {
+  position: absolute;
+  top: 13%;
+  left: 68%;
+  transform: translateX(-50%) rotate(-7deg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+.mapSource > span {
+  font-family: monospace;
+  font-size: 9px;
+  color: var(--gui-muted);
+  white-space: nowrap;
+}
+.mapNode {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transform: translate(-50%, -50%);
+  min-height: 48px;
+  padding: 0 15px;
+  border: 1px solid var(--gui-border);
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  font-size: 12px !important;
+  border-radius: 100px;
+  z-index: 2;
+  white-space: nowrap;
+  transition:
+    box-shadow 200ms,
+    background 200ms,
+    color 200ms;
+}
+.mapNode:hover {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--gui-ink) 13%, transparent);
+}
+.nodeNumber {
+  font-family: monospace;
+  font-size: 9px;
+  opacity: 0.65;
+}
+.node0 {
+  top: 30%;
+  left: 30%;
+}
+.node1 {
+  top: 54%;
+  left: 70%;
+}
+.node2 {
+  top: 79%;
+  left: 34%;
+  background: var(--lab-highlight);
+  color: var(--lab-highlight-ink);
+  border-color: var(--lab-highlight);
+}
+.nodeActive {
+  background: var(--gui-primary);
+  color: var(--gui-on-primary);
+  border-color: var(--gui-primary);
+  box-shadow: 0 0 0 5px var(--gui-soft);
+}
+.nodeActive .nodeNumber {
+  opacity: 1;
+}
+.mapMarginNote {
+  position: absolute;
+  top: 77%;
+  left: 72%;
+  font-family: monospace;
+  font-size: 8px;
+  letter-spacing: 0.7px;
+  line-height: 1.8;
+  color: var(--lab-note);
+  transform: rotate(-5deg);
+}
+.mapSpark {
+  position: absolute;
+  left: 10%;
+  top: 58%;
+  color: var(--gui-accent);
+  width: 32px;
+  height: 32px;
+}
+.labControls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0 23px;
+  border-top: 1px solid var(--gui-border);
+  border-bottom: 1px solid var(--gui-border);
+}
+.labControls button {
+  min-height: 49px;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--gui-muted);
+  font-size: 11px !important;
+  padding: 0 10px;
+}
+.labControls button > span:first-child {
+  font-family: monospace;
+  font-size: 8px;
+}
+.labControls button[aria-pressed="true"] {
+  color: var(--gui-ink);
+  font-weight: 600;
+}
+.controlDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
+  margin-left: 3px;
+}
+.labControls button[aria-pressed="true"] .controlDot {
+  background: var(--gui-accent);
+}
+.labDescription {
+  padding: 18px 23px 0;
+  min-height: 108px;
+}
+.labDescription strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.labDescription p {
+  font-size: 11px;
+  line-height: 1.85;
+  color: var(--gui-muted);
+  margin-top: 7px !important;
+}
+.labDisclaimer {
+  padding: 12px 23px 18px;
+  font-size: 9px;
+  color: var(--gui-muted);
+}
+.recipeRibbon {
+  max-width: 1140px;
+  margin: 5px auto 0;
+  padding: 24px 0;
+  border-top: 1px solid var(--gui-border);
+  border-bottom: 1px solid var(--gui-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.recipeRibbon > p {
+  font-size: 13px;
+  letter-spacing: -0.15px;
+}
+.recipeRibbon > p span {
+  color: var(--gui-muted);
+}
+.ribbonSteps {
+  display: flex;
+  align-items: center;
+  gap: 23px;
+  color: var(--gui-muted);
+  font-size: 10px;
+  font-family: monospace;
+}
+.ribbonSteps > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ribbonSteps b {
+  color: var(--gui-ink);
+  font-weight: 500;
+}
+.ribbonSteps svg {
+  color: var(--gui-accent);
+}
+.recipeHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 35px;
+}
+.recipeHeading h2 {
+  max-width: 550px;
+}
+.recipeHeading > p {
+  max-width: 260px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--gui-muted);
+  padding-bottom: 20px;
+}
+.recipeCards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 17px;
+  margin: 27px 0 64px;
+}
+.recipeCard {
+  position: relative;
+  background: var(--gui-soft);
+  border: 1px solid var(--gui-border);
+  border-radius: 14px;
+  padding: 24px;
+}
+.recipeCard:nth-child(2) {
+  background: var(--lab-highlight);
+  color: var(--lab-highlight-ink);
+  border-color: var(--lab-highlight);
+}
+.recipeCard:nth-child(2) p,
+.recipeCard:nth-child(2) .recipeNumber {
+  color: var(--lab-highlight-ink);
+}
+.recipeNumber {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--gui-muted);
+  margin-bottom: 27px;
+}
+.experiment .recipeCard h3 {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.6px;
+  margin: 0 0 15px;
+  max-width: 235px;
+}
+.recipeCard p {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--gui-muted);
+}
+.workspaceIntro {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 45px 24px 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid var(--gui-border);
+}
+.featureCards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 30px;
+}
+.featureCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 27px;
+  background: var(--gui-surface);
+  border: 1px solid var(--gui-border);
+  border-radius: 16px;
+}
+.featureCard > svg {
+  color: var(--gui-accent);
+  margin-bottom: 24px;
+}
+.featureCard > span {
+  font-size: 9px;
+}
+.experiment .featureCard h3 {
+  font-size: 23px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  margin: 14px 0;
+}
+.experiment .featureCard p {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--gui-muted);
+  margin: 0 0 26px;
+}
+.featureNote {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--gui-border);
+  color: var(--gui-accent);
+  line-height: 1.6;
+  width: 100%;
+}
+.workspaceIntro h2 {
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: -1.3px;
+  font-weight: 500;
+}
+.workspaceIntro p {
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+  max-width: 320px;
+}
+.experiment .finalHeading {
+  font-size: clamp(38px, 4.6vw, 58px);
+}
+.finalNote {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  font-family: monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.finalNote svg {
+  color: var(--gui-accent);
+}
+.markDecoration {
+  position: absolute;
+  right: 7%;
+  top: 23%;
+  opacity: 0.13;
+  transform: rotate(12deg);
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes trace {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (max-width: 1200px) {
+  .recipeRibbon {
+    margin-inline: 30px;
+  }
+  .hero {
+    gap: 30px;
+  }
+}
+@media (max-width: 1000px) {
+  .hero {
+    padding-top: 55px;
+    gap: 24px;
+    grid-template-columns: 0.95fr 1fr;
+  }
+  .experiment .hero h1 {
+    font-size: 63px;
+    letter-spacing: -3.5px;
+  }
+  .experiment .heroCopy > p {
+    font-size: 14px;
+  }
+  .labStamp {
+    display: none;
+  }
+  .mapNode {
+    font-size: 10px !important;
+    padding: 0 10px;
+    gap: 6px;
+  }
+  .mapNode svg {
+    width: 12px;
+  }
+  .mapAnnotation {
+    font-size: 10px;
+  }
+  .mapSource svg {
+    width: 40px;
+    height: 40px;
+  }
+  .mapMarginNote {
+    font-size: 7px;
+  }
+  .labDescription {
+    min-height: 130px;
+  }
+  .recipeCard {
+    padding: 21px;
+  }
+}
+@media (max-width: 850px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 45px 24px;
+  }
+  .heroCopy {
+    padding: 0;
+  }
+  .experiment .hero h1 {
+    font-size: clamp(60px, 9vw, 76px);
+    margin: 24px 0;
+  }
+  .experiment .heroCopy > p {
+    max-width: 460px;
+  }
+  .heroActions {
+    margin-top: 24px;
+  }
+  .heroFootnote {
+    margin-top: 20px;
+  }
+  .lab {
+    max-width: 520px;
+    width: 100%;
+    justify-self: center;
+    transform: rotate(0.5deg);
+  }
+  .labStamp {
+    display: flex;
+  }
+  .mapNode {
+    font-size: 12px !important;
+    padding: 0 15px;
+  }
+  .labDescription {
+    min-height: 105px;
+  }
+  .recipeRibbon {
+    margin: 10px 24px 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .ribbonSteps {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .recipeHeading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+  .recipeHeading > p {
+    max-width: 400px;
+    padding: 0;
+  }
+  .recipeCards {
+    grid-template-columns: 1fr;
+    margin-bottom: 45px;
+  }
+  .featureCards {
+    grid-template-columns: 1fr;
+  }
+  .experiment .featureCard p {
+    max-width: 490px;
+    font-size: 13px;
+  }
+  .recipeCard {
+    padding: 25px;
+  }
+  .recipeNumber {
+    margin-bottom: 20px;
+  }
+  .recipeCard h3 {
+    max-width: none;
+  }
+  .recipeCard p {
+    font-size: 13px;
+    max-width: 490px;
+  }
+  .workspaceIntro {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+    padding-top: 32px;
+    margin-inline: 24px;
+    padding-inline: 0;
+  }
+  .workspaceIntro p {
+    max-width: 420px;
+  }
+}
+@media (max-width: 420px) {
+  .hero {
+    padding: 40px 22px 35px;
+    gap: 35px;
+  }
+  .heroKicker {
+    font-size: 8px;
+    letter-spacing: 0.8px;
+  }
+  .experiment .hero h1 {
+    font-size: 52px;
+    letter-spacing: -3.5px;
+  }
+  .experiment .heroCopy > p {
+    font-size: 14px;
+  }
+  .heroActions {
+    gap: 11px;
+  }
+  .quietLink {
+    font-size: 11px;
+  }
+  .labHeading {
+    padding: 20px 17px 0;
+  }
+  .labLabel {
+    font-size: 8px;
+    letter-spacing: 0.7px;
+  }
+  .labStamp {
+    font-size: 8px;
+  }
+  .map {
+    margin-inline: 8px;
+    width: calc(100% - 16px);
+    height: 290px;
+    aspect-ratio: auto;
+  }
+  .mapNode {
+    font-size: 10px !important;
+    padding: 0 10px;
+    gap: 6px;
+  }
+  .node1 {
+    left: 68%;
+  }
+  .node0 {
+    left: 28%;
+  }
+  .mapSource {
+    left: 69%;
+    top: 12%;
+  }
+  .mapAnnotation {
+    font-size: 10px;
+    left: 8%;
+  }
+  .mapMarginNote {
+    left: 69%;
+    font-size: 6px;
+  }
+  .mapSpark {
+    font-size: 28px;
+    left: 9%;
+  }
+  .labControls {
+    margin-inline: 17px;
+  }
+  .labControls button {
+    padding-inline: 5px;
+    font-size: 10px !important;
+    gap: 5px;
+  }
+  .labDescription {
+    padding-inline: 17px;
+    min-height: 123px;
+  }
+  .labDisclaimer {
+    font-size: 8px;
+    padding-inline: 17px;
+  }
+  .ribbonSteps {
+    font-size: 8px;
+    gap: 8px;
+  }
+  .ribbonSteps > span {
+    gap: 5px;
+  }
+  .recipeRibbon > p {
+    font-size: 12px;
+  }
+  .workspaceIntro h2 {
+    font-size: 30px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero *,
+  .lab,
+  .lab *,
+  .experiment * {
+    animation: none !important;
+    transition: none !important;
+    translate: none !important;
+  }
+  .mapPaths .pathActive {
+    stroke-dashoffset: 0;
+  }
+  .lab {
+    transform: none;
+  }
+}

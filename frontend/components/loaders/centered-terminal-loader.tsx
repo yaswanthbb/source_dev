@@ -541,6 +541,7 @@ function preserveCenteredLoader(
   isDark: boolean
 ) {
   if (typeof document === 'undefined') return;
+  if (document.documentElement.dataset.uiMode === 'gui') return;
   if (document.getElementById('sd-centered-terminal-overlay')) return;
 
   const overlay = sourceEl.cloneNode(true) as HTMLElement;
@@ -561,6 +562,10 @@ function preserveCenteredLoader(
   let rafId: number;
 
   const tickBridge = () => {
+    if (!overlay.isConnected || document.documentElement.dataset.uiMode === 'gui') {
+      overlay.remove();
+      return;
+    }
     const elapsed = Date.now() - startTime;
     if (elapsed < targetMin) {
       const ratio = Math.min(1, elapsed / targetMin);

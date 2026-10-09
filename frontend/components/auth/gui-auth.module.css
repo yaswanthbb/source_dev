@@ -1,0 +1,788 @@
+.root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+.root a {
+  text-decoration: none;
+}
+.root button,
+.root input {
+  font: inherit;
+}
+.root button {
+  cursor: pointer;
+}
+.root button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.header {
+  width: min(1200px, 100%);
+  padding: 24px 30px;
+  margin-inline: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--gui-ink);
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+.brand svg {
+  flex-shrink: 0;
+}
+.colon {
+  color: var(--gui-accent);
+}
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.homeLink,
+.modeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  color: var(--gui-muted);
+  font-size: 12px;
+}
+.modeButton {
+  background: none;
+  border: 1px solid var(--gui-border);
+  border-radius: 100px;
+  padding: 0 13px;
+}
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  color: var(--gui-ink);
+}
+.iconButton:hover,
+.modeButton:hover {
+  background: var(--gui-soft);
+}
+.main {
+  width: min(1200px, 100%);
+  margin: auto;
+  display: grid;
+  grid-template-columns: 1.08fr 1fr;
+  gap: 90px;
+  align-items: center;
+  padding: 40px 30px 55px;
+}
+.story {
+  min-width: 0;
+  padding: 45px 38px 32px;
+  border: 1px solid var(--gui-border);
+  border-radius: 26px 26px 8px 26px;
+  background: var(--gui-accent-soft);
+  animation: enter 600ms var(--gui-ease) both;
+}
+.eyebrow {
+  display: block;
+  font-size: 9px;
+  font-family: monospace;
+  letter-spacing: 1.4px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+}
+.story h2 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: clamp(34px, 3.4vw, 46px);
+  line-height: 1.13;
+  letter-spacing: -2px;
+  font-weight: 500;
+  margin: 20px 0;
+}
+.story > p {
+  color: var(--gui-muted);
+  line-height: 1.9;
+  font-size: 13px;
+  max-width: 340px;
+  margin: 0;
+}
+.learningPath {
+  position: relative;
+  height: 235px;
+  margin: 32px -12px 23px;
+  background: radial-gradient(
+    color-mix(in srgb, var(--gui-accent) 20%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 16px 16px;
+}
+.pathDrawing {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  stroke: var(--gui-accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 650;
+  stroke-dashoffset: 650;
+  animation: draw 900ms 200ms var(--gui-ease) forwards;
+}
+.pathCard {
+  position: absolute;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 15px;
+  border: 1px solid var(--gui-border);
+  background: var(--gui-surface);
+  border-radius: 10px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--gui-ink) 4%, transparent);
+  white-space: nowrap;
+}
+.pathCard > span:first-child {
+  font-size: 9px;
+  font-family: monospace;
+  color: var(--gui-accent);
+}
+.pathCard > span:last-child {
+  font-size: 9px;
+  color: var(--gui-muted);
+  margin-left: 10px;
+}
+.pathRoadmap {
+  top: 4%;
+  left: 4%;
+  transform: rotate(-3deg);
+}
+.pathConcept {
+  top: 44%;
+  right: 0;
+  transform: rotate(3deg);
+}
+.pathPractice {
+  bottom: 4%;
+  left: 5%;
+  transform: rotate(-2deg);
+  background: var(--gui-primary);
+  color: var(--gui-on-primary);
+  border-color: var(--gui-primary);
+}
+.pathPractice > span {
+  color: var(--gui-on-primary) !important;
+}
+.pathMark {
+  position: absolute;
+  top: 1%;
+  right: 5%;
+  transform: rotate(8deg);
+}
+.authorCanvas {
+  position: relative;
+  margin: 35px 0 28px;
+  padding: 20px 5px 6px;
+}
+.canvasAnnotation {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--gui-accent);
+  transform: rotate(-4deg);
+}
+.canvasSheet {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid var(--gui-border);
+  border-radius: 13px;
+  padding: 21px;
+  background: var(--gui-surface);
+  transform: rotate(-2deg);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--gui-ink) 5%, transparent);
+}
+.canvasSheet::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 6px -5px -6px 5px;
+  border: 1px solid var(--gui-border);
+  border-radius: 13px;
+  background: var(--gui-soft);
+  transform: rotate(4deg);
+}
+.canvasTop {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--gui-accent);
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+.draftStamp {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 0;
+  border: 1px dashed var(--gui-accent);
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+.canvasHeading {
+  margin: 17px 0 21px;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 21px;
+  line-height: 1.3;
+  letter-spacing: -0.7px;
+}
+.canvasModule {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  background: var(--gui-accent-soft);
+  padding: 12px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.canvasModule > span:last-child {
+  margin-left: auto;
+  font-family: monospace;
+  color: var(--gui-accent);
+}
+.canvasConcepts {
+  margin: 12px 0 0 18px;
+  padding-left: 15px;
+  border-left: 1px solid var(--gui-border);
+  display: grid;
+  gap: 11px;
+}
+.canvasConcepts > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--gui-muted);
+  font-size: 10px;
+}
+.canvasConcepts i {
+  height: 3px;
+  width: 18px;
+  margin-left: auto;
+  background: var(--gui-border);
+  border-radius: 2px;
+}
+.canvasBottom {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gui-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--gui-muted);
+  font-size: 9px;
+}
+.recoveryIllustration {
+  margin: 32px 0 28px;
+  display: grid;
+  gap: 16px;
+}
+.recoveryIllustration > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.recoveryIllustration > div > span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--gui-border);
+  border-radius: 10px;
+  background: var(--gui-surface);
+  color: var(--gui-accent);
+  font: 11px monospace;
+}
+.recoveryIllustration strong,
+.recoveryIllustration small {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+}
+.recoveryIllustration small {
+  color: var(--gui-muted);
+  font-size: 10px;
+  margin-top: 4px;
+  font-weight: 400;
+}
+.recoverySteps {
+  display: flex;
+  gap: 14px;
+  margin: 23px 0;
+  padding: 0;
+  list-style: none;
+  color: var(--gui-muted);
+  font-size: 11px;
+}
+.recoverySteps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.recoverySteps span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--gui-border);
+  border-radius: 50%;
+  font-size: 10px;
+}
+.recoverySteps [aria-current="step"] {
+  color: var(--gui-accent);
+  font-weight: 600;
+}
+.recoverySteps [aria-current="step"] span {
+  background: var(--gui-primary);
+  color: var(--gui-on-primary);
+  border-color: var(--gui-primary);
+}
+.recoveryActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 15px;
+  margin-top: 17px;
+}
+.statusActions {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+}
+.codeInput {
+  letter-spacing: 8px;
+  font-size: 24px !important;
+  font-family: monospace !important;
+}
+.codeInput::placeholder {
+  letter-spacing: normal;
+  font-size: 14px;
+}
+.storyFootnote {
+  border-top: 1px solid var(--gui-border);
+  padding-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gui-muted);
+  font-size: 10px;
+}
+.storyFootnote > span {
+  width: 6px;
+  height: 6px;
+  background: var(--gui-accent);
+  border-radius: 50%;
+}
+.formPanel {
+  min-width: 0;
+  width: 100%;
+  max-width: 420px;
+  justify-self: center;
+  padding: 20px 0;
+  animation: enter 600ms 80ms var(--gui-ease) both;
+}
+.formPanel h1 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: -1.8px;
+  line-height: 1.2;
+  margin: 13px 0;
+}
+.formPanel:focus-visible,
+.formPanel h1:focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+.intro {
+  color: var(--gui-muted);
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 0 0 27px;
+}
+.providers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.providers button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--gui-border);
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  min-height: 48px;
+  border-radius: 10px;
+  font-size: 13px;
+  transition: border-color 180ms;
+}
+.providers button:hover:not(:disabled) {
+  border-color: var(--gui-accent);
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--gui-muted);
+  font-size: 10px;
+  margin: 24px 0;
+}
+.divider > span {
+  flex: 1;
+  height: 1px;
+  background: var(--gui-border);
+}
+.feedbackSlot:empty {
+  display: none;
+}
+.feedbackSlot {
+  margin-bottom: 20px;
+}
+.fields {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.field {
+  margin-bottom: 22px;
+}
+.field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gui-ink);
+}
+.field input {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 14px;
+  margin-top: 9px;
+  border: 1px solid color-mix(in srgb, var(--gui-muted) 65%, var(--gui-border));
+  border-radius: 10px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  font-size: 14px;
+  transition: border-color 180ms;
+}
+.field input::placeholder {
+  color: var(--gui-muted);
+  opacity: 1;
+}
+.field input:focus {
+  border-color: var(--gui-accent);
+}
+.field input[aria-invalid="true"] {
+  border-color: #ac351f;
+}
+.fieldError {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #ac351f;
+  margin: 7px 0 0;
+}
+.fieldHint {
+  color: var(--gui-muted);
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 8px 0 0;
+}
+:global(html.dark) .fieldError {
+  color: #ffb4a9;
+}
+:global(html.dark) .field input[aria-invalid="true"] {
+  border-color: #ffb4a9;
+}
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.labelRow a {
+  font-size: 11px;
+  color: var(--gui-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.passwordInput {
+  position: relative;
+}
+.passwordInput input {
+  padding-right: 52px;
+}
+.passwordInput button {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  height: 44px;
+  width: 44px;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: none;
+  color: var(--gui-muted);
+  border-radius: 8px;
+}
+.passwordInput button:hover {
+  color: var(--gui-accent);
+}
+.submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 50px;
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--gui-primary);
+  color: var(--gui-on-primary);
+  border: 1px solid var(--gui-primary);
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    box-shadow 180ms,
+    translate 180ms;
+}
+.submit:hover:not(:disabled) {
+  box-shadow: 0 5px 15px color-mix(in srgb, var(--gui-accent) 15%, transparent);
+  translate: 0 -1px;
+}
+.registerPrompt {
+  margin: 25px 0 0;
+  color: var(--gui-muted);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.8;
+}
+.registerPrompt a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--gui-accent);
+  font-weight: 500;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: min(1200px, 100%);
+  margin: auto auto 0;
+  padding: 20px 30px 25px;
+  color: var(--gui-muted);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.footer a {
+  color: var(--gui-ink);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.errorLinks {
+  margin: 8px 0 0;
+  padding-left: 17px;
+}
+.errorLinks a {
+  text-decoration: underline;
+}
+.cancelButton {
+  border: 0;
+  background: none;
+  color: var(--gui-accent);
+  min-height: 44px;
+  padding: 0;
+  font-size: 12px !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.successPanel {
+  display: grid;
+  gap: 24px;
+  padding: 24px 0;
+}
+.spinner {
+  animation: spin 1s linear infinite;
+}
+.placeholder {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.skipLink {
+  position: absolute;
+  left: 20px;
+  top: -100px;
+  background: var(--gui-primary);
+  color: var(--gui-on-primary);
+  padding: 12px 18px;
+  border-radius: 8px;
+  z-index: 60;
+}
+.skipLink:focus {
+  top: 16px;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 1000px) {
+  .main {
+    gap: 40px;
+  }
+  .story {
+    padding: 35px 25px 27px;
+  }
+  .story h2 {
+    font-size: 36px;
+  }
+  .pathCard {
+    padding-inline: 10px;
+    gap: 9px;
+  }
+  .pathCard > span:last-child {
+    margin-left: 0;
+  }
+}
+@media (max-width: 760px) {
+  .main {
+    grid-template-columns: 1fr;
+    gap: 35px;
+    padding: 20px 24px 35px;
+  }
+  .formPanel {
+    grid-row: 1;
+    padding-top: 0;
+  }
+  .story {
+    width: 100%;
+    max-width: 420px;
+    justify-self: center;
+    padding: 27px;
+  }
+  .story h2 {
+    font-size: 31px;
+    letter-spacing: -1.3px;
+    margin: 14px 0;
+  }
+  .learningPath {
+    display: none;
+  }
+  .authorCanvas,
+  .recoveryIllustration {
+    display: none;
+  }
+  .storyFootnote {
+    padding-top: 18px;
+    margin-top: 20px;
+  }
+  .header {
+    padding: 19px 24px 24px;
+  }
+  .homeLink {
+    display: none;
+  }
+  .footer {
+    padding-inline: 24px;
+  }
+}
+@media (max-width: 420px) {
+  .header {
+    padding: 15px 22px 26px;
+    gap: 12px;
+  }
+  .brand {
+    font-size: 19px;
+    gap: 7px;
+  }
+  .brand svg {
+    width: 30px;
+    height: 30px;
+  }
+  .headerActions {
+    gap: 3px;
+  }
+  .modeButton {
+    padding-inline: 10px;
+  }
+  .main {
+    padding-inline: 22px;
+  }
+  .formPanel h1 {
+    font-size: 36px;
+  }
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .field input {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story,
+  .formPanel,
+  .pathDrawing,
+  .spinner {
+    animation: none;
+  }
+  .pathDrawing {
+    stroke-dashoffset: 0;
+  }
+  .root * {
+    transition: none !important;
+  }
+}

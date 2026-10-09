@@ -1,0 +1,52 @@
+.theme {
+  --gui-bg: #faf6f0;
+  --gui-surface: #fffdfa;
+  --gui-soft: #f3ece3;
+  --gui-ink: #29231e;
+  --gui-muted: #6e6258;
+  --gui-border: #e5d9cc;
+  --gui-accent: #b84913;
+  --gui-accent-bright: #f58238;
+  --gui-accent-soft: #fae7d7;
+  --gui-primary: #b84913;
+  --gui-on-primary: #fffdfa;
+  --gui-terminal-bg: #241e19;
+  --gui-terminal-ink: #f4e9dd;
+  --gui-terminal-accent: #ffb77d;
+  --source-mark-bg: #b84913;
+  --source-mark-ink: #fffdfa;
+  --source-mark-accent: #ffce9c;
+  --gui-radius: 20px;
+  --gui-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--gui-bg);
+  color: var(--gui-ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+:global(html.dark) .theme {
+  --gui-bg: #1b1714;
+  --gui-surface: #251f1a;
+  --gui-soft: #30271f;
+  --gui-ink: #faf2e9;
+  --gui-muted: #c2b2a2;
+  --gui-border: #514236;
+  --gui-accent: #ffb77d;
+  --gui-accent-bright: #ff974f;
+  --gui-accent-soft: #422c1d;
+  --gui-primary: #ffb77d;
+  --gui-on-primary: #2c1d12;
+  --source-mark-bg: #ffb77d;
+  --source-mark-ink: #2c1d12;
+  --source-mark-accent: #8e370d;
+}
+
+.theme :is(a, button, input, summary):focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 5px;
+}
+
+.theme ::selection {
+  background: var(--gui-accent-soft);
+  color: var(--gui-ink);
+}

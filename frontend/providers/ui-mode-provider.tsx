@@ -78,7 +78,7 @@ interface UiModeContextValue {
   /** True until the stored preferences have been read, so a consumer can hold
    *  off on a one-time animation rather than play it against a default. */
   ready: boolean;
-  setMode: (mode: UiMode) => void;
+  setMode: (mode: UiMode, options?: { navigate?: boolean }) => void;
   toggleMode: () => void;
   /** Record a move. The CLI calls this on every `cd`; it is the only writer of
    *  the user's position. */
@@ -234,10 +234,14 @@ export function UiModeProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setMode = useCallback(
-    (next: UiMode) => {
+    (next: UiMode, options?: { navigate?: boolean }) => {
       setModeState(next);
       writeLocal(MODE_KEY, next);
       pushRemote({ uiMode: next });
+
+      // Public appearance controls can persist a preference without sending
+      // guests into an authenticated workspace. Existing callers still navigate.
+      if (options?.navigate === false) return;
 
       if (next === "cli") {
         // Resume exactly where they were, including the deep locations GUI

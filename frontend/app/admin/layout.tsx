@@ -24,7 +24,7 @@ import { getToken, getUser, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { MinimalTerminalLoader } from '@/components/loaders/minimal-terminal-loader';
+import { ModeAwareLoader } from '@/components/loaders/mode-aware-loader';
 import '../developer/dashboard/terminal-dashboard.css';
 
 const ADMIN_NAV_ITEMS = [
@@ -133,7 +133,9 @@ export default function AdminAppShellLayout({
 
   if (!isDataReady || !isLoaderDone) {
     return (
-      <MinimalTerminalLoader
+      <ModeAwareLoader
+        guiTitle="Preparing your admin workspace"
+        guiDescription="Checking access and loading your account."
         minDuration={2000}
         isAsyncComplete={isDataReady}
         onComplete={() => setIsLoaderDone(true)}
