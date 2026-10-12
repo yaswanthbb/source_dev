@@ -1,0 +1,168 @@
+.page {
+  min-width: 0;
+}
+.lessonIdentity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--gui-accent-soft);
+  border: 1px solid var(--gui-border);
+  border-radius: var(--gui-radius);
+  padding: 22px 24px;
+}
+.lessonIdentity > svg {
+  color: var(--gui-accent);
+  flex-shrink: 0;
+}
+.lessonIdentity > div {
+  min-width: 0;
+  flex: 1;
+}
+.lessonIdentity h2 {
+  font-size: 21px;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.lessonIdentity p {
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.7;
+  margin-top: 6px;
+}
+.badge {
+  color: var(--gui-accent);
+  background: var(--gui-surface);
+  border: 1px solid var(--gui-border);
+  border-radius: 24px;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+.forms {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.draftNote {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--gui-accent-soft);
+  margin-bottom: 22px;
+}
+.draftNote svg {
+  color: var(--gui-accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.draftNote p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.compare {
+  display: grid;
+  gap: 16px;
+}
+.compare > div:first-child {
+  margin-bottom: 0;
+}
+.compare > button {
+  justify-self: start;
+}
+.compare summary {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--gui-accent);
+  min-height: 44px;
+  display: list-item;
+  align-content: center;
+  cursor: pointer;
+}
+.reference {
+  min-width: 0;
+  border-top: 1px solid var(--gui-border);
+  padding: 20px 0 8px;
+}
+.placements {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+.placements li {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.placements strong {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.placements span {
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.6;
+}
+.dialog {
+  color: var(--gui-ink);
+  background: var(--gui-surface);
+  border: 1px solid var(--gui-border);
+  border-radius: var(--gui-radius);
+  width: min(540px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  margin: auto;
+  padding: 30px;
+  box-shadow: var(--gui-shadow);
+}
+.dialog::backdrop {
+  background: rgb(12 15 21 / 55%);
+}
+.dialogIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--gui-accent-soft);
+  color: var(--gui-accent);
+  margin-bottom: 18px;
+}
+.dialog h2 {
+  font-size: 24px;
+  letter-spacing: -0.035em;
+  line-height: 1.35;
+  margin: 0 0 14px;
+}
+.dialog p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--gui-muted);
+  margin: 0 0 12px;
+}
+.dialogActions {
+  display: flex;
+  justify-content: end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+@media (max-width: 650px) {
+  .lessonIdentity {
+    flex-wrap: wrap;
+    padding: 20px;
+    gap: 12px;
+  }
+  .badge {
+    margin-left: 34px;
+  }
+  .dialog {
+    padding: 22px;
+  }
+}

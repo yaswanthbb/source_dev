@@ -133,6 +133,12 @@ export function ContentLibraryView({
                 Classic library
               </button>
             )}
+            <Link className={styles.secondary} href="/developer/concepts/new">
+              <FilePenLine size={17} aria-hidden="true" /> New lesson
+            </Link>
+            <Link className={styles.secondary} href="/developer/generate">
+              AI generation & jobs
+            </Link>
           </div>
         </div>
         <svg className={styles.motif} viewBox="0 0 220 180" aria-hidden="true">
@@ -378,7 +384,7 @@ export function ContentLibraryView({
                 <Link
                   href={`/developer/content/${encodeURIComponent(outcome.roadmap.id)}`}
                 >
-                  Open classic editor{" "}
+                  Open roadmap editor{" "}
                   <ArrowRight size={15} aria-hidden="true" />
                 </Link>
               </GuiFeedback>
@@ -497,8 +503,8 @@ export function ContentLibraryView({
             </button>
           </form>
           <p className={styles.classicNote}>
-            Module and lesson authoring opens in the classic editor for now. Its
-            GUI redesign is the next checkpoint.
+            Add modules and connect your lessons in the roadmap editor. Lesson
+            writing and editing open in the GUI.
           </p>
         </aside>
       </div>
@@ -566,7 +572,7 @@ function RoadmapCard({ roadmap: r }: { roadmap: OwnRoadmap }) {
           className={styles.editorLink}
           href={`/developer/content/${encodeURIComponent(r.id)}`}
         >
-          Open editor <span>Classic view</span>
+          Open editor <span>Roadmap authoring</span>
           <ArrowRight size={16} aria-hidden="true" />
         </Link>
       )}

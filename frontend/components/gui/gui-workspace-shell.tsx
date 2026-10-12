@@ -16,6 +16,7 @@ import {
   Moon,
   PenLine,
   RotateCcw,
+  Sparkles,
   Sun,
   Terminal,
   UserRound,
@@ -39,6 +40,11 @@ const NAVIGATION = [
   },
   { href: "/developer/review", title: "Reviews", icon: RotateCcw },
   { href: "/developer/content", title: "My content", icon: PenLine },
+  {
+    href: "/developer/generate",
+    title: "AI generation & jobs",
+    icon: Sparkles,
+  },
   { href: "/developer/articles", title: "My articles", icon: FileText },
   { href: "/developer/keys", title: "AI provider keys", icon: KeyRound },
 ];
@@ -144,7 +150,11 @@ export function GuiWorkspaceShell({
               className={styles.navLink}
               aria-current={
                 pathname === href ||
-                (href === "/developer/roadmaps" &&
+                (href === "/developer/content" &&
+                  (pathname === "/developer/concepts/new" ||
+                    /^\/developer\/concepts\/[^/]+\/edit$/.test(pathname))) ||
+                ((href === "/developer/roadmaps" ||
+                  href === "/developer/content") &&
                   pathname.startsWith(`${href}/`))
                   ? "page"
                   : undefined

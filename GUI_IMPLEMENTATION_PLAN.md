@@ -34,11 +34,11 @@ with user approval. A completed visual redesign does not imply new backend work.
 | 9 | Quiz / answer feedback | Approved; continued on user instruction |
 | 10 | Review session and queue (FSRS read model) | Approved; continued on user instruction |
 | 11 | Lesson discussion + private Ask AI | Approved; continued on user instruction |
-| 12 | Own content `/developer/content` | Implemented; ready for visual review |
-| 13 | Roadmap authoring `/developer/content/[roadmapId]` | Planned |
-| 14 | New lesson `/developer/concepts/new` | Planned |
-| 15 | Edit lesson `/developer/concepts/[id]/edit` | Planned |
-| 16 | AI generation/jobs (existing APIs; explicit paid actions only) | Planned |
+| 12 | Own content `/developer/content` | Approved; continued on user instruction |
+| 13 | Roadmap authoring `/developer/content/[roadmapId]` | Approved; continued on user instruction |
+| 14 | New lesson `/developer/concepts/new` | Approved; continued on user instruction |
+| 15 | Edit lesson `/developer/concepts/[id]/edit` | Approved; continued on user instruction |
+| 16 | AI generation/jobs `/developer/generate` (existing APIs; explicit paid actions only) | Implemented; ready for visual review |
 | 17 | Provider keys `/developer/keys` | Planned |
 | 18 | Public articles `/articles` | Planned |
 | 19 | Article reader `/articles/[id]` | Planned |
@@ -547,3 +547,198 @@ The staged snapshot remains unchanged; this experiment is an unstaged working-co
 - Temporary sample removed, its server/tab closed and viewport reset. No backend,
   migration, package, real-account, paid-provider, staging, commit or push actions.
   Notes: `design-system/source-dev/pages/content.md`. Stop for review; editor is next.
+
+## Roadmap authoring checkpoint — 2026-10-12
+
+- User approved continuing to checkpoint 13. The roadmap editor now selects a scoped
+  orange GUI outline/review panel or the original classic editor, preserved apart from
+  its export and plain roadmap ID parameter. Server page passes only the ID; both
+  appearance switches stay on the authoring route without changing learner location.
+- Existing module creation, own-lesson search/attach, detach, whole-roadmap submission
+  and request/withdraw takedown are wired to existing APIs. New modules follow the
+  maximum current order index. Published trees allow additions but hide detach; draft
+  submission shows the real 3-module / 3-lessons-per-module minimums. Review metadata,
+  pending drafts, feedback, deletion dates and takedown countdowns stay truthful.
+- Strict account/ownership/placement/review projection keeps only metadata, never
+  lesson or draft bodies. Admin attachment search is still own-only; raw generation
+  booleans and transient origin labels yield equivalent metadata. Unknown structure
+  or access/contract errors hide private cache; ordinary read errors retain the checked
+  outline and drafts while pausing writes. Existing GET review normalizes elapsed
+  unpublish dates before detail is read; no new backend/date-transition mechanism.
+- Every write uses fresh account/tree/fingerprint and placement/lesson checks before
+  one POST or DELETE, then verifies acknowledgement and saved state. No write retries,
+  optimistic success, AI generation, quotas or progress writes. Ambiguous responses
+  lock changes until explicit successful refresh, warning that an earlier request can
+  still finish and repeating a change can duplicate it. No exactly-once guarantee.
+- Native forms, linked/focused validation, retained drafts, persistent feedback and
+  focused inline confirmations with Escape/cancel focus return. Changed checked data
+  dismisses old confirmations without clearing module drafts (unit verified). Shared shell navigation
+  now marks My content active on nested authoring routes. Library links no longer label
+  this editor classic; new/edit lesson links still explicitly disclose classic view.
+- Labelled actual-component local-only sample QA covered desktop, 375px phone, 768px
+  tablet and 812px landscape; light/dark; search/attach, module creation, detach/cancel,
+  submit/takedown/withdraw, validation/status focus, draft retention and all read/write
+  feedback states, mobile menu Escape/focus. Fixed a phone module-heading squeeze by
+  putting the attach button in its own grid row. No overflow or console errors observed.
+- Verification: 299 frontend tests across 17 files (112 learning/authoring cases),
+  touched-file lint, theme separation, classic preservation and final typecheck/build.
+  Existing unused test variable and multiple-lockfile warning remain. Browser sample
+  excludes real account/API actions; live permissions, cross-tab changes, effective-date
+  transitions, signed-in mode switching and OS reduced-motion remain manual.
+- Temporary sample removed, its server/tab closed and viewport reset. No backend,
+  schema, package, account/provider, staging, commit or push changes. Design notes and
+  manual checks: `design-system/source-dev/pages/roadmap-authoring.md`. Stop for visual
+  review; checkpoint 14 (new lesson) has not started.
+
+## New lesson checkpoint — 2026-10-12
+
+- User approved the roadmap editor and continued to checkpoint 14. New lesson now
+  selects a scoped orange writing desk or the classic form, preserved byte-for-byte
+  except its export name. Server page reads/normalizes target query data and passes
+  plain values; mode switches stay on the route without changing learner location.
+- Native title/body labels, 200-character title and existing 20-character body minimum,
+  difficulty radios, linked/focused submit summary, retained writing and an explicit
+  Write/Preview switch. Preview reuses the safe reader renderer: skipped HTML, inert
+  unsafe links, consent-gated external images, existing protected diagrams/code/tables.
+  No autosave, AI/provider calls, fabricated publication or invented grading.
+- My content includes a standalone new-lesson entry; each roadmap module’s new-lesson
+  link carries its exact module/roadmap IDs. Module-only legacy links resolve one owned
+  parent. Repeated/unsafe/wrong-parent/foreign/deleted targets fail closed instead of
+  silently creating an unattached lesson. New/editing saved lessons are separate:
+  editing remains labelled classic until checkpoint 15.
+- Account and target are freshly checked before one POST /concepts. Exact owner,
+  title, unchanged Markdown body, difficulty, pending/manual review metadata and ID
+  must be acknowledged before reporting creation. ID-based metadata tolerates an
+  empty legacy slug for international titles; backend slug behavior is unchanged.
+- Linked saving then uses the existing guarded roadmap attachment helper. These are
+  two separate writes, not a transaction. Attachment failure retains the confirmed
+  lesson ID and blocks creating it again. Explicit fresh saved-lesson/module checks
+  can enable attachment-only retry. Lost targets hide their old metadata while a
+  freshly verified owned lesson keeps its classic edit link; account changes hide
+  all private cache/form.
+- Unknown create outcomes lock further creation until explicit successful metadata
+  search using the original submitted title/difficulty, even if local writing changes.
+  Candidate matches do not establish which request created them. Failed checks stay
+  locked; warnings say earlier requests may still finish and repeat creation can
+  duplicate lessons. No automatic retries or exactly-once guarantee.
+- Confirmed saves retain readable submitted text and focused status; no forced redirect
+  into the unfinished editor. A deliberate Start another lesson rechecks access and
+  clears the form. Failed recovery feedback gets focus ahead of simultaneous saved
+  feedback. Ordinary loading/network/stale/pending/uncertain states retain the draft.
+- Labelled actual-component local-only browser sample checked desktop, 375px phone,
+  768px tablet and 812px landscape, light/dark, validation/body links, difficulty,
+  safe preview, create/attach/partial-recovery/target-loss, submitted text, explicit
+  reset, all read/write feedback and mobile menu Escape/focus. No overflow or console
+  errors observed. No signed-in account/content/provider writes were performed.
+- Frontend typecheck, touched lint, theme guard, classic preservation, 317 tests across
+  17 files (130 learning/authoring cases, 18 new lesson cases), diff check and final
+  fixture-free webpack build. Existing unused test variable and lockfile warnings
+  remain. Actual signed-in permissions, two-step save/attach, cross-tab transitions,
+  mode switching and OS reduced-motion remain manual; notes list these checks.
+- Temporary sample route removed, server/tab closed, viewport reset. No backend,
+  schema, dependency, staging, commit or push changes; no migration needed.
+  Notes: `design-system/source-dev/pages/new-lesson.md`. Stop for visual review;
+  checkpoint 15 (edit lesson) has not started.
+
+## Edit lesson checkpoint — 2026-10-12
+
+- User approved new lesson and continued to checkpoint 15. Saved lessons now open
+  an orange GUI editor or the preserved classic editor. Server route awaits a plain
+  ID; mode changes stay on this route and never update learner location.
+- The writing desk starts with a pending draft, including an empty one, when present.
+  Checked saved body and pending draft have separate safe Markdown comparisons.
+  Local writing survives rechecks and ordinary failures. Replacing the form with
+  checked text is deliberate and confirmed; no autosave or automatic overwrite.
+- Title/difficulty and body use separate existing PATCH requests. This avoids the
+  backend staged-body early return skipping difficulty. Details update immediately
+  while keeping body/review state; body saves explain immediate/staged/pending behavior
+  in a native focused confirmation. No auto-chained save, approval or publication.
+- Author/admin permissions are mirrored, including admin edits to another author
+  or an unlinked author. Placement summaries do not imply publication or roadmap
+  editing access. My content navigation and new-lesson/roadmap editor links now
+  describe GUI editing accurately. Classic editor logic is kept byte-for-byte except
+  its export and plain ID input.
+- Fresh account ID/role, lesson fields, update timestamp and placement fingerprint
+  precede one PATCH. Exact acknowledgement and a second fresh account/lesson read
+  confirm details, staged draft or direct-body result. Other fields/origin must stay
+  unchanged. No write retries, optimistic success, AI/provider/progress operations.
+- Unknown transport/408/5xx/incomplete/mismatched/readback outcomes pause further
+  saves until explicit successful checking. Failed checks stay locked; access/contract
+  failures hide private cached text. Recovery warns that earlier requests may still
+  finish and a read cannot identify the request that saved. Client preflight does not
+  provide transaction isolation, cancellation or exactly-once behavior.
+- Native labels/radios, linked error summary, body Write/Preview and honest matching/
+  unsaved status. Feedback focuses after modal closure; successful recheck feedback
+  has priority over previous saved feedback. Escape returns focus, checked-text reset
+  focuses title. Shared safe reader skips HTML/unsafe URLs and gates external images;
+  code/tables/protected diagrams reused with distinct local/saved/draft prefixes.
+- Local-only actual-component production sample covered desktop, 375px phone, 768px
+  tablet and 812px landscape, light/dark, field validation, retained edits on checks,
+  staged/details saves, previews/comparisons, explicit reset, error/unknown/pending/
+  admin/no-placement states and mobile menu Escape. Fixed a result-focus race when
+  closing a save modal. No horizontal overflow or app console errors observed.
+- Verification: 332 frontend tests across 17 files (145 learning/authoring cases,
+  15 new edit cases), typecheck, touched lint, theme guard, classic comparison, diff
+  check and final fixture-free webpack build. Existing unused test variable and
+  multiple-lockfile warnings remain. A sandbox-only Next TypeScript subprocess
+  failure cleared on an approved build outside the sandbox; no config changes.
+- Real signed-in save/readback, author/admin permissions, cross-tab/stale races,
+  route/mode continuity and OS reduced-motion remain manual. Temporary sample,
+  server and tabs removed, viewport reset; no backend/schema/package/Git publishing
+  actions or migration. Notes: `design-system/source-dev/pages/edit-lesson.md`.
+  Stop for visual review; checkpoint 16 (AI generation/jobs) has not started.
+
+## AI generation / jobs checkpoint — 2026-10-12
+
+- User approved edit lesson and emphasized the next checkpoint. Added an authenticated
+  GUI generation workspace for all three existing batch actions: roadmap modules,
+  module lessons and module questions. Shared navigation, library and exact owned
+  roadmap/module authoring links are wired. Single-lesson `concept ai` remains in the
+  existing developer terminal; its registry and implementation are unchanged.
+- Plain normalized target/job IDs cross the Server/Client boundary. Invalid, repeated,
+  missing-parent and unavailable linked targets never trigger a job or silently bind
+  a foreign module. Selection stays local and never overwrites learner location;
+  CLI handoff uses the exact stored developer-shell path, including for admins.
+- Provider/default-key metadata and applicable quota come from current APIs. Only
+  metadata is retained; no key entry, decryption or secret storage here. Quota is
+  distinct from provider pricing/reserved capacity, admin bypass is not labelled free.
+  Model catalog loads only on request, with live versus curated fallback disclosure,
+  current-key binding and an optional verified model override. No invented models/prices.
+- Native scope radios/selects, linked focused validation and a native confirmation
+  naming action, target, provider/key, model choice, quota gate, transmitted scope,
+  saved output and existing automatic retry/fallback behavior. Consent starts unchecked
+  for each request. The frozen confirmation snapshot is checked synchronously at
+  dispatch as well as invalidated by effects, closing the stale-consent timing gap.
+- Fresh account ID/role, owned target/tree, capacity, default-key/settings fingerprint,
+  available quota, active target jobs and selected model precede one start POST.
+  Returned job ID and a fresh requester-owned saved record must match the exact ID,
+  type, target and approved provider/key/model snapshot before reporting acceptance.
+  Acceptance is separate from completion; frontend never claims every item succeeded.
+- Unknown transport/408/5xx/ACK/readback outcomes retain any known ID and pause writes
+  until explicit successful checks. Failed checks do not unlock; renewed consent is
+  required. Recovery warns of outstanding requests, charges and matching-job ambiguity.
+  No automatic frontend start retry or exactly-once/cancellation/atomic-version guarantee.
+- Own active jobs and unread results load independently of generation settings. Optional
+  visible-page 5-second read polling stops on errors/background/unmount; normal polls
+  do not move focus or announce empty checking pulses. Completed result IDs refresh
+  relevant content/target/quota caches. Transition races prefer the later terminal row.
+- Actual progress steps, distinct created/failed/skipped counts, failure reasons,
+  retry lineage, legacy unknown snapshots and known-ID inspection. No fake percentages,
+  cancellation or failed-only retry controls. Unread list is explicitly capped at 20.
+  Mark reviewed sends one selected own finished ID and confirms its stored flag before
+  removing a card; no optimistic dismissal or blanket acknowledgement. Content stays.
+- Orange master, original finite SVG, shared GUI tokens, native 44px controls, light/dark,
+  responsive desk/cards and reduced-motion support. Local-only actual-component sample
+  checks desktop/375px/768px/812px, loading/unavailable/empty/quota/admin/uncertain states,
+  model/fallback choices, unchecked/renewed consent, local acceptance, status focus,
+  partial results/details/reviewed retention, known-ID reads, recovery and menu Escape.
+  No overflow or app console errors; no real account, provider, paid generation or
+  acknowledgement operations used for verification.
+- Verification: 354 frontend tests across 17 files (167 learning/authoring checks,
+  22 new generation cases), typecheck, touched lint, theme guard, diff check and final
+  fixture-free webpack build. Existing unused test variable and lockfile warnings remain.
+  Signed-in API/persistence, provider billing/routing, multi-tab/default-key races,
+  pipeline-enabled/legacy output and OS reduced-motion smoke remain manual.
+- Temporary sample/server/tabs removed, viewport reset. No backend/schema/package,
+  staging/commit/push or migration work. Notes: `design-system/source-dev/pages/ai-generation.md`.
+  Stop for visual review; checkpoint 17 (provider keys) has not started.

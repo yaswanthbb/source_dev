@@ -1411,7 +1411,7 @@ test("timed-out or malformed roadmap creation never retries or claims success", 
     assert.equal(writes, 1);
   }
 });
-test("GUI content presents real statuses, classic editor links and honest loading/error/empty states", () => {
+test("GUI content presents real statuses, roadmap editor links and honest loading/error/empty states", () => {
   const { h, library } = contentSetup(),
     View = h.load(
       new URL("../content/content-view.tsx", import.meta.url),
@@ -1419,7 +1419,7 @@ test("GUI content presents real statuses, classic editor links and honest loadin
   const props = { data: library, onCreate() {}, onRefresh() {} };
   const html = h.render(createElement(View, props));
   assert.match(html, /Draft · private/);
-  assert.match(html, /Classic view/);
+  assert.match(html, /Roadmap authoring/);
   assert.match(html, /\/developer\/content\/own-1/);
   assert.match(html, /does not run AI/);
   const loading = h.render(
@@ -1562,6 +1562,3237 @@ test("My content mode gate keeps the route and never writes learning location", 
   assert.match(css, /var\(--gui-primary\)/);
 });
 
+function editorRaw() {
+  return {
+    ...ownRoadmapRaw,
+    unpublishStatus: "none",
+    modules: [0, 1, 2].map((i) => ({
+      id: `m${i}`,
+      roadmapId: "own-1",
+      title: `Module ${i + 1}`,
+      orderIndex: i,
+      moduleConcepts: [0, 1, 2].map((j) => ({
+        id: `p${i}-${j}`,
+        moduleId: `m${i}`,
+        conceptId: `c${i}-${j}`,
+        orderIndex: j + 1,
+        concept: {
+          id: `c${i}-${j}`,
+          title: `Lesson ${i + 1}.${j + 1}`,
+          authorId: contentUser.id,
+          reviewStatus: "approved",
+          draftContent: null,
+          originLabel: "handwritten",
+        },
+      })),
+    })),
+  };
+}
+function editorReview(raw) {
+  const modules = raw.modules.map((m) => ({
+    moduleId: m.id,
+    title: m.title,
+    approved:
+      m.moduleConcepts.length > 0 &&
+      m.moduleConcepts.every((p) => p.concept.reviewStatus === "approved"),
+    concepts: m.moduleConcepts.map((p) => ({
+      id: p.conceptId,
+      title: p.concept.title,
+      reviewStatus: p.concept.reviewStatus,
+      hasPendingDraft: p.concept.draftContent != null,
+    })),
+  }));
+  const concepts = modules.flatMap((m) => m.concepts),
+    pendingCount = concepts.filter((c) => c.reviewStatus === "pending").length,
+    rejectedCount = concepts.filter(
+      (c) => c.reviewStatus === "rejected",
+    ).length;
+  return {
+    roadmapId: raw.id,
+    title: raw.title,
+    reviewStatus: raw.reviewStatus,
+    modules,
+    moduleCount: modules.length,
+    conceptCount: concepts.length,
+    pendingCount,
+    rejectedCount,
+    canPublish:
+      raw.reviewStatus === "submitted" && !pendingCount && !rejectedCount,
+  };
+}
+function editorSetup(options = {}, raw = editorRaw()) {
+  const h = roadmapHarness(options),
+    data = h.load(new URL("../content/editor-data.ts", import.meta.url)),
+    client = h.load(new URL("../content/editor-client.ts", import.meta.url));
+  const editor = data.parseEditorData(
+    contentUser,
+    raw,
+    editorReview(raw),
+    raw.id,
+  );
+  return { h, data, client, editor, raw };
+}
+test("editor projection validates owned placement/review and keeps metadata only", () => {
+  const raw = editorRaw();
+  raw.modules[0].moduleConcepts[0].concept.content = "secret body";
+  raw.modules[0].moduleConcepts[0].concept.draftContent = "";
+  const { data, editor } = editorSetup({}, raw);
+  assert.equal(editor.modules[0].lessons[0].hasPendingDraft, true);
+  assert.equal(editor.modules[0].lessons[0].content, undefined);
+  assert.equal(editor.modules[0].lessons[0].draftContent, undefined);
+  for (const mutate of [
+    (r) => {
+      r.createdById = "other";
+    },
+    (r) => {
+      r.modules[0].roadmapId = "other";
+    },
+    (r) => {
+      r.modules[0].moduleConcepts[0].moduleId = "other";
+    },
+    (r) => {
+      r.modules[0].moduleConcepts[0].concept.authorId = "other";
+    },
+    (r) => {
+      r.modules.push(r.modules[0]);
+    },
+    (r) => {
+      r.modules[0].moduleConcepts.push(r.modules[0].moduleConcepts[0]);
+    },
+    (r) => {
+      r.modules = undefined;
+    },
+    (r) => {
+      r.deleteEffectiveAt = "2020-01-01T00:00:00Z";
+    },
+  ]) {
+    const invalid = editorRaw();
+    mutate(invalid);
+    assert.throws(() =>
+      data.parseEditorData(contentUser, invalid, editorReview(raw), raw.id),
+    );
+  }
+  assert.throws(() =>
+    data.parseEditorData(
+      contentUser,
+      raw,
+      { ...editorReview(raw), pendingCount: 1 },
+      raw.id,
+    ),
+  );
+  assert.throws(() =>
+    data.parseEditorData(
+      contentUser,
+      raw,
+      { ...editorReview(raw), canPublish: true },
+      raw.id,
+    ),
+  );
+});
+test("editor search excludes other/unowned lessons even for admin and checks duplicate metadata", () => {
+  const { data } = editorSetup(),
+    lesson = editorRaw().modules[0].moduleConcepts[0].concept;
+  assert.equal(
+    data.parseOwnLessons(
+      [
+        lesson,
+        { ...lesson, id: "foreign", authorId: "other" },
+        { ...lesson, id: "orphan", authorId: null },
+      ],
+      contentUser.id,
+    ).length,
+    1,
+  );
+  assert.throws(
+    () => data.parseOwnLessons([lesson, lesson], contentUser.id),
+    /Duplicate/,
+  );
+  assert.throws(() =>
+    data.parseOwnLessons(
+      [{ ...lesson, reviewStatus: "made-up" }],
+      contentUser.id,
+    ),
+  );
+  // Admin list responses expose the real generation boolean, while detail
+  // responses add the transient label. Both must yield the same preflight data.
+  for (const generated of [true, false]) {
+    const adminList = {
+      ...lesson,
+      originLabel: undefined,
+      isAiGenerated: generated,
+    };
+    const detail = {
+      ...adminList,
+      originLabel: generated ? "ai" : "handwritten",
+    };
+    assert.equal(
+      JSON.stringify(data.parseEditorLesson(adminList, contentUser.id)),
+      JSON.stringify(data.parseEditorLesson(detail, contentUser.id)),
+    );
+  }
+});
+test("editor orders legacy zero indices without mutating and checks submission minimums", () => {
+  const raw = editorRaw();
+  raw.modules.reverse();
+  const { data, editor } = editorSetup({}, raw);
+  assert.equal(editor.modules[0].id, "m0");
+  assert.equal(raw.modules[0].id, "m2");
+  assert.equal(data.submissionIssues(editor).length, 0);
+  assert.equal(
+    data.submissionIssues({ ...editor, modules: editor.modules.slice(0, 2) })
+      .length,
+    1,
+  );
+  const empty = { ...editor, modules: [{ ...editor.modules[0], lessons: [] }] };
+  assert.equal(data.submissionIssues(empty).length, 2);
+  assert.equal(data.moduleTitleError("  模块  "), undefined);
+  assert.ok(data.moduleTitleError(" "));
+  assert.ok(data.moduleTitleError("a".repeat(121)));
+});
+test("editor reads account and normalizing review before detail, with abort/timeout and no explicit writes", async () => {
+  const raw = editorRaw(),
+    calls = [],
+    signal = new AbortController().signal;
+  const { client } = editorSetup({
+    api: {
+      get: async (path, opts) => {
+        calls.push([path, opts]);
+        return {
+          data:
+            path === "/users/me"
+              ? contentUser
+              : path.endsWith("/review")
+                ? editorReview(raw)
+                : raw,
+        };
+      },
+      post: () => assert.fail("entry write"),
+    },
+  });
+  await client.loadRoadmapEditor(raw.id, signal);
+  assert.deepEqual(
+    calls.map((c) => c[0]),
+    ["/users/me", "/roadmaps/own-1/review", "/roadmaps/own-1"],
+  );
+  assert.ok(
+    calls.every((c) => c[1].signal === signal && c[1].timeout === 12000),
+  );
+  const searched = [];
+  const setup = editorSetup({
+    api: {
+      get: async (path, opts) => {
+        searched.push([path, opts]);
+        return {
+          data:
+            path === "/users/me"
+              ? contentUser
+              : [raw.modules[0].moduleConcepts[0].concept],
+        };
+      },
+    },
+  });
+  assert.equal(
+    (await setup.client.searchOwnLessons(setup.editor, " Lesson ", signal))
+      .length,
+    1,
+  );
+  assert.equal(searched[1][0], "/concepts?search=Lesson");
+  await setup.client.searchOwnLessons(setup.editor, "x", signal);
+  assert.equal(searched.length, 2);
+});
+test("module append uses next actual order and one POST, then checks saved state", async () => {
+  let raw = editorRaw();
+  raw.modules[2].orderIndex = 9;
+  const calls = [],
+    before = structuredClone(raw);
+  const { client, editor } = editorSetup(
+    {
+      api: {
+        get: async (path, opts) => {
+          calls.push(["GET", path, opts]);
+          return {
+            data:
+              path === "/users/me"
+                ? contentUser
+                : path.endsWith("/review")
+                  ? editorReview(raw)
+                  : raw,
+          };
+        },
+        post: async (path, body, opts) => {
+          calls.push(["POST", path, body, opts]);
+          const saved = {
+            id: "m-new",
+            roadmapId: raw.id,
+            ...body,
+            moduleConcepts: [],
+          };
+          raw = { ...raw, modules: [...raw.modules, saved] };
+          return { data: saved };
+        },
+      },
+    },
+    before,
+  );
+  const outcome = await client.runEditorAction(editor, {
+    kind: "module",
+    title: "  Next module  ",
+  });
+  assert.equal(outcome.data.modules.at(-1).title, "Next module");
+  assert.equal(calls.filter((c) => c[0] === "POST").length, 1);
+  assert.equal(calls[3][2].orderIndex, 10);
+  assert.equal(calls[3][3].timeout, 12000);
+  assert.equal(calls.filter((c) => c[0] === "GET").length, 6);
+});
+test("changed account, stale tree, invalid module and published detach block before any write", async () => {
+  for (const scenario of [
+    "account",
+    "tree",
+    "module",
+    "published",
+    "minimums",
+  ]) {
+    const before = editorRaw(),
+      raw = structuredClone(before);
+    let writes = 0;
+    if (scenario === "published") {
+      before.reviewStatus = "published";
+      raw.reviewStatus = "published";
+    }
+    if (scenario === "tree") raw.title = "Changed";
+    if (scenario === "minimums") {
+      before.modules = [];
+      raw.modules = [];
+    }
+    const { client, editor } = editorSetup(
+      {
+        api: {
+          get: async (path) => ({
+            data:
+              path === "/users/me"
+                ? {
+                    ...contentUser,
+                    id: scenario === "account" ? "other" : contentUser.id,
+                  }
+                : path.endsWith("/review")
+                  ? editorReview(raw)
+                  : raw,
+          }),
+          post: () => {
+            writes++;
+          },
+          delete: () => {
+            writes++;
+          },
+        },
+      },
+      before,
+    );
+    const action =
+      scenario === "published"
+        ? { kind: "detach", moduleId: "m0", conceptId: "c0-0" }
+        : scenario === "module"
+          ? { kind: "detach", moduleId: "missing", conceptId: "c0-0" }
+          : scenario === "minimums"
+            ? { kind: "submit" }
+            : { kind: "module", title: "New" };
+    await assert.rejects(client.runEditorAction(editor, action));
+    assert.equal(writes, 0);
+  }
+});
+test("attachment checks fresh own lesson and saves exactly one placement", async () => {
+  let raw = editorRaw();
+  const lesson = {
+      ...raw.modules[0].moduleConcepts[0].concept,
+      id: "new-lesson",
+      title: "New lesson",
+    },
+    calls = [];
+  const { client, data, editor } = editorSetup({
+    api: {
+      get: async (path) => {
+        calls.push(["GET", path]);
+        return {
+          data:
+            path === "/users/me"
+              ? contentUser
+              : path.startsWith("/concepts/")
+                ? lesson
+                : path.endsWith("/review")
+                  ? editorReview(raw)
+                  : raw,
+        };
+      },
+      post: async (path, body) => {
+        calls.push(["POST", path, body]);
+        const placement = {
+          id: "new-placement",
+          moduleId: "m0",
+          conceptId: body.conceptId,
+          orderIndex: 4,
+          concept: lesson,
+        };
+        raw.modules[0].moduleConcepts.push(placement);
+        return { data: placement };
+      },
+    },
+  });
+  const result = await client.runEditorAction(editor, {
+    kind: "attach",
+    moduleId: "m0",
+    lesson: data.parseEditorLesson(lesson, contentUser.id),
+  });
+  assert.equal(result.data.modules[0].lessons.length, 4);
+  assert.equal(calls[3][1], "/concepts/new-lesson");
+  assert.equal(calls[4][1], "/modules/m0/concepts");
+  assert.equal(calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("foreign, changed, already attached lesson cannot be attached", async () => {
+  for (const scenario of ["foreign", "changed", "attached"]) {
+    const raw = editorRaw(),
+      chosen = {
+        ...raw.modules[0].moduleConcepts[0].concept,
+        id: scenario === "attached" ? "c0-0" : "chosen",
+      };
+    let writes = 0;
+    const current = {
+      ...chosen,
+      authorId: scenario === "foreign" ? "other" : chosen.authorId,
+      title: scenario === "changed" ? "Different" : chosen.title,
+    };
+    const { client, data, editor } = editorSetup(
+      {
+        api: {
+          get: async (path) => ({
+            data:
+              path === "/users/me"
+                ? contentUser
+                : path.startsWith("/concepts/")
+                  ? current
+                  : path.endsWith("/review")
+                    ? editorReview(raw)
+                    : raw,
+          }),
+          post: () => {
+            writes++;
+          },
+        },
+      },
+      raw,
+    );
+    await assert.rejects(
+      client.runEditorAction(editor, {
+        kind: "attach",
+        moduleId: "m0",
+        lesson: data.parseEditorLesson(chosen, contentUser.id),
+      }),
+    );
+    assert.equal(writes, 0);
+  }
+});
+test("detach confirms saved absence with one DELETE and keeps other placements", async () => {
+  const raw = editorRaw(),
+    writes = [];
+  const { client, editor } = editorSetup(
+    {
+      api: {
+        get: async (path) => ({
+          data:
+            path === "/users/me"
+              ? contentUser
+              : path.endsWith("/review")
+                ? editorReview(raw)
+                : raw,
+        }),
+        delete: async (path, opts) => {
+          writes.push([path, opts]);
+          raw.modules[0].moduleConcepts.shift();
+          return { data: undefined };
+        },
+      },
+    },
+    raw,
+  );
+  const result = await client.runEditorAction(editor, {
+    kind: "detach",
+    moduleId: "m0",
+    conceptId: "c0-0",
+  });
+  assert.equal(result.data.modules[0].lessons.length, 2);
+  assert.equal(result.data.modules[1].lessons.length, 3);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][0], "/modules/m0/concepts/c0-0");
+});
+test("submit/request/withdraw confirm real lifecycle responses and fresh state", async () => {
+  for (const kind of ["submit", "request-unpublish", "cancel-unpublish"]) {
+    const raw = editorRaw();
+    if (kind !== "submit") raw.reviewStatus = "published";
+    if (kind === "cancel-unpublish") raw.unpublishStatus = "requested";
+    let writes = 0;
+    const { client, editor } = editorSetup(
+      {
+        api: {
+          get: async (path) => ({
+            data:
+              path === "/users/me"
+                ? contentUser
+                : path.endsWith("/review")
+                  ? editorReview(raw)
+                  : raw,
+          }),
+          post: async (path) => {
+            writes++;
+            assert.ok(path.endsWith(`/${kind}`));
+            if (kind === "submit") raw.reviewStatus = "submitted";
+            else
+              raw.unpublishStatus =
+                kind === "request-unpublish" ? "requested" : "none";
+            return { data: raw };
+          },
+        },
+      },
+      raw,
+    );
+    const result = await client.runEditorAction(editor, { kind });
+    assert.equal(writes, 1);
+    assert.ok(result.message);
+    assert.equal(
+      result.data.roadmap.status,
+      kind === "submit" ? "submitted" : "published",
+    );
+  }
+});
+test("write timeout/5xx/malformed ack/missing saved state lock uncertainty; refusals remain definitive", async () => {
+  for (const scenario of [
+    "network",
+    "server",
+    "timeout",
+    "ack",
+    "read",
+    "missing",
+    "denied",
+    "bad",
+  ]) {
+    const raw = editorRaw();
+    let writes = 0;
+    const { client, editor } = editorSetup(
+      {
+        api: {
+          get: async (path) => {
+            if (scenario === "read" && writes) throw new Error("offline");
+            return {
+              data:
+                path === "/users/me"
+                  ? contentUser
+                  : path.endsWith("/review")
+                    ? editorReview(raw)
+                    : raw,
+            };
+          },
+          post: async () => {
+            writes++;
+            if (
+              ["network", "server", "timeout", "denied", "bad"].includes(
+                scenario,
+              )
+            )
+              throw scenario === "network"
+                ? new Error()
+                : {
+                    response: {
+                      status:
+                        scenario === "server"
+                          ? 503
+                          : scenario === "timeout"
+                            ? 408
+                            : scenario === "denied"
+                              ? 403
+                              : 400,
+                    },
+                  };
+            return {
+              data:
+                scenario === "ack"
+                  ? {}
+                  : {
+                      id: "new",
+                      roadmapId: raw.id,
+                      title: "New",
+                      orderIndex: 3,
+                    },
+            };
+          },
+        },
+      },
+      raw,
+    );
+    await assert.rejects(
+      client.runEditorAction(editor, { kind: "module", title: "New" }),
+      (error) => {
+        assert.equal(error.uncertain, !["denied", "bad"].includes(scenario));
+        assert.equal(error.unavailable, scenario === "denied");
+        return true;
+      },
+    );
+    assert.equal(writes, 1);
+  }
+});
+test("editor GUI shows real structure/review, explicit classic lesson destinations and honest load/error states", () => {
+  const { h, editor } = editorSetup(),
+    View = h.load(
+      new URL("../content/editor-view.tsx", import.meta.url),
+    ).RoadmapEditorView;
+  const props = { data: editor, onAction() {}, onSearch() {}, onRefresh() {} };
+  const html = h.render(createElement(View, props));
+  assert.match(html, /9 lesson placements/);
+  assert.match(html, /Before you submit/);
+  assert.match(html, /\/developer\/concepts\/c0-0\/edit/);
+  assert.match(html, /does not generate lessons/);
+  const loading = h.render(
+    createElement(View, { ...props, data: undefined, loading: true }),
+  );
+  assert.match(loading, /Loading your roadmap/);
+  assert.doesNotMatch(loading, /0 modules/);
+  const empty = h.render(
+    createElement(View, { ...props, data: { ...editor, modules: [] } }),
+  );
+  assert.match(empty, /first chapter/);
+  assert.match(empty, /Add at least 3 modules/);
+  const published = h.render(
+    createElement(View, {
+      ...props,
+      data: { ...editor, roadmap: { ...editor.roadmap, status: "published" } },
+    }),
+  );
+  assert.doesNotMatch(published, /Detach Lesson/);
+  assert.match(published, /Request takedown/);
+  const uncertain = h.render(
+    createElement(View, {
+      ...props,
+      error: "Maybe saved",
+      uncertain: true,
+      canWrite: false,
+    }),
+  );
+  assert.match(uncertain, /change isn’t confirmed/);
+  assert.match(uncertain, /disabled=""/);
+});
+test("editor controller deduplicates same-tick actions and pauses stale writes", () => {
+  const { editor } = editorSetup();
+  for (const stale of [false, true]) {
+    const h = roadmapHarness({
+      queries: {
+        "content/editor/own-1": {
+          data: editor,
+          isPending: false,
+          isFetching: false,
+          isError: stale,
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+      },
+    });
+    const view = h
+      .load(new URL("../content/gui-roadmap-editor.tsx", import.meta.url))
+      .GuiRoadmapEditor({ roadmapId: "own-1" }).props.children;
+    view.props.onAction({ kind: "module", title: "New" });
+    view.props.onAction({ kind: "module", title: "New" });
+    assert.equal(
+      h.calls.filter((c) => c[0] === "mutation").length,
+      stale ? 0 : 1,
+    );
+    assert.equal(view.props.canWrite, !stale);
+    assert.ok(h.queryCalls.every((q) => q.retry === false));
+  }
+});
+test("editor uncertainty requires explicit successful recovery and hides access/contract failures", async () => {
+  const { editor } = editorSetup();
+  for (const failed of [false, true]) {
+    const mutationResult = {},
+      h = roadmapHarness({
+        mutationResult,
+        queries: {
+          "content/editor/own-1": {
+            data: editor,
+            isPending: false,
+            isFetching: false,
+            refetch: async () => ({ data: editor, isError: failed }),
+          },
+        },
+        hooks: {
+          useState: (v) => [v, () => {}],
+          useRef: (v) => ({ current: v }),
+        },
+      });
+    const { ContentFailure } = h.load(
+      new URL("../content/content-client.ts", import.meta.url),
+    );
+    mutationResult.error = new ContentFailure("uncertain", true);
+    const view = h
+      .load(new URL("../content/gui-roadmap-editor.tsx", import.meta.url))
+      .GuiRoadmapEditor({ roadmapId: "own-1" }).props.children;
+    assert.equal(view.props.canWrite, false);
+    view.props.onAction({ kind: "submit" });
+    assert.equal(h.calls.length, 0);
+    view.props.onRefresh();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      h.calls.filter((c) => c[0] === "reset-mutation").length,
+      failed ? 0 : 1,
+    );
+  }
+  const h = roadmapHarness({
+    queries: {
+      "content/editor/own-1": {
+        data: editor,
+        isError: true,
+        error: { response: { status: 403 } },
+      },
+    },
+    hooks: { useState: (v) => [v, () => {}], useRef: (v) => ({ current: v }) },
+  });
+  const tree = h
+    .load(new URL("../content/gui-roadmap-editor.tsx", import.meta.url))
+    .GuiRoadmapEditor({ roadmapId: "own-1" });
+  const html = h.render(tree.props.children);
+  assert.match(html, /Cached private content is hidden/);
+  assert.doesNotMatch(html, /Lesson 1/);
+});
+test("checked roadmap changes dismiss an old confirmation without clearing a module draft", () => {
+  const { editor } = editorSetup(),
+    refs = [],
+    updates = [],
+    effects = [];
+  let stateIndex = 0,
+    refIndex = 0,
+    confirmationOpen = false,
+    focusCount = 0;
+  const pendingConfirmation = {
+    action: { kind: "submit" },
+    title: "Submit this roadmap?",
+    description: "Original checked state",
+  };
+  const h = roadmapHarness({
+    hooks: {
+      useState: (initial) => {
+        const index = stateIndex++;
+        return [
+          index === 0
+            ? "Keep my draft"
+            : index === 6 && confirmationOpen
+              ? pendingConfirmation
+              : initial,
+          (value) => updates.push([index, value]),
+        ];
+      },
+      useRef: (initial) => {
+        const index = refIndex++;
+        return refs[index] ?? (refs[index] = { current: initial });
+      },
+      useEffect: (callback) => effects.push(callback),
+    },
+  });
+  const View = h.load(
+    new URL("../content/editor-view.tsx", import.meta.url),
+  ).RoadmapEditorView;
+  const props = { data: editor, onAction() {}, onSearch() {}, onRefresh() {} };
+  View(props);
+  effects.splice(0).forEach((effect) => effect());
+  refs[5].current = { focus: () => focusCount++ };
+  confirmationOpen = true;
+  stateIndex = 0;
+  refIndex = 0;
+  View({ ...props, data: { ...editor, loadedAt: "2026-10-12T18:00:00Z" } });
+  effects.splice(0).forEach((effect) => effect());
+  assert.ok(updates.some(([index, value]) => index === 6 && value === null));
+  assert.ok(!updates.some(([index]) => index === 0));
+  assert.equal(focusCount, 1);
+});
+test("editor mode remains on route without changing learner location and native theme/motion is scoped", () => {
+  const h = roadmapHarness({ mode: { ready: true, isCli: true } });
+  const tree = h
+    .load(new URL("../content/gui-roadmap-editor.tsx", import.meta.url))
+    .RoadmapEditorPage({ roadmapId: "own-1" });
+  tree.props.children[0].props.children.props.onClick();
+  assert.equal(
+    JSON.stringify(h.calls.at(-1)),
+    JSON.stringify(["mode", "gui", { navigate: false }]),
+  );
+  assert.ok(!h.calls.some((c) => c[0] === "location"));
+  const css = readFileSync(
+    new URL("../content/editor.module.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /var\(--gui-primary\)/);
+});
+
+const newLessonDraft = {
+  title: " A clear connection ",
+  content: "  ## One idea\n\nExplain it with a concrete example.\n",
+  difficulty: "medium",
+};
+const createdLessonRaw = {
+  id: "created-lesson",
+  title: newLessonDraft.title.trim(),
+  content: newLessonDraft.content,
+  difficulty: "medium",
+  slug: "a-clear-connection",
+  authorId: contentUser.id,
+  reviewStatus: "pending",
+  draftContent: null,
+  isAiGenerated: false,
+  rejectionReason: null,
+  createdAt: "2026-10-12T00:00:00Z",
+};
+const standaloneRequest = { moduleId: null, roadmapId: null, invalid: false };
+const linkedRequest = { moduleId: "m0", roadmapId: "own-1", invalid: false };
+function newLessonSetup(options = {}, linked = false, raw = editorRaw()) {
+  const h = roadmapHarness(options),
+    data = h.load(new URL("../content/new-lesson-data.ts", import.meta.url)),
+    client = h.load(
+      new URL("../content/new-lesson-client.ts", import.meta.url),
+    );
+  const context = {
+    user: contentUser,
+    request: linked ? linkedRequest : standaloneRequest,
+    loadedAt: "2026-10-12T00:00:00Z",
+    ...(linked
+      ? {
+          target: {
+            editor: h
+              .load(new URL("../content/editor-data.ts", import.meta.url))
+              .parseEditorData(contentUser, raw, editorReview(raw), raw.id),
+            moduleId: "m0",
+          },
+        }
+      : {}),
+  };
+  return { h, data, client, context };
+}
+test("new lesson target params reject repeated, blank, unsafe and incomplete targets", () => {
+  const { data } = newLessonSetup();
+  assert.equal(
+    JSON.stringify(data.lessonTargetRequest({})),
+    JSON.stringify(standaloneRequest),
+  );
+  assert.equal(data.lessonTargetRequest({ moduleId: "m0" }).moduleId, "m0");
+  for (const query of [
+    { moduleId: ["m0", "m1"] },
+    { moduleId: "../m0" },
+    { moduleId: "" },
+    { roadmapId: "own-1" },
+    { moduleId: "m0", roadmapId: ["own-1"] },
+  ])
+    assert.equal(data.lessonTargetRequest(query).invalid, true);
+});
+test("new lesson validation preserves existing limits, international title and raw Markdown", () => {
+  const { data } = newLessonSetup();
+  assert.equal(
+    data.lessonDraftErrors({ ...newLessonDraft, title: "  学习  " }).title,
+    undefined,
+  );
+  assert.ok(data.lessonDraftErrors({ ...newLessonDraft, title: " " }).title);
+  assert.ok(
+    data.lessonDraftErrors({ ...newLessonDraft, title: "x".repeat(201) }).title,
+  );
+  assert.ok(
+    data.lessonDraftErrors({ ...newLessonDraft, content: "Short" }).content,
+  );
+  assert.ok(
+    data.lessonDraftErrors({ ...newLessonDraft, difficulty: "invented" })
+      .difficulty,
+  );
+  assert.equal(data.lessonDraftErrors(newLessonDraft).content, undefined);
+});
+test("creation acknowledgement requires actual owner, body, difficulty, pending manual status and projects metadata only", () => {
+  const { data } = newLessonSetup(),
+    saved = data.parseLessonCreation(
+      createdLessonRaw,
+      contentUser.id,
+      newLessonDraft,
+    );
+  assert.equal(saved.content, undefined);
+  assert.equal(saved.draftContent, undefined);
+  assert.equal(saved.originLabel, "handwritten");
+  for (const patch of [
+    { authorId: "other" },
+    { content: "different text" },
+    { title: "different" },
+    { difficulty: "hard" },
+    { reviewStatus: "approved" },
+    { draftContent: "staged" },
+    { isAiGenerated: true },
+    { originLabel: "ai" },
+    { createdAt: "invalid" },
+  ])
+    assert.throws(() =>
+      data.parseLessonCreation(
+        { ...createdLessonRaw, ...patch },
+        contentUser.id,
+        newLessonDraft,
+      ),
+    );
+  const international = { ...newLessonDraft, title: "学习连接" };
+  const unicodeSaved = data.parseLessonCreation(
+    { ...createdLessonRaw, title: international.title, slug: "" },
+    contentUser.id,
+    international,
+  );
+  assert.equal(unicodeSaved.title, international.title);
+  assert.equal(unicodeSaved.slug, undefined);
+});
+test("legacy module-only links resolve one owned parent; foreign, overdue and duplicate placements refuse", () => {
+  const { data } = newLessonSetup(),
+    raw = editorRaw();
+  assert.equal(
+    data.findOwnedModuleRoadmap(
+      [raw, { ...raw, id: "foreign", createdById: "other" }],
+      contentUser.id,
+      "m0",
+    ),
+    "own-1",
+  );
+  for (const rows of [
+    [],
+    [{ ...raw, createdById: "other" }],
+    [{ ...raw, modules: undefined }],
+    [{ ...raw, deleteEffectiveAt: "2020-01-01T00:00:00Z" }],
+    [raw, raw],
+    [{ ...raw, modules: [{ ...raw.modules[0], roadmapId: "foreign" }] }],
+  ])
+    assert.throws(() =>
+      data.findOwnedModuleRoadmap(rows, contentUser.id, "m0"),
+    );
+});
+test("new lesson entry reads only account without target and guards linked parent with abort/timeout", async () => {
+  const raw = editorRaw(),
+    calls = [],
+    signal = new AbortController().signal;
+  const { client } = newLessonSetup({
+    api: {
+      get: async (path, opts) => {
+        calls.push([path, opts]);
+        return {
+          data:
+            path === "/users/me"
+              ? contentUser
+              : path === "/roadmaps"
+                ? [raw]
+                : path.endsWith("/review")
+                  ? editorReview(raw)
+                  : raw,
+        };
+      },
+      post: () => assert.fail("no entry write"),
+    },
+  });
+  await client.loadNewLessonContext(standaloneRequest, signal);
+  assert.equal(calls.length, 1);
+  await client.loadNewLessonContext(
+    { moduleId: "m0", roadmapId: null, invalid: false },
+    signal,
+  );
+  assert.ok(calls.some((c) => c[0] === "/roadmaps"));
+  assert.ok(
+    calls.every((c) => c[1].signal === signal && c[1].timeout === 12000),
+  );
+  assert.ok(calls.at(-1)[0].endsWith("/own-1"));
+});
+test("standalone lesson creation uses one POST after fresh identity and preserves body whitespace", async () => {
+  const calls = [],
+    { client, context } = newLessonSetup({
+      api: {
+        get: async (path) => {
+          calls.push(["GET", path]);
+          return { data: contentUser };
+        },
+        post: async (path, body, opts) => {
+          calls.push(["POST", path, body, opts]);
+          return { data: createdLessonRaw };
+        },
+      },
+    });
+  const saved = await client.createNewLesson(context, newLessonDraft);
+  assert.equal(saved.attachment, "none");
+  assert.equal(saved.lesson.id, "created-lesson");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1][2].title, newLessonDraft.title.trim());
+  assert.equal(calls[1][2].content, newLessonDraft.content);
+  assert.equal(calls[1][2].isAiGenerated, undefined);
+  assert.equal(calls[1][3].timeout, 12000);
+});
+test("changed identity, parent snapshot and invalid drafts never send creation", async () => {
+  for (const scenario of ["account", "parent", "invalid"]) {
+    const raw = editorRaw(),
+      current = structuredClone(raw);
+    if (scenario === "parent") current.modules[0].title = "Changed";
+    let writes = 0;
+    const { client, context } = newLessonSetup(
+      {
+        api: {
+          get: async (path) => ({
+            data:
+              path === "/users/me"
+                ? {
+                    ...contentUser,
+                    id: scenario === "account" ? "other" : contentUser.id,
+                  }
+                : path.endsWith("/review")
+                  ? editorReview(current)
+                  : current,
+          }),
+          post: () => {
+            writes++;
+          },
+        },
+      },
+      scenario === "parent",
+      raw,
+    );
+    await assert.rejects(
+      client.createNewLesson(
+        context,
+        scenario === "invalid"
+          ? { ...newLessonDraft, content: "" }
+          : newLessonDraft,
+      ),
+    );
+    assert.equal(writes, 0);
+  }
+});
+test("linked creation sends one create and one guarded attach, then confirms saved placement", async () => {
+  const raw = editorRaw(),
+    writes = [];
+  const { client, context } = newLessonSetup(
+    {
+      api: {
+        get: async (path) => ({
+          data:
+            path === "/users/me"
+              ? contentUser
+              : path.startsWith("/concepts/")
+                ? createdLessonRaw
+                : path.endsWith("/review")
+                  ? editorReview(raw)
+                  : raw,
+        }),
+        post: async (path, body) => {
+          writes.push([path, body]);
+          if (path === "/concepts") return { data: createdLessonRaw };
+          const placement = {
+            id: "p-new",
+            moduleId: "m0",
+            conceptId: body.conceptId,
+            orderIndex: 4,
+            concept: createdLessonRaw,
+          };
+          raw.modules[0].moduleConcepts.push(placement);
+          return { data: placement };
+        },
+      },
+    },
+    true,
+    raw,
+  );
+  const result = await client.createNewLesson(context, newLessonDraft);
+  assert.equal(result.attachment, "attached");
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0][0], "/concepts");
+  assert.equal(writes[1][0], "/modules/m0/concepts");
+  assert.equal(writes[1][1].conceptId, "created-lesson");
+});
+test("attach refusal/timeout/malformed response preserve the confirmed lesson and never recreate", async () => {
+  for (const scenario of ["refused", "timeout", "ack"]) {
+    const raw = editorRaw(),
+      writes = [];
+    const { client, context } = newLessonSetup(
+      {
+        api: {
+          get: async (path) => ({
+            data:
+              path === "/users/me"
+                ? contentUser
+                : path.startsWith("/concepts/")
+                  ? createdLessonRaw
+                  : path.endsWith("/review")
+                    ? editorReview(raw)
+                    : raw,
+          }),
+          post: async (path) => {
+            writes.push(path);
+            if (path === "/concepts") return { data: createdLessonRaw };
+            if (scenario === "ack") return { data: {} };
+            throw scenario === "timeout"
+              ? new Error("timeout")
+              : { response: { status: 400 } };
+          },
+        },
+      },
+      true,
+      raw,
+    );
+    const result = await client.createNewLesson(context, newLessonDraft);
+    assert.equal(result.lesson.id, "created-lesson");
+    assert.equal(result.attachment, "unconfirmed");
+    assert.equal(result.uncertain, scenario !== "refused");
+    assert.equal(writes.filter((p) => p === "/concepts").length, 1);
+    assert.equal(writes.length, 2);
+  }
+});
+test("uncertain creation never attaches or retries; definitive refusal remains distinguishable", async () => {
+  for (const scenario of ["network", "5xx", "408", "ack", "refused"]) {
+    let writes = 0;
+    const { client, context } = newLessonSetup({
+      api: {
+        get: async () => ({ data: contentUser }),
+        post: async () => {
+          writes++;
+          if (scenario === "ack") return { data: { id: "unverified" } };
+          throw scenario === "network"
+            ? new Error()
+            : {
+                response: {
+                  status:
+                    scenario === "5xx" ? 503 : scenario === "408" ? 408 : 400,
+                },
+              };
+        },
+      },
+    });
+    await assert.rejects(
+      client.createNewLesson(context, newLessonDraft),
+      (error) => {
+        assert.equal(error.uncertain, scenario !== "refused");
+        return true;
+      },
+    );
+    assert.equal(writes, 1);
+  }
+});
+test("saved-state checks reconcile known attachment without writes and search possible previous saves using metadata only", async () => {
+  const raw = editorRaw();
+  raw.modules[0].moduleConcepts.push({
+    id: "p-new",
+    moduleId: "m0",
+    conceptId: createdLessonRaw.id,
+    orderIndex: 4,
+    concept: createdLessonRaw,
+  });
+  const calls = [],
+    { client, data, context } = newLessonSetup(
+      {
+        api: {
+          get: async (path) => {
+            calls.push(path);
+            return {
+              data:
+                path === "/users/me"
+                  ? contentUser
+                  : path.startsWith("/concepts?")
+                    ? [
+                        createdLessonRaw,
+                        {
+                          ...createdLessonRaw,
+                          id: "foreign",
+                          authorId: "other",
+                        },
+                      ]
+                    : path.startsWith("/concepts/")
+                      ? createdLessonRaw
+                      : path.endsWith("/review")
+                        ? editorReview(raw)
+                        : raw,
+            };
+          },
+          post: () => assert.fail("no recovery writes"),
+        },
+      },
+      true,
+      raw,
+    );
+  const saved = data.parseLessonCreation(
+    createdLessonRaw,
+    contentUser.id,
+    newLessonDraft,
+  );
+  assert.equal(
+    (
+      await client.checkNewLessonState(context, newLessonDraft, {
+        lesson: saved,
+        attachment: "unconfirmed",
+        uncertain: true,
+      })
+    ).result.attachment,
+    "attached",
+  );
+  const checked = await client.checkNewLessonState(
+    { ...context, request: standaloneRequest, target: undefined },
+    newLessonDraft,
+  );
+  assert.equal(checked.candidates.length, 1);
+  assert.equal(checked.candidates[0].content, undefined);
+  assert.ok(
+    calls.at(-1).includes(encodeURIComponent(newLessonDraft.title.trim())),
+  );
+});
+test("a target lost after creation keeps the owned saved lesson accessible; changed account hides it", async () => {
+  for (const changedAccount of [false, true]) {
+    let accountReads = 0;
+    const { client, data, context } = newLessonSetup(
+      {
+        api: {
+          get: async (path) => {
+            if (path === "/users/me") {
+              accountReads++;
+              return {
+                data: {
+                  ...contentUser,
+                  id:
+                    changedAccount && accountReads > 1
+                      ? "other"
+                      : contentUser.id,
+                },
+              };
+            }
+            if (path.startsWith("/concepts/"))
+              return { data: createdLessonRaw };
+            throw { response: { status: 404 } };
+          },
+        },
+      },
+      true,
+    );
+    const result = {
+      lesson: data.parseLessonCreation(
+        createdLessonRaw,
+        contentUser.id,
+        newLessonDraft,
+      ),
+      attachment: "unconfirmed",
+    };
+    if (changedAccount)
+      await assert.rejects(
+        client.checkNewLessonState(context, newLessonDraft, result),
+        (error) => error.unavailable === true,
+      );
+    else {
+      const checked = await client.checkNewLessonState(
+        context,
+        newLessonDraft,
+        result,
+      );
+      assert.equal(checked.result.lesson.id, "created-lesson");
+      assert.equal(checked.result.targetUnavailable, true);
+      assert.equal(checked.context.target, undefined);
+    }
+  }
+});
+test("creation followed by a lost target retains the confirmed lesson without sending attachment", async () => {
+  const raw = editorRaw();
+  let created = false,
+    writes = 0;
+  const { client, context } = newLessonSetup(
+    {
+      api: {
+        get: async (path) => {
+          if (path === "/users/me") return { data: contentUser };
+          if (created) throw { response: { status: 404 } };
+          return { data: path.endsWith("/review") ? editorReview(raw) : raw };
+        },
+        post: async (path) => {
+          writes++;
+          assert.equal(path, "/concepts");
+          created = true;
+          return { data: createdLessonRaw };
+        },
+      },
+    },
+    true,
+    raw,
+  );
+  const result = await client.createNewLesson(context, newLessonDraft);
+  assert.equal(writes, 1);
+  assert.equal(result.lesson.id, "created-lesson");
+  assert.equal(result.targetUnavailable, true);
+  assert.equal(result.unavailable, false);
+});
+test("definitive access errors recover only for the same checked author", async () => {
+  const { context } = newLessonSetup(),
+    key = ["content", "new-lesson", null, null, false].join("/");
+  for (const changed of [false, true]) {
+    const h = roadmapHarness({
+      mutationResult: { error: { response: { status: 403 } } },
+      queries: {
+        [key]: {
+          data: context,
+          isPending: false,
+          isFetching: false,
+          refetch: async () => ({
+            data: changed
+              ? { ...context, user: { ...contentUser, id: "other" } }
+              : context,
+            isError: false,
+          }),
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+      },
+    });
+    const unavailable = h
+      .load(new URL("../content/gui-new-lesson.tsx", import.meta.url))
+      .GuiNewLesson({ request: standaloneRequest }).props.children;
+    unavailable.props.children[1].props.onClick();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      h.calls.filter((c) => c[0] === "reset-mutation").length,
+      changed ? 0 : 1,
+    );
+  }
+});
+test("new lesson GUI uses native labelled writing/difficulty and honest loading, result and partial-save actions", () => {
+  const { h, data, context } = newLessonSetup(),
+    View = h.load(
+      new URL("../content/new-lesson-view.tsx", import.meta.url),
+    ).NewLessonView,
+    props = {
+      context,
+      onCreate() {},
+      onAttach() {},
+      onCheck() {},
+      onStartAnother() {},
+    };
+  const html = h.render(createElement(View, props));
+  assert.match(html, /name="lesson-difficulty"/);
+  assert.match(html, /textarea/);
+  assert.match(html, /Save private lesson/);
+  assert.match(html, /without autosave/);
+  const loading = h.render(
+    createElement(View, { ...props, context: undefined, loading: true }),
+  );
+  assert.match(loading, /Preparing lesson authoring/);
+  assert.match(loading, /disabled=""/);
+  assert.match(loading, /Checking placement/);
+  assert.doesNotMatch(loading, /This lesson is created without a module/);
+  const result = {
+    lesson: data.parseLessonCreation(
+      createdLessonRaw,
+      contentUser.id,
+      newLessonDraft,
+    ),
+    attachment: "unconfirmed",
+    issue: "Attach refused",
+  };
+  const partial = h.render(
+    createElement(View, {
+      ...props,
+      result,
+      canCreate: false,
+      canAttach: true,
+    }),
+  );
+  assert.match(partial, /Lesson created; attachment isn’t confirmed/);
+  assert.match(partial, /Attach saved lesson/);
+  assert.doesNotMatch(partial, />Save private lesson</);
+  assert.match(partial, /Continue editing/);
+  assert.match(partial, /readonly=""/i);
+});
+test("new lesson preview uses the safe reader renderer with inert HTML and explicit external-image loading", () => {
+  let stateIndex = 0;
+  const { context } = newLessonSetup(),
+    h = roadmapHarness({
+      hooks: {
+        useState: (initial) => {
+          const index = stateIndex++;
+          return [
+            index === 1
+              ? "## Draft heading\n\n<script>alert(1)</script>\n\n![Sample](https://example.test/sample.png)\n\n[Bad](javascript:alert(1))"
+              : index === 3
+                ? "preview"
+                : initial,
+            () => {},
+          ];
+        },
+      },
+    });
+  const View = h.load(
+    new URL("../content/new-lesson-view.tsx", import.meta.url),
+  ).NewLessonView;
+  const html = h.render(
+    createElement(View, {
+      context,
+      onCreate() {},
+      onAttach() {},
+      onCheck() {},
+      onStartAnother() {},
+    }),
+  );
+  assert.match(html, /new-lesson-preview-section/);
+  assert.match(html, /Local preview/);
+  assert.match(html, /Load image/);
+  assert.doesNotMatch(html, /<script|<img|href="javascript:/);
+});
+test("new lesson controller deduplicates and pauses stale writes while keeping module query routing local", () => {
+  const { context } = newLessonSetup(),
+    key = ["content", "new-lesson", null, null, false].join("/");
+  for (const stale of [false, true]) {
+    const h = roadmapHarness({
+        queries: {
+          [key]: {
+            data: context,
+            isPending: false,
+            isFetching: false,
+            isError: stale,
+          },
+        },
+        hooks: {
+          useState: (v) => [v, () => {}],
+          useRef: (v) => ({ current: v }),
+        },
+      }),
+      view = h
+        .load(new URL("../content/gui-new-lesson.tsx", import.meta.url))
+        .GuiNewLesson({ request: standaloneRequest }).props.children;
+    view.props.onCreate(newLessonDraft);
+    view.props.onCreate(newLessonDraft);
+    assert.equal(
+      h.calls.filter((c) => c[0] === "mutation").length,
+      stale ? 0 : 1,
+    );
+    assert.equal(view.props.canCreate, !stale);
+    assert.equal(h.queryCalls[0].retry, false);
+  }
+  const mode = roadmapHarness({ mode: { ready: true, isCli: true } }),
+    gate = mode
+      .load(new URL("../content/gui-new-lesson.tsx", import.meta.url))
+      .NewLessonPage({ request: linkedRequest });
+  gate.props.children[0].props.children.props.onClick();
+  assert.equal(
+    JSON.stringify(mode.calls.at(-1)),
+    JSON.stringify(["mode", "gui", { navigate: false }]),
+  );
+  assert.ok(!mode.calls.some((c) => c[0] === "location"));
+  assert.match(
+    readFileSync(
+      new URL("../content/editor-view.tsx", import.meta.url),
+      "utf8",
+    ),
+    /moduleId=\$\{encodeURIComponent\(m.id\)\}&roadmapId=/,
+  );
+});
+test("unconfirmed creation unlocks only after successful explicit check using the original submitted title", async () => {
+  const { context } = newLessonSetup(),
+    key = ["content", "new-lesson", null, null, false].join("/");
+  for (const failed of [false, true]) {
+    const refs = [],
+      mutationResult = {},
+      calls = [];
+    let refIndex = 0;
+    const h = roadmapHarness({
+      mutationResult,
+      queries: {
+        [key]: { data: context, isPending: false, isFetching: false },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => {
+          const i = refIndex++;
+          return refs[i] ?? (refs[i] = { current: v });
+        },
+      },
+      api: {
+        get: async (path) => {
+          calls.push(path);
+          if (failed) throw new Error("offline");
+          return {
+            data: path === "/users/me" ? contentUser : [createdLessonRaw],
+          };
+        },
+      },
+    });
+    const controller = h.load(
+        new URL("../content/gui-new-lesson.tsx", import.meta.url),
+      ),
+      before = controller.GuiNewLesson({ request: standaloneRequest }).props
+        .children;
+    before.props.onCreate(newLessonDraft);
+    h.calls.find((c) => c[0] === "mutation")[1].onSettled();
+    mutationResult.error = new (h.load(
+      new URL("../content/content-client.ts", import.meta.url),
+    ).ContentFailure)("uncertain", true);
+    refIndex = 0;
+    const after = controller.GuiNewLesson({ request: standaloneRequest }).props
+      .children;
+    assert.equal(after.props.canCreate, false);
+    after.props.onCheck({ ...newLessonDraft, title: "Changed after timeout" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      h.calls.filter((c) => c[0] === "reset-mutation").length,
+      failed ? 0 : 1,
+    );
+    if (!failed)
+      assert.equal(
+        calls.at(-1),
+        `/concepts?search=${encodeURIComponent(newLessonDraft.title.trim())}`,
+      );
+  }
+});
+
+function editLessonRaw(patch = {}) {
+  return {
+    ...createdLessonRaw,
+    id: "editable",
+    title: "Clear connections",
+    content:
+      "A branch points to a commit. It is a movable reference to a point in history.",
+    draftContent: null,
+    reviewStatus: "approved",
+    updatedAt: "2026-10-12T01:00:00Z",
+    appearsIn: [
+      {
+        moduleConceptId: "placement-1",
+        moduleId: "module-1",
+        roadmapId: "roadmap-1",
+        moduleTitle: "Reading history",
+        roadmapTitle: "Version control",
+      },
+    ],
+    ...patch,
+  };
+}
+function editLessonSetup(options = {}, raw = editLessonRaw()) {
+  const h = roadmapHarness(options),
+    data = h.load(new URL("../content/edit-lesson-data.ts", import.meta.url)),
+    client = h.load(
+      new URL("../content/edit-lesson-client.ts", import.meta.url),
+    );
+  return {
+    h,
+    data,
+    client,
+    before: data.parseEditLessonData(raw, contentUser, raw.id),
+  };
+}
+test("lesson edit projection requires owner/admin, complete body/draft/review and safe placement data", () => {
+  const { data, before } = editLessonSetup();
+  assert.equal(before.lesson.media, undefined);
+  assert.equal(before.lesson.slug, undefined);
+  for (const patch of [
+    { id: "other" },
+    { authorId: "other" },
+    { draftContent: undefined },
+    { draftContent: {} },
+    { content: null },
+    { reviewStatus: "published" },
+    { difficulty: "unknown" },
+    { rejectionReason: undefined },
+    { isAiGenerated: undefined },
+    { updatedAt: "bad" },
+    { appearsIn: undefined },
+    { appearsIn: [...editLessonRaw().appearsIn, ...editLessonRaw().appearsIn] },
+  ])
+    assert.throws(() =>
+      data.parseEditLessonData(editLessonRaw(patch), contentUser, "editable"),
+    );
+  assert.throws(() =>
+    data.parseEditLessonData(
+      editLessonRaw({ authorId: null }),
+      contentUser,
+      "editable",
+    ),
+  );
+  for (const authorId of ["other", null])
+    assert.equal(
+      data.parseEditLessonData(
+        editLessonRaw({ authorId }),
+        { ...contentUser, role: "admin" },
+        "editable",
+      ).lesson.authorId,
+      authorId,
+    );
+});
+test("lesson editing prefers even an empty staged draft and uses update rather than creation validation", () => {
+  const { data } = editLessonSetup();
+  assert.equal(data.editableBody(editLessonRaw({ draftContent: "" })), "");
+  assert.equal(
+    data.editableBody(editLessonRaw({ draftContent: "pending" })),
+    "pending",
+  );
+  assert.equal(
+    data.lessonEditError({ kind: "body", content: "  x\n" }),
+    undefined,
+  );
+  assert.match(data.lessonEditError({ kind: "body", content: " \n " }), /body/);
+  assert.match(
+    data.lessonEditError({ kind: "details", title: "", difficulty: "medium" }),
+    /title/,
+  );
+  assert.match(
+    data.lessonEditError({
+      kind: "details",
+      title: "x",
+      difficulty: "unknown",
+    }),
+    /Choose/,
+  );
+  assert.equal(
+    data.lessonEditError({
+      kind: "details",
+      title: " 分支 ",
+      difficulty: "hard",
+    }),
+    undefined,
+  );
+});
+test("lesson edit entry is abortable, timed and read-only with fresh account checked before lesson", async () => {
+  const calls = [],
+    signal = new AbortController().signal;
+  const { client } = editLessonSetup({
+    api: {
+      get: async (path, options) => {
+        calls.push([path, options]);
+        return { data: path === "/users/me" ? contentUser : editLessonRaw() };
+      },
+      patch: () => assert.fail("entry writes"),
+    },
+  });
+  await client.loadEditLesson("editable", signal);
+  assert.deepEqual(
+    calls.map((c) => c[0]),
+    ["/users/me", "/concepts/editable"],
+  );
+  for (const [, options] of calls) {
+    assert.equal(options.signal, signal);
+    assert.equal(options.timeout, 12000);
+  }
+  await assert.rejects(client.loadEditLesson("../other"), /invalid/);
+  assert.equal(calls.length, 2);
+});
+test("lesson edit preflight blocks changed account, role, body, draft, review, update stamp and placement before PATCH", async () => {
+  for (const scenario of [
+    "account",
+    "role",
+    "body",
+    "draft",
+    "review",
+    "stamp",
+    "placement",
+    "access",
+  ]) {
+    let reads = 0;
+    const { client, before } = editLessonSetup({
+      api: {
+        get: async (path) => {
+          reads++;
+          if (scenario === "access") throw { response: { status: 403 } };
+          return {
+            data:
+              path === "/users/me"
+                ? {
+                    ...contentUser,
+                    ...(scenario === "account"
+                      ? { id: "other" }
+                      : scenario === "role"
+                        ? { role: "admin" }
+                        : {}),
+                  }
+                : editLessonRaw(
+                    scenario === "body"
+                      ? { content: "changed" }
+                      : scenario === "draft"
+                        ? { draftContent: "new draft" }
+                        : scenario === "review"
+                          ? { reviewStatus: "pending" }
+                          : scenario === "stamp"
+                            ? { updatedAt: "2026-10-12T02:00:00Z" }
+                            : scenario === "placement"
+                              ? { appearsIn: [] }
+                              : {},
+                  ),
+          };
+        },
+        patch: () => assert.fail(`no ${scenario} write`),
+      },
+    });
+    await assert.rejects(
+      client.saveLessonEdit(before, {
+        kind: "body",
+        content: "A new explanation",
+      }),
+      (error) => error.uncertain === false,
+    );
+    assert.equal(
+      reads,
+      ["account", "role", "access"].includes(scenario) ? 1 : 2,
+    );
+  }
+});
+test("details save sends one metadata-only PATCH and confirms a second account/lesson read", async () => {
+  const calls = [],
+    action = { kind: "details", title: " 分支 ", difficulty: "hard" };
+  let raw = editLessonRaw();
+  const { client, before } = editLessonSetup({
+    api: {
+      get: async (path) => {
+        calls.push(["GET", path]);
+        return { data: path === "/users/me" ? contentUser : raw };
+      },
+      patch: async (path, body, options) => {
+        calls.push(["PATCH", path, body, options]);
+        raw = {
+          ...raw,
+          title: body.title,
+          difficulty: body.difficulty,
+          updatedAt: "2026-10-12T02:00:00Z",
+        };
+        return { data: raw };
+      },
+    },
+  });
+  const result = await client.saveLessonEdit(before, action);
+  assert.equal(result.outcome, "details");
+  assert.equal(result.data.lesson.title, "分支");
+  const patches = calls.filter((c) => c[0] === "PATCH");
+  assert.equal(patches.length, 1);
+  assert.equal(
+    JSON.stringify(patches[0][2]),
+    JSON.stringify({ title: "分支", difficulty: "hard" }),
+  );
+  assert.equal(patches[0][3].timeout, 12000);
+  assert.deepEqual(
+    calls.map((c) => c[0]),
+    ["GET", "GET", "PATCH", "GET", "GET"],
+  );
+  assert.equal(result.data.lesson.content, before.lesson.content);
+});
+test("body saves confirm staged rewrites, immediate small edits with old draft kept, and nonlive pending resets", async () => {
+  for (const scenario of ["staged", "small", "pending"]) {
+    const original = editLessonRaw(
+      scenario === "small"
+        ? { draftContent: "An older staged rewrite" }
+        : scenario === "pending"
+          ? { reviewStatus: "rejected", rejectionReason: "Add examples" }
+          : {},
+    );
+    const action = {
+      kind: "body",
+      content:
+        scenario === "small"
+          ? `${original.content}!`
+          : "## Rewritten explanation\n\n" +
+            "A completely different explanation with examples. ".repeat(4),
+    };
+    let raw = original,
+      patches = 0;
+    const { client, before } = editLessonSetup(
+      {
+        api: {
+          get: async (path) => ({
+            data: path === "/users/me" ? contentUser : raw,
+          }),
+          patch: async (path, body) => {
+            patches++;
+            assert.equal(
+              JSON.stringify(body),
+              JSON.stringify({ content: action.content }),
+            );
+            raw = {
+              ...raw,
+              updatedAt: "2026-10-12T02:00:00Z",
+              ...(scenario === "staged"
+                ? { draftContent: body.content }
+                : { content: body.content }),
+              ...(scenario === "pending"
+                ? { reviewStatus: "pending", rejectionReason: null }
+                : {}),
+            };
+            return { data: raw };
+          },
+        },
+      },
+      original,
+    );
+    const result = await client.saveLessonEdit(before, action);
+    assert.equal(patches, 1);
+    assert.equal(result.outcome, scenario === "staged" ? "draft" : "body");
+    assert.equal(result.data.lesson.title, original.title);
+    assert.equal(result.data.lesson.difficulty, original.difficulty);
+    assert.equal(
+      scenario === "staged"
+        ? result.data.lesson.draftContent
+        : result.data.lesson.content,
+      action.content,
+    );
+    if (scenario === "small")
+      assert.equal(result.data.lesson.draftContent, original.draftContent);
+    if (scenario === "pending")
+      assert.equal(result.data.lesson.rejectionReason, null);
+  }
+});
+test("edit ACK must confirm the requested branch and preserve other fields and manual origin", () => {
+  const { data, before } = editLessonSetup();
+  const details = { kind: "details", title: "New title", difficulty: "hard" },
+    ack = editLessonRaw({ title: "New title", difficulty: "hard" });
+  for (const patch of [
+    { title: "Old" },
+    { difficulty: "medium" },
+    { content: "Other" },
+    { draftContent: "Other" },
+    { reviewStatus: "pending" },
+    { isAiGenerated: true },
+    { authorId: "other" },
+  ])
+    assert.throws(() =>
+      data.confirmLessonEdit({ ...ack, ...patch }, before, details),
+    );
+  const body = { kind: "body", content: "A changed long body. ".repeat(10) },
+    staged = editLessonRaw({ draftContent: body.content });
+  assert.equal(data.confirmLessonEdit(staged, before, body).outcome, "draft");
+  for (const patch of [
+    { draftContent: "Other" },
+    { title: "Other" },
+    { difficulty: "hard" },
+    { reviewStatus: "pending" },
+    { content: "Other" },
+  ])
+    assert.throws(() =>
+      data.confirmLessonEdit({ ...staged, ...patch }, before, body),
+    );
+});
+test("edit transport failures never retry a PATCH and distinguish unknown outcomes from refusals", async () => {
+  for (const status of [undefined, 408, 500, 503, 400, 403, 404, 422, 429]) {
+    let patches = 0;
+    const { client, before } = editLessonSetup({
+      api: {
+        get: async (path) => ({
+          data: path === "/users/me" ? contentUser : editLessonRaw(),
+        }),
+        patch: async () => {
+          patches++;
+          throw status ? { response: { status } } : new Error("timeout");
+        },
+      },
+    });
+    await assert.rejects(
+      client.saveLessonEdit(before, {
+        kind: "details",
+        title: "New",
+        difficulty: "hard",
+      }),
+      (error) =>
+        error.uncertain === (!status || status === 408 || status >= 500) &&
+        error.unavailable === [403, 404].includes(status),
+    );
+    assert.equal(patches, 1);
+  }
+});
+test("edit malformed ACK, failed reread or mismatched reread stay unconfirmed after one PATCH", async () => {
+  for (const scenario of ["ack", "read", "mismatch", "account"]) {
+    let wrote = false,
+      patches = 0;
+    const action = { kind: "details", title: "New", difficulty: "hard" },
+      ack = editLessonRaw({ title: "New", difficulty: "hard" });
+    const { client, before } = editLessonSetup({
+      api: {
+        get: async (path) => {
+          if (wrote && scenario === "read") throw new Error("offline");
+          return {
+            data:
+              path === "/users/me"
+                ? {
+                    ...contentUser,
+                    ...(wrote && scenario === "account" ? { id: "other" } : {}),
+                  }
+                : wrote
+                  ? scenario === "mismatch"
+                    ? editLessonRaw({ ...ack, title: "Changed elsewhere" })
+                    : ack
+                  : editLessonRaw(),
+          };
+        },
+        patch: async () => {
+          wrote = true;
+          patches++;
+          return { data: scenario === "ack" ? { id: "editable" } : ack };
+        },
+      },
+    });
+    await assert.rejects(
+      client.saveLessonEdit(before, action),
+      (error) =>
+        error.uncertain === true &&
+        error.unavailable === (scenario === "account"),
+    );
+    assert.equal(patches, 1);
+  }
+});
+test("GUI editor opens the pending draft, offers checked body comparison, and scopes admin/no-placement states", () => {
+  const raw = editLessonRaw({
+      draftContent: "Pending rewrite for a clearer lesson",
+    }),
+    { h, before } = editLessonSetup({}, raw);
+  const View = h.load(
+      new URL("../content/edit-lesson-view.tsx", import.meta.url),
+    ).EditLessonView,
+    props = { data: before, onSave() {}, onCheck() {} };
+  const html = h.render(createElement(View, props));
+  assert.match(html, /Pending rewrite for a clearer lesson<\/textarea>/);
+  assert.match(html, /Compare the saved body/);
+  assert.match(html, /Compare the pending draft/);
+  assert.match(html, /name="edit-lesson-difficulty"/);
+  assert.match(html, /save keeps the body and review state/);
+  assert.match(html, /Review body save/);
+  assert.match(html, /without autosave/);
+  const admin = h.render(
+    createElement(View, {
+      ...props,
+      data: {
+        ...before,
+        user: { ...contentUser, role: "admin" },
+        lesson: { ...before.lesson, authorId: null },
+        placements: [],
+      },
+    }),
+  );
+  assert.match(admin, /Editing as an administrator/);
+  assert.match(admin, /no module placements/);
+});
+test("GUI edit rechecks preserve local text until explicit confirmed replacement and body saves only body", () => {
+  const states = [],
+    refs = [];
+  let stateIndex = 0,
+    refIndex = 0;
+  const { h, before } = editLessonSetup({
+    hooks: {
+      useState: (initial) => {
+        const i = stateIndex++;
+        if (!(i in states)) states[i] = initial;
+        return [
+          states[i],
+          (value) => {
+            states[i] = typeof value === "function" ? value(states[i]) : value;
+          },
+        ];
+      },
+      useRef: (initial) => {
+        const i = refIndex++;
+        return refs[i] ?? (refs[i] = { current: initial });
+      },
+      useEffect() {},
+    },
+  });
+  const View = h.load(
+      new URL("../content/edit-lesson-view.tsx", import.meta.url),
+    ).EditLessonView,
+    saves = [];
+  const render = (data) => {
+    stateIndex = 0;
+    refIndex = 0;
+    return View({ data, onSave: (action) => saves.push(action), onCheck() {} });
+  };
+  let tree = render(before);
+  walk(tree, (n) => n.props.id === "edit-lesson-title")[0].props.onChange({
+    target: { value: "Local title" },
+  });
+  walk(tree, (n) => n.props.id === "edit-lesson-body")[0].props.onChange({
+    target: { value: "Local body with an example" },
+  });
+  const checked = {
+    ...before,
+    lesson: {
+      ...before.lesson,
+      title: "New checked title",
+      draftContent: "Checked pending draft",
+    },
+  };
+  tree = render(checked);
+  assert.equal(
+    walk(tree, (n) => n.props.id === "edit-lesson-title")[0].props.value,
+    "Local title",
+  );
+  assert.equal(
+    walk(tree, (n) => n.props.id === "edit-lesson-body")[0].props.value,
+    "Local body with an example",
+  );
+  walk(tree, (n) => n.type === "form")[1].props.onSubmit({
+    preventDefault() {},
+  });
+  tree = render(checked);
+  walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Save body text",
+  )[0].props.onClick();
+  assert.equal(
+    JSON.stringify(saves[0]),
+    JSON.stringify({ kind: "body", content: "Local body with an example" }),
+  );
+  tree = render(checked);
+  walk(
+    tree,
+    (n) =>
+      n.type === "button" &&
+      n.props.children === "Use checked version in the form",
+  )[0].props.onClick({ currentTarget: { focus() {} } });
+  tree = render(checked);
+  walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Use checked version",
+  )[0].props.onClick();
+  tree = render(checked);
+  assert.equal(
+    walk(tree, (n) => n.props.id === "edit-lesson-title")[0].props.value,
+    "New checked title",
+  );
+  assert.equal(
+    walk(tree, (n) => n.props.id === "edit-lesson-body")[0].props.value,
+    "Checked pending draft",
+  );
+});
+test("GUI edit controller deduplicates, pauses stale/failed writes, and keeps appearance switch on route", () => {
+  const { before } = editLessonSetup(),
+    key = "content/lesson-edit/editable";
+  for (const scenario of ["ready", "fetching", "stale"]) {
+    const h = roadmapHarness({
+      queries: {
+        [key]: {
+          data: before,
+          isPending: false,
+          isFetching: scenario === "fetching",
+          isError: scenario === "stale",
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+      },
+    });
+    const view = h
+      .load(new URL("../content/gui-edit-lesson.tsx", import.meta.url))
+      .GuiEditLesson({ id: "editable" }).props.children;
+    view.props.onSave({ kind: "body", content: "Local writing" });
+    view.props.onSave({ kind: "body", content: "Local writing" });
+    assert.equal(
+      h.calls.filter((c) => c[0] === "mutation").length,
+      scenario === "ready" ? 1 : 0,
+    );
+    assert.equal(h.queryCalls[0].retry, false);
+    assert.equal(h.queryCalls[0].refetchOnWindowFocus, false);
+  }
+  const h = roadmapHarness({ mode: { ready: true, isCli: true } }),
+    gate = h
+      .load(new URL("../content/gui-edit-lesson.tsx", import.meta.url))
+      .EditLessonPage({ id: "editable" });
+  gate.props.children[0].props.children.props.onClick();
+  assert.equal(
+    JSON.stringify(h.calls.at(-1)),
+    JSON.stringify(["mode", "gui", { navigate: false }]),
+  );
+  assert.ok(!h.calls.some((c) => c[0] === "location"));
+});
+test("body already matching the checked live text needs no repeat save even when an older draft remains", () => {
+  let stateIndex = 0;
+  const { h, before } = editLessonSetup(
+    {
+      hooks: {
+        useState: (initial) => [
+          stateIndex++ === 2 ? editLessonRaw().content : initial,
+          () => {},
+        ],
+      },
+    },
+    editLessonRaw({ draftContent: "An older draft remains pending" }),
+  );
+  const View = h.load(
+    new URL("../content/edit-lesson-view.tsx", import.meta.url),
+  ).EditLessonView;
+  const html = h.render(
+    createElement(View, {
+      data: before,
+      onSave() {},
+      onCheck() {},
+      result: {
+        data: before,
+        action: {
+          kind: "details",
+          title: before.lesson.title,
+          difficulty: before.lesson.difficulty,
+        },
+        outcome: "details",
+        message: "Lesson details saved",
+      },
+    }),
+  );
+  assert.match(html, /This text matches the checked saved body/);
+  const bodySave = [
+    ...html.matchAll(/<button\b([^>]*)>(.*?)<\/button>/gs),
+  ].find((match) => match[2].includes("Review body save"));
+  assert.match(bodySave[1], /disabled=""/);
+});
+test("lesson edit access/contract failures hide cached private body and account, ordinary errors keep the view paused", () => {
+  const { before } = editLessonSetup();
+  for (const hidden of [false, true]) {
+    const query = {
+      data: before,
+      isPending: false,
+      isFetching: false,
+      isError: true,
+    };
+    const h = roadmapHarness({
+      queries: { "content/lesson-edit/editable": query },
+      hooks: {
+        useState: (initial) => [initial, () => {}],
+        useRef: (initial) => ({ current: initial }),
+      },
+    });
+    query.error = hidden
+      ? new (h.load(
+          new URL("../content/content-client.ts", import.meta.url),
+        ).ContentFailure)("Access changed", false, true)
+      : new Error("offline");
+    const shell = h
+      .load(new URL("../content/gui-edit-lesson.tsx", import.meta.url))
+      .GuiEditLesson({ id: "editable" });
+    if (hidden) {
+      assert.equal(shell.props.user, undefined);
+      assert.equal(
+        shell.props.children.props.title,
+        "Lesson editing unavailable",
+      );
+      assert.equal(
+        walk(shell, (n) => n.props.id === "edit-lesson-body").length,
+        0,
+      );
+    } else {
+      assert.equal(shell.props.user.id, before.user.id);
+      assert.equal(shell.props.children.props.canSave, false);
+      assert.equal(shell.props.children.props.data, before);
+    }
+  }
+});
+test("unconfirmed edit unlocks only after a successful read-only check, failed check keeps mutation error", async () => {
+  const { before } = editLessonSetup();
+  for (const failed of [false, true]) {
+    const mutationResult = {};
+    const h = roadmapHarness({
+      mutationResult,
+      queries: {
+        "content/lesson-edit/editable": {
+          data: before,
+          isPending: false,
+          isFetching: false,
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+      },
+      api: {
+        get: async (path) => {
+          if (failed) throw new Error("offline");
+          return { data: path === "/users/me" ? contentUser : editLessonRaw() };
+        },
+        patch: () => assert.fail("checking never writes"),
+      },
+    });
+    const failure = h.load(
+      new URL("../content/content-client.ts", import.meta.url),
+    ).ContentFailure;
+    mutationResult.error = new failure("uncertain", true);
+    const view = h
+      .load(new URL("../content/gui-edit-lesson.tsx", import.meta.url))
+      .GuiEditLesson({ id: "editable" }).props.children;
+    assert.equal(view.props.canSave, false);
+    assert.equal(view.props.uncertain, true);
+    view.props.onCheck();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      h.calls.filter((c) => c[0] === "reset-mutation").length,
+      failed ? 0 : 1,
+    );
+  }
+});
+
+const generationGuid = (n) =>
+  `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const generationProviders = [
+  {
+    provider: "nvidia",
+    displayName: "NVIDIA",
+    byokOnly: false,
+    defaultModel: "sample-model",
+  },
+  {
+    provider: "gemini",
+    displayName: "Gemini",
+    byokOnly: true,
+    defaultModel: "sample-gemini",
+  },
+];
+const generationKey = {
+  id: generationGuid(200),
+  provider: "nvidia",
+  label: "Sample default",
+  keyHint: "1234",
+  isDefault: true,
+  dailyLimit: 20,
+  defaultModel: null,
+  updatedAt: "2026-10-12T00:00:00Z",
+};
+const generationQuota = {
+  remaining: 20,
+  limit: 20,
+  unlimited: false,
+  tier: "own-key",
+  provider: "nvidia",
+};
+function generationRaw() {
+  const raw = editorRaw();
+  raw.id = generationGuid(1);
+  raw.modules.forEach((m, i) => {
+    m.id = generationGuid(20 + i);
+    m.roadmapId = raw.id;
+    m.moduleConcepts.forEach((p) => {
+      p.moduleId = m.id;
+    });
+  });
+  return raw;
+}
+function generationJobRaw(patch = {}) {
+  return {
+    id: generationGuid(100),
+    requestedByUserId: contentUser.id,
+    jobType: "roadmap_modules",
+    targetId: generationGuid(1),
+    status: "pending",
+    progressCurrent: 0,
+    progressTotal: 0,
+    resultSummary: null,
+    errorMessage: null,
+    createdAt: "2026-10-12T00:00:00Z",
+    updatedAt: "2026-10-12T00:00:00Z",
+    acknowledgedAt: null,
+    retryOfJobId: null,
+    provider: "nvidia",
+    model: "sample-model",
+    providerKeyId: generationGuid(200),
+    ...patch,
+  };
+}
+const generationSummary = {
+  createdCount: 2,
+  failedCount: 1,
+  skippedCount: 0,
+  failedItems: [{ title: "A lesson", reason: "Sample provider failure" }],
+  targetLabel: "Foundations of Git",
+  itemNoun: "module",
+};
+function generationSetup(options = {}, raw = generationRaw()) {
+  const h = roadmapHarness(options),
+    data = h.load(new URL("../generation/generation-data.ts", import.meta.url)),
+    client = h.load(
+      new URL("../generation/generation-client.ts", import.meta.url),
+    );
+  const editor = h
+    .load(new URL("../content/editor-data.ts", import.meta.url))
+    .parseEditorData(contentUser, raw, editorReview(raw), raw.id);
+  const settings = data.parseGenerationSettings(
+      contentUser,
+      [generationKey],
+      generationProviders,
+      generationQuota,
+    ),
+    feed = data.parseGenerationFeed(contentUser, [], []);
+  const library = h
+    .load(new URL("../content/content-data.ts", import.meta.url))
+    .parseContentLibrary(
+      contentUser,
+      [raw],
+      Date.parse("2026-10-12T00:00:00Z"),
+    );
+  return {
+    h,
+    data,
+    client,
+    editor,
+    settings,
+    feed,
+    library,
+    raw,
+    intent: {
+      kind: "roadmap_modules",
+      roadmapId: raw.id,
+      targetId: raw.id,
+      model: "",
+    },
+  };
+}
+function generationApi(overrides = {}) {
+  const calls = [],
+    raw = generationRaw();
+  let job = generationJobRaw();
+  const api = {
+    get: async (path, options) => {
+      calls.push(["GET", path, options]);
+      if (overrides.get) return overrides.get(path, options, job);
+      const value =
+        path === "/users/me"
+          ? contentUser
+          : path === "/roadmaps"
+            ? [raw]
+            : path.endsWith("/review")
+              ? editorReview(raw)
+              : path === `/roadmaps/${raw.id}`
+                ? raw
+                : path === "/ai-keys"
+                  ? [generationKey]
+                  : path === "/ai-providers"
+                    ? generationProviders
+                    : path === "/ai-generate/quota"
+                      ? generationQuota
+                      : path.endsWith("jobs/active") ||
+                          path.endsWith("jobs/results")
+                        ? []
+                        : path.includes("/jobs/")
+                          ? job
+                          : {
+                              models: ["sample-model"],
+                              live: false,
+                              defaultModel: "sample-model",
+                            };
+      return { data: value };
+    },
+    post: async (path, body, options) => {
+      calls.push(["POST", path, body, options]);
+      if (overrides.post) return overrides.post(path, body, options);
+      if (path.endsWith("acknowledge")) {
+        job = {
+          ...job,
+          status: "completed",
+          acknowledgedAt: "2026-10-12T02:00:00Z",
+          updatedAt: "2026-10-12T02:00:00Z",
+        };
+        return { data: { acknowledged: 1 } };
+      }
+      const jobType = Object.entries({
+        "roadmap-modules": "roadmap_modules",
+        "module-concepts": "module_concepts",
+        "module-mcqs": "module_mcqs",
+      }).find(([name]) => path.endsWith(name))[1];
+      job = generationJobRaw({
+        jobType,
+        targetId: body.roadmapId ?? body.moduleId,
+        model: body.model || "sample-model",
+      });
+      return { data: { jobId: job.id } };
+    },
+  };
+  return {
+    api,
+    calls,
+    setJob: (value) => {
+      job = value;
+    },
+  };
+}
+test("generation target links reject invalid/repeated/wrong-shape IDs without starting anything", () => {
+  const { data } = generationSetup();
+  for (const query of [
+    { roadmapId: [generationGuid(1), generationGuid(1)] },
+    { roadmapId: "../x" },
+    { moduleId: generationGuid(20) },
+    { jobId: "" },
+  ])
+    assert.equal(data.generationRequest(query).invalid, true);
+  assert.equal(
+    data.generationRequest({
+      roadmapId: generationGuid(1),
+      moduleId: generationGuid(20),
+    }).moduleId,
+    generationGuid(20),
+  );
+  assert.equal(data.generationRequest({}).invalid, false);
+});
+test("generation settings project metadata only and tie quota to actual default key and role", () => {
+  const { data } = generationSetup();
+  const settings = data.parseGenerationSettings(
+    contentUser,
+    [{ ...generationKey, apiKey: "secret", keyCiphertext: "cipher" }],
+    generationProviders,
+    generationQuota,
+  );
+  assert.equal(settings.keys[0].apiKey, undefined);
+  assert.equal(settings.keys[0].keyCiphertext, undefined);
+  for (const [keys, quota] of [
+    [
+      [generationKey, { ...generationKey, id: generationGuid(201) }],
+      generationQuota,
+    ],
+    [[generationKey], { ...generationQuota, provider: "gemini" }],
+    [[generationKey], { ...generationQuota, tier: "free" }],
+    [[generationKey], { ...generationQuota, remaining: 21 }],
+    [[generationKey], { ...generationQuota, limit: 15 }],
+  ])
+    assert.throws(() =>
+      data.parseGenerationSettings(
+        contentUser,
+        keys,
+        generationProviders,
+        quota,
+      ),
+    );
+  assert.equal(
+    data.parseGenerationSettings(
+      { ...contentUser, role: "admin" },
+      [generationKey],
+      generationProviders,
+      {
+        ...generationQuota,
+        remaining: -1,
+        limit: -1,
+        unlimited: true,
+        tier: "admin",
+      },
+    ).quota.unlimited,
+    true,
+  );
+  assert.equal(
+    data.parseGenerationSettings(contentUser, [], generationProviders, {
+      remaining: 5,
+      limit: 5,
+      unlimited: false,
+      tier: "free",
+      provider: "nvidia",
+    }).keys.length,
+    0,
+  );
+});
+test("generation jobs require requester-owned records, valid progress/dates and exact partial result counts", () => {
+  const { data } = generationSetup();
+  for (const patch of [
+    { requestedByUserId: "other" },
+    { jobType: "concept_content" },
+    { progressCurrent: 2, progressTotal: 1 },
+    { status: "cancelled" },
+    { updatedAt: "bad" },
+    { resultSummary: { ...generationSummary, failedCount: 2 } },
+  ])
+    assert.throws(() =>
+      data.parseGenerationJob(generationJobRaw(patch), contentUser),
+    );
+  assert.throws(() =>
+    data.parseGenerationJob(generationJobRaw({ requestedByUserId: "other" }), {
+      ...contentUser,
+      role: "admin",
+    }),
+  );
+  const job = data.parseGenerationJob(
+    generationJobRaw({
+      status: "completed",
+      resultSummary: generationSummary,
+      provider: null,
+      model: null,
+      providerKeyId: null,
+      retryOfJobId: generationGuid(99),
+    }),
+    contentUser,
+  );
+  assert.equal(job.resultSummary.createdCount, 2);
+  assert.equal(job.resultSummary.failedCount, 1);
+  assert.equal(job.provider, null);
+});
+test("job completion between active/results reads resolves to the later terminal record", () => {
+  const { data } = generationSetup();
+  const feed = data.parseGenerationFeed(
+    contentUser,
+    [generationJobRaw()],
+    [
+      generationJobRaw({
+        status: "completed",
+        resultSummary: generationSummary,
+      }),
+    ],
+  );
+  assert.equal(feed.active.length, 0);
+  assert.equal(feed.results.length, 1);
+  assert.throws(() =>
+    data.parseGenerationFeed(
+      contentUser,
+      [generationJobRaw(), generationJobRaw()],
+      [],
+    ),
+  );
+  assert.throws(() =>
+    data.parseGenerationFeed(
+      contentUser,
+      [],
+      [
+        generationJobRaw({
+          status: "completed",
+          acknowledgedAt: "2026-10-12T02:00:00Z",
+        }),
+      ],
+    ),
+  );
+});
+test("known-job lookup binds the returned requester-owned record to the exact requested ID", async () => {
+  const fixture = generationApi();
+  fixture.setJob(generationJobRaw({ id: generationGuid(99) }));
+  const { client } = generationSetup({ api: fixture.api });
+  await assert.rejects(
+    client.loadGenerationJob(contentUser, generationGuid(100)),
+    (error) => error.unavailable === true,
+  );
+  assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 0);
+});
+test("generation entry/metadata/feed reads are abortable timed and never call a model or POST", async () => {
+  const fixture = generationApi(),
+    { client } = generationSetup({ api: fixture.api }),
+    signal = new AbortController().signal;
+  await client.loadGenerationLibrary(signal);
+  await client.loadGenerationSettings(contentUser, signal);
+  await client.loadGenerationFeed(contentUser, signal);
+  assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 0);
+  assert.equal(
+    fixture.calls.some((c) => c[1].includes("/models")),
+    false,
+  );
+  for (const [, , options] of fixture.calls) {
+    assert.equal(options.signal, signal);
+    assert.equal(options.timeout, 12000);
+  }
+});
+test("model catalog is an explicit read scoped to current default key and labels fallback rather than assuming live", async () => {
+  const fixture = generationApi(),
+    { client, settings, data } = generationSetup({ api: fixture.api });
+  const catalog = await client.loadGenerationModels(settings);
+  assert.equal(catalog.live, false);
+  assert.equal(
+    catalog.settingsFingerprint,
+    data.generationSettingsFingerprint(settings),
+  );
+  assert.equal(
+    fixture.calls.at(-1)[1],
+    `/ai-providers/nvidia/models?keyId=${generationKey.id}`,
+  );
+  assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 0);
+});
+test("selected model override is forwarded once and confirmed from the saved job snapshot", async () => {
+  const fixture = generationApi(),
+    { client, editor, settings, intent, data } = generationSetup({
+      api: fixture.api,
+    });
+  const catalog = data.parseGenerationModels(
+    {
+      models: ["  sample-alternative  "],
+      live: true,
+      defaultModel: "sample-model",
+    },
+    settings,
+  );
+  const saved = await client.startGeneration(
+    editor,
+    settings,
+    { ...intent, model: "sample-alternative" },
+    catalog,
+  );
+  assert.equal(saved.model, "sample-alternative");
+  const posts = fixture.calls.filter((c) => c[0] === "POST");
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0][2].model, "sample-alternative");
+  const linked = data.generationRequest({
+    roadmapId: generationGuid(1).replace("-4000-", "-5000-"),
+  });
+  assert.equal(linked.invalid, false);
+});
+test("zero acknowledgement count is accepted only when a fresh read confirms the reviewed flag", async () => {
+  let fixture;
+  fixture = generationApi({
+    post: async () => {
+      fixture.setJob(
+        generationJobRaw({
+          status: "completed",
+          resultSummary: generationSummary,
+          acknowledgedAt: "2026-10-12T02:00:00Z",
+        }),
+      );
+      return { data: { acknowledged: 0 } };
+    },
+  });
+  fixture.setJob(
+    generationJobRaw({ status: "completed", resultSummary: generationSummary }),
+  );
+  const { client, data } = generationSetup({ api: fixture.api }),
+    before = data.parseGenerationJob(
+      generationJobRaw({
+        status: "completed",
+        resultSummary: generationSummary,
+      }),
+      contentUser,
+    );
+  assert.ok(
+    (await client.markGenerationReviewed(contentUser, before)).acknowledgedAt,
+  );
+  assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("generation start guards exact capacity, owned module, active target, quota gate and current model choice", () => {
+  const { data, editor, settings, feed, intent } = generationSetup();
+  assert.equal(
+    data.generationStartIssue(editor, settings, feed, intent),
+    undefined,
+  );
+  assert.match(
+    data.generationStartIssue(
+      { ...editor, modules: [...editor.modules, ...editor.modules] },
+      settings,
+      feed,
+      intent,
+    ),
+    /six-item/,
+  );
+  const lessons = {
+    ...intent,
+    kind: "module_concepts",
+    targetId: editor.modules[0].id,
+  };
+  assert.equal(data.generationRequiredSlots(editor, lessons), 4);
+  assert.match(
+    data.generationStartIssue(
+      editor,
+      { ...settings, quota: { ...settings.quota, remaining: 3 } },
+      feed,
+      lessons,
+    ),
+    /At least 4/,
+  );
+  assert.match(
+    data.generationStartIssue(
+      editor,
+      settings,
+      {
+        ...feed,
+        active: [data.parseGenerationJob(generationJobRaw(), contentUser)],
+      },
+      intent,
+    ),
+    /already active/,
+  );
+  assert.match(
+    data.generationStartIssue(editor, settings, feed, {
+      ...lessons,
+      targetId: generationGuid(25),
+    }),
+    /module/,
+  );
+  assert.match(
+    data.generationStartIssue(editor, settings, feed, {
+      ...intent,
+      model: "unknown",
+    }),
+    /catalog/,
+  );
+  assert.equal(
+    data.generationStartIssue(
+      editor,
+      settings,
+      feed,
+      { ...intent, model: "sample-model" },
+      data.parseGenerationModels(
+        { models: ["sample-model"], live: false, defaultModel: "sample-model" },
+        settings,
+      ),
+    ),
+    undefined,
+  );
+});
+test("all three batch actions send exactly one selected target/provider POST then verify requester-owned saved job", async () => {
+  for (const kind of ["roadmap_modules", "module_concepts", "module_mcqs"]) {
+    const fixture = generationApi(),
+      { client, editor, settings, intent } = generationSetup({
+        api: fixture.api,
+      });
+    const selected = {
+      ...intent,
+      kind,
+      targetId:
+        kind === "roadmap_modules" ? editor.roadmap.id : editor.modules[0].id,
+    };
+    const job = await client.startGeneration(editor, settings, selected);
+    assert.equal(job.jobType, kind);
+    assert.equal(job.targetId, selected.targetId);
+    const posts = fixture.calls.filter((c) => c[0] === "POST");
+    assert.equal(posts.length, 1);
+    assert.equal(
+      JSON.stringify(posts[0][2]),
+      JSON.stringify({
+        ...(kind === "roadmap_modules"
+          ? { roadmapId: selected.targetId }
+          : { moduleId: selected.targetId }),
+        provider: "nvidia",
+      }),
+    );
+    assert.equal(posts[0][3].timeout, 12000);
+    assert.equal(
+      fixture.calls.at(-1)[1],
+      `/ai-generate/jobs/${generationGuid(100)}`,
+    );
+  }
+});
+test("generation preflight blocks account/role/tree/key/capacity/quota or active-job drift before any paid POST", async () => {
+  for (const scenario of [
+    "account",
+    "role",
+    "tree",
+    "key",
+    "quota",
+    "active",
+  ]) {
+    const standard = generationApi(),
+      fixture = generationApi({
+        get: async (path, options, job) => {
+          if (path === "/users/me")
+            return {
+              data: {
+                ...contentUser,
+                ...(scenario === "account"
+                  ? { id: "other" }
+                  : scenario === "role"
+                    ? { role: "admin" }
+                    : {}),
+              },
+            };
+          if (scenario === "tree" && path === `/roadmaps/${generationGuid(1)}`)
+            return { data: { ...generationRaw(), description: "Changed" } };
+          if (scenario === "key" && path === "/ai-keys")
+            return { data: [{ ...generationKey, id: generationGuid(201) }] };
+          if (scenario === "quota" && path === "/ai-generate/quota")
+            return { data: { ...generationQuota, remaining: 0 } };
+          if (scenario === "active" && path.endsWith("jobs/active"))
+            return { data: [job] };
+          return standard.api.get(path, options);
+        },
+      });
+    const { client, editor, settings, intent } = generationSetup({
+      api: fixture.api,
+    });
+    await assert.rejects(client.startGeneration(editor, settings, intent));
+    assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 0);
+  }
+});
+test("generation unknown transport/acceptance/readback outcomes lock without automatic paid retry", async () => {
+  for (const scenario of [
+    "timeout",
+    "server",
+    "refused",
+    "ack",
+    "readback",
+    "wrong-target",
+    "wrong-key",
+  ]) {
+    let wrote = false;
+    const standard = generationApi(),
+      fixture = generationApi({
+        get: async (path, options) => {
+          if (wrote && path.includes("/jobs/")) {
+            if (scenario === "readback") throw new Error("offline");
+            return {
+              data: generationJobRaw(
+                scenario === "wrong-target"
+                  ? { targetId: generationGuid(99) }
+                  : scenario === "wrong-key"
+                    ? { providerKeyId: generationGuid(201) }
+                    : {},
+              ),
+            };
+          }
+          return standard.api.get(path, options);
+        },
+        post: async () => {
+          wrote = true;
+          if (scenario === "timeout") throw new Error("timeout");
+          if (scenario === "server" || scenario === "refused")
+            throw { response: { status: scenario === "server" ? 503 : 429 } };
+          return {
+            data: scenario === "ack" ? {} : { jobId: generationGuid(100) },
+          };
+        },
+      });
+    const { client, editor, settings, intent } = generationSetup({
+      api: fixture.api,
+    });
+    await assert.rejects(
+      client.startGeneration(editor, settings, intent),
+      (error) =>
+        error.uncertain === (scenario !== "refused") &&
+        error.jobId ===
+          (["readback", "wrong-target", "wrong-key"].includes(scenario)
+            ? generationGuid(100)
+            : undefined),
+    );
+    assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("mark reviewed scopes acknowledgement to one finished own ID and validates stored flag before reporting success", async () => {
+  const fixture = generationApi();
+  fixture.setJob(
+    generationJobRaw({ status: "completed", resultSummary: generationSummary }),
+  );
+  const { client, data } = generationSetup({ api: fixture.api }),
+    before = data.parseGenerationJob(
+      generationJobRaw({
+        status: "completed",
+        resultSummary: generationSummary,
+      }),
+      contentUser,
+    );
+  const after = await client.markGenerationReviewed(contentUser, before);
+  assert.ok(after.acknowledgedAt);
+  const posts = fixture.calls.filter((c) => c[0] === "POST");
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0][1], "/ai-generate/jobs/acknowledge");
+  assert.equal(
+    JSON.stringify(posts[0][2]),
+    JSON.stringify({ jobIds: [before.id] }),
+  );
+});
+test("reviewed/changed/active/foreign jobs cannot trigger duplicate or wrong acknowledgement", async () => {
+  for (const scenario of ["reviewed", "changed", "active", "foreign"]) {
+    const fixture = generationApi();
+    fixture.setJob(
+      generationJobRaw({
+        status: scenario === "active" ? "running" : "completed",
+        resultSummary: generationSummary,
+        ...(scenario === "reviewed"
+          ? { acknowledgedAt: "2026-10-12T02:00:00Z" }
+          : scenario === "changed"
+            ? { updatedAt: "2026-10-12T02:00:00Z" }
+            : scenario === "foreign"
+              ? { requestedByUserId: "other" }
+              : {}),
+      }),
+    );
+    const { client, data } = generationSetup({ api: fixture.api }),
+      before = data.parseGenerationJob(
+        generationJobRaw({
+          status: "completed",
+          resultSummary: generationSummary,
+        }),
+        contentUser,
+      );
+    if (scenario === "reviewed")
+      assert.ok(
+        (await client.markGenerationReviewed(contentUser, before))
+          .acknowledgedAt,
+      );
+    else
+      await assert.rejects(client.markGenerationReviewed(contentUser, before));
+    assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 0);
+  }
+});
+test("acknowledgement failures and malformed or unconfirmed stored flags retain unknown outcome after one POST", async () => {
+  for (const scenario of ["transport", "ack", "flag"]) {
+    const fixture = generationApi({
+      post: async () => {
+        if (scenario === "transport") throw new Error("offline");
+        return { data: { acknowledged: scenario === "ack" ? 5 : 1 } };
+      },
+    });
+    fixture.setJob(
+      generationJobRaw({
+        status: "completed",
+        resultSummary: generationSummary,
+      }),
+    );
+    const { client, data } = generationSetup({ api: fixture.api }),
+      before = data.parseGenerationJob(
+        generationJobRaw({
+          status: "completed",
+          resultSummary: generationSummary,
+        }),
+        contentUser,
+      );
+    await assert.rejects(
+      client.markGenerationReviewed(contentUser, before),
+      (error) => error.uncertain === true,
+    );
+    assert.equal(fixture.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("generation GUI names saved counts and progress stages, provider charges/retries and native renewed consent", () => {
+  const { h, data, library, settings, editor, feed } = generationSetup();
+  const View = h.load(
+    new URL("../generation/generation-view.tsx", import.meta.url),
+  ).GenerationView;
+  const html = h.render(
+    createElement(View, {
+      request: data.generationRequest({}),
+      library,
+      settings,
+      target: editor,
+      feed: {
+        ...feed,
+        active: [
+          data.parseGenerationJob(
+            generationJobRaw({
+              status: "running",
+              progressCurrent: 1,
+              progressTotal: 6,
+            }),
+            contentUser,
+          ),
+        ],
+        results: [
+          data.parseGenerationJob(
+            generationJobRaw({
+              id: generationGuid(101),
+              status: "completed",
+              resultSummary: generationSummary,
+            }),
+            contentUser,
+          ),
+        ],
+      },
+      selectedRoadmapId: editor.roadmap.id,
+      canStart: true,
+      canReview: true,
+      onRoadmap() {},
+      onCheck() {},
+      onLoadModels() {},
+      onStart() {},
+      onReview() {},
+      onLookup() {},
+    }),
+  );
+  assert.match(html, /name="generation-kind"/);
+  assert.match(html, /<progress/);
+  assert.match(html, /reported steps/);
+  assert.match(html, /may incur provider charges/);
+  assert.match(html, /automatically retry/);
+  assert.match(html, /type="checkbox"/);
+  assert.match(html, /up to 20 results/);
+  assert.match(html, /Mark this result reviewed/);
+  assert.doesNotMatch(html, /Cancel job|Retry generation|100%|price estimate/);
+});
+test("generation GUI requires consent per modal and does not start from selection, preview or unconfirmed checkbox", () => {
+  const states = [],
+    refs = [];
+  let stateIndex = 0,
+    refIndex = 0;
+  const { h, data, library, settings, editor, feed } = generationSetup({
+    hooks: {
+      useState: (initial) => {
+        const i = stateIndex++;
+        if (!(i in states)) states[i] = initial;
+        return [
+          states[i],
+          (value) => {
+            states[i] = typeof value === "function" ? value(states[i]) : value;
+          },
+        ];
+      },
+      useRef: (initial) => {
+        const i = refIndex++;
+        return refs[i] ?? (refs[i] = { current: initial });
+      },
+      useEffect() {},
+    },
+  });
+  const View = h.load(
+      new URL("../generation/generation-view.tsx", import.meta.url),
+    ).GenerationView,
+    starts = [];
+  const render = () => {
+    stateIndex = 0;
+    refIndex = 0;
+    return View({
+      request: data.generationRequest({}),
+      library,
+      settings,
+      target: editor,
+      feed,
+      selectedRoadmapId: editor.roadmap.id,
+      canStart: true,
+      onRoadmap() {},
+      onCheck() {},
+      onLoadModels() {},
+      onStart: (intent) => starts.push(intent),
+      onReview() {},
+      onLookup() {},
+    });
+  };
+  let tree = render();
+  walk(tree, (n) => n.props.id === "generation-form")[0].props.onSubmit({
+    preventDefault() {},
+  });
+  tree = render();
+  const start = walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Start generation job",
+  )[0];
+  assert.equal(start.props.disabled, true);
+  start.props.onClick();
+  assert.equal(starts.length, 0);
+  walk(
+    tree,
+    (n) => n.type === "input" && n.props.type === "checkbox",
+  )[0].props.onChange({ target: { checked: true } });
+  tree = render();
+  walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Start generation job",
+  )[0].props.onClick();
+  assert.equal(starts.length, 1);
+  tree = render();
+  walk(tree, (n) => n.props.id === "generation-form")[0].props.onSubmit({
+    preventDefault() {},
+  });
+  tree = render();
+  assert.equal(
+    walk(
+      tree,
+      (n) => n.type === "button" && n.props.children === "Start generation job",
+    )[0].props.disabled,
+    true,
+  );
+});
+test("paid confirmation rejects a changed default-key snapshot before effects have time to clear old consent", () => {
+  const states = [],
+    refs = [];
+  let stateIndex = 0,
+    refIndex = 0;
+  const { h, data, library, settings, editor, feed } = generationSetup({
+    hooks: {
+      useState: (initial) => {
+        const i = stateIndex++;
+        if (!(i in states)) states[i] = initial;
+        return [
+          states[i],
+          (value) => {
+            states[i] = typeof value === "function" ? value(states[i]) : value;
+          },
+        ];
+      },
+      useRef: (initial) => {
+        const i = refIndex++;
+        return refs[i] ?? (refs[i] = { current: initial });
+      },
+      useEffect() {},
+    },
+  });
+  const View = h.load(
+      new URL("../generation/generation-view.tsx", import.meta.url),
+    ).GenerationView,
+    starts = [];
+  const render = (setup) => {
+    stateIndex = 0;
+    refIndex = 0;
+    return View({
+      request: data.generationRequest({}),
+      library,
+      settings: setup,
+      target: editor,
+      feed,
+      selectedRoadmapId: editor.roadmap.id,
+      canStart: true,
+      onRoadmap() {},
+      onCheck() {},
+      onLoadModels() {},
+      onStart: (intent) => starts.push(intent),
+      onReview() {},
+      onLookup() {},
+    });
+  };
+  let tree = render(settings);
+  walk(tree, (n) => n.props.id === "generation-form")[0].props.onSubmit({
+    preventDefault() {},
+  });
+  tree = render(settings);
+  walk(
+    tree,
+    (n) => n.type === "input" && n.props.type === "checkbox",
+  )[0].props.onChange({ target: { checked: true } });
+  tree = render({
+    ...settings,
+    keys: [{ ...settings.keys[0], id: generationGuid(201) }],
+  });
+  const button = walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Start generation job",
+  )[0];
+  assert.equal(button.props.disabled, true);
+  button.props.onClick();
+  assert.equal(starts.length, 0);
+});
+test("generation controller deduplicates paid actions and disables stale/missing/uncertain settings while allowing jobs reads", () => {
+  const fixture = generationSetup(),
+    request = fixture.data.generationRequest({
+      roadmapId: fixture.editor.roadmap.id,
+    });
+  for (const scenario of [
+    "ready",
+    "stale",
+    "no-settings",
+    "missing-target",
+    "uncertain",
+  ]) {
+    const library = {
+        ...fixture.library,
+        ...(scenario === "missing-target" ? { roadmaps: [] } : {}),
+      },
+      mutationResult = {};
+    const h = roadmapHarness({
+      mutationResult,
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+        useEffect() {},
+      },
+      queries: {
+        "generation/library": {
+          data: library,
+          isPending: false,
+          isFetching: false,
+        },
+        "generation/settings/author-1/developer": {
+          data: scenario === "no-settings" ? undefined : fixture.settings,
+          isFetching: scenario === "stale",
+          isError: scenario === "no-settings",
+        },
+        "generation/jobs/author-1/developer": {
+          data: fixture.feed,
+          isFetching: false,
+        },
+        [`generation/target/author-1/developer/${fixture.editor.roadmap.id}`]: {
+          data: fixture.editor,
+          isFetching: false,
+        },
+      },
+    });
+    if (scenario === "uncertain")
+      mutationResult.error = new (h.load(
+        new URL("../generation/generation-client.ts", import.meta.url),
+      ).GenerationFailure)("unknown", true);
+    const view = h
+      .load(new URL("../generation/gui-generation.tsx", import.meta.url))
+      .GuiGeneration({ request }).props.children;
+    view.props.onStart(fixture.intent);
+    view.props.onStart(fixture.intent);
+    assert.equal(
+      h.calls.filter((c) => c[0] === "mutation").length,
+      scenario === "ready" ? 1 : 0,
+    );
+    if (scenario === "missing-target")
+      assert.equal(view.props.target, undefined);
+    if (scenario === "no-settings") assert.equal(view.props.canReview, true);
+    const jobs = h.queryCalls.find((q) => q.queryKey[1] === "jobs");
+    assert.equal(jobs.refetchInterval({ state: {} }), 5000);
+    assert.equal(
+      jobs.refetchInterval({ state: { error: new Error("offline") } }),
+      false,
+    );
+    assert.equal(jobs.refetchIntervalInBackground, false);
+  }
+});
+test("generation mode handoff preserves the developer shell and exact learner location", () => {
+  const h = roadmapHarness({
+      mode: {
+        ready: true,
+        isCli: true,
+        location: {
+          kind: "concept",
+          roadmap: "git",
+          module: "history",
+          concept: "branches",
+        },
+      },
+    }),
+    request = { roadmapId: null, moduleId: null, jobId: null, invalid: false };
+  const tree = h
+    .load(new URL("../generation/gui-generation.tsx", import.meta.url))
+    .GenerationPage({ request });
+  walk(
+    tree,
+    (n) => n.props.children === "Open GUI generation & jobs",
+  )[0].props.onClick();
+  assert.equal(
+    JSON.stringify(h.calls.at(-1)),
+    JSON.stringify(["mode", "gui", { navigate: false }]),
+  );
+  assert.ok(!h.calls.some((c) => c[0] === "location"));
+  const terminal = walk(tree, (n) =>
+    n.props.href?.startsWith("/developer/terminal"),
+  )[0];
+  assert.ok(terminal.props.href.includes("path="));
+});
+test("unconfirmed generation unlocks only after explicit successful read checks and never retries a paid action", async () => {
+  const fixture = generationSetup(),
+    request = fixture.data.generationRequest({
+      roadmapId: fixture.editor.roadmap.id,
+    });
+  for (const failed of [false, true]) {
+    const api = generationApi({
+        post: () => assert.fail("recovery never posts"),
+      }),
+      mutationResult = {};
+    const h = roadmapHarness({
+      api: {
+        ...api.api,
+        get: async (...args) => {
+          if (failed) throw new Error("offline");
+          return api.api.get(...args);
+        },
+      },
+      mutationResult,
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+        useEffect() {},
+      },
+      queries: {
+        "generation/library": {
+          data: fixture.library,
+          isPending: false,
+          isFetching: false,
+          refetch: async () => ({
+            data: fixture.library,
+            isError: failed,
+            error: new Error("offline"),
+          }),
+        },
+        "generation/settings/author-1/developer": {
+          data: fixture.settings,
+          isFetching: false,
+        },
+        "generation/jobs/author-1/developer": {
+          data: fixture.feed,
+          isFetching: false,
+        },
+        [`generation/target/author-1/developer/${fixture.editor.roadmap.id}`]: {
+          data: fixture.editor,
+          isFetching: false,
+        },
+      },
+    });
+    mutationResult.error = new (h.load(
+      new URL("../generation/generation-client.ts", import.meta.url),
+    ).GenerationFailure)("unknown", true);
+    const view = h
+      .load(new URL("../generation/gui-generation.tsx", import.meta.url))
+      .GuiGeneration({ request }).props.children;
+    assert.equal(view.props.canStart, false);
+    view.props.onCheck();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      h.calls.filter((c) => c[0] === "reset-mutation").length,
+      failed ? 0 : 1,
+    );
+    assert.equal(api.calls.filter((c) => c[0] === "POST").length, 0);
+  }
+});
+
 export function roadmapHarness({
   hooks,
   mode = { ready: true, isCli: false, location: { kind: "root" } },
@@ -1595,6 +4826,10 @@ export function roadmapHarness({
       ...globals,
       require: (name) => {
         if (name === "./cli-content") return { CliContent: () => null };
+        if (name === "./cli-roadmap-editor")
+          return { CliRoadmapEditor: () => null };
+        if (name === "./cli-new-lesson") return { CliNewLesson: () => null };
+        if (name === "./cli-edit-lesson") return { CliEditLesson: () => null };
         if (name === "react" && hooks)
           return { ...requirePackage(name), ...hooks };
         if (name.endsWith(".css")) {
@@ -1652,6 +4887,8 @@ export function roadmapHarness({
           return {
             useQueryClient: () => ({
               clear() {},
+              getQueryData: (key) => queries[key.join("/")]?.data,
+              setQueryData: (...args) => calls.push(["cache-data", ...args]),
               invalidateQueries: async () => {},
             }),
             useMutation: (options) => ({
