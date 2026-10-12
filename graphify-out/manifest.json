@@ -1608,9 +1608,9 @@
     "semantic_hash": ""
   },
   "frontend/app/developer/content/page.tsx": {
-    "mtime": 1791172318.8908377,
-    "seen": 1791172489.0438788,
-    "ast_hash": "7358805370d64780432c4c110c5ab398",
+    "mtime": 1791778090.7639072,
+    "seen": 1791780087.0412877,
+    "ast_hash": "d257c07ad4b50b9a8082bad0bea0c711",
     "semantic_hash": ""
   },
   "frontend/app/developer/dashboard/page.tsx": {
@@ -1650,9 +1650,9 @@
     "semantic_hash": ""
   },
   "frontend/app/developer/terminal/page.tsx": {
-    "mtime": 1791618777.8196805,
-    "seen": 1791775830.3994253,
-    "ast_hash": "3c10802bf5884b391a2f82584f54becd",
+    "mtime": 1791776417.4625752,
+    "seen": 1791780087.0412989,
+    "ast_hash": "4ab86c340b552c11f28ff45417f0d92a",
     "semantic_hash": ""
   },
   "frontend/app/loading.tsx": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "source-dev-master-plan.md": {
-    "mtime": 1791726085.8460069,
-    "seen": 1791775830.399675,
-    "ast_hash": "277e8b1e41cf643502ce88ce9e2d1e6c",
+    "mtime": 1791779412.5734816,
+    "seen": 1791780087.0413976,
+    "ast_hash": "cb2b579dc594db2de0d8791a1ea44371",
     "semantic_hash": ""
   },
   "frontend/screenshots/neofetch.png": {
@@ -2670,9 +2670,9 @@
     "semantic_hash": ""
   },
   "GUI_IMPLEMENTATION_PLAN.md": {
-    "mtime": 1791726085.6820326,
-    "seen": 1791775830.399636,
-    "ast_hash": "fedb03197e9a3f96abbf3c54919fdf17",
+    "mtime": 1791779412.505482,
+    "seen": 1791780087.0413823,
+    "ast_hash": "f2014ef7aa71ae7caba16529feb1ee35",
     "semantic_hash": ""
   },
   "design-system/source-dev/MASTER.md": {
@@ -2808,15 +2808,15 @@
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/gui-roadmaps.tsx": {
-    "mtime": 1791618596.5900717,
-    "seen": 1791775830.3995132,
-    "ast_hash": "3ca173531c3ca7cc2e7f9e2ff169af74",
+    "mtime": 1791776415.3144863,
+    "seen": 1791780087.0413375,
+    "ast_hash": "7c83dd4014150a9a0358ea90ef4f3b79",
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/lesson-data.ts": {
-    "mtime": 1791546907.2745633,
-    "seen": 1791775830.399515,
-    "ast_hash": "29ba84f0805294630047de2b62994825",
+    "mtime": 1791776415.634592,
+    "seen": 1791780087.0413384,
+    "ast_hash": "a15cf7d5f6a8f2ec49ba354e79faeeee",
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/lesson-diagram.tsx": {
@@ -2826,15 +2826,15 @@
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/lesson-markdown.tsx": {
-    "mtime": 1791547846.0057437,
-    "seen": 1791775830.3995183,
-    "ast_hash": "31f9929a54c156b62f4f248097d584e8",
+    "mtime": 1791776415.7059882,
+    "seen": 1791780087.0413396,
+    "ast_hash": "57f61e6514de880630460788370a6f80",
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/lesson-view.tsx": {
-    "mtime": 1791618777.5057,
-    "seen": 1791775830.39952,
-    "ast_hash": "f18f61f693ddfbc4a041f1395bf87568",
+    "mtime": 1791776417.3095765,
+    "seen": 1791780087.04134,
+    "ast_hash": "25058c64fe4af7e4902076152dbddf64",
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/module-view.tsx": {
@@ -2868,15 +2868,15 @@
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/roadmap-view.tsx": {
-    "mtime": 1791618596.6670723,
-    "seen": 1791775830.3995297,
-    "ast_hash": "d2355d35dc4bb75f8bbc97d89359a428",
+    "mtime": 1791776289.290902,
+    "seen": 1791780087.0413442,
+    "ast_hash": "cc6c1dbf716cd222d3309af97265de27",
     "semantic_hash": ""
   },
   "frontend/components/roadmaps/roadmaps.test.mjs": {
-    "mtime": 1791623747.5343094,
-    "seen": 1791775830.3995314,
-    "ast_hash": "303640fb45a1270d78b4ae9f793ade12",
+    "mtime": 1791778458.465633,
+    "seen": 1791780087.0413451,
+    "ast_hash": "8a0e395d987758b84135067554c86e9f",
     "semantic_hash": ""
   },
   "backend/qa-privacy.md": {
@@ -2919,6 +2919,78 @@
     "mtime": 1791525127.795727,
     "seen": 1791775830.3996677,
     "ast_hash": "b385662056eeb426537f7db7bdb51ab3",
+    "semantic_hash": ""
+  },
+  "frontend/app/developer/roadmaps/[reference]/modules/[moduleReference]/lessons/[conceptReference]/discussion/page.tsx": {
+    "mtime": 1791776417.4882467,
+    "seen": 1791780087.0412946,
+    "ast_hash": "8fec9c17d94a927cb945bbc184615fb5",
+    "semantic_hash": ""
+  },
+  "frontend/components/content/cli-content.tsx": {
+    "mtime": 1791778090.6929073,
+    "seen": 1791780087.0413146,
+    "ast_hash": "3f248f4778c51f82df2ce3ec7a838998",
+    "semantic_hash": ""
+  },
+  "frontend/components/content/content-client.ts": {
+    "mtime": 1791778458.2235634,
+    "seen": 1791780087.0413153,
+    "ast_hash": "bc2fdaf45d7ebbc84f03a189de837927",
+    "semantic_hash": ""
+  },
+  "frontend/components/content/content-data.ts": {
+    "mtime": 1791778302.23904,
+    "seen": 1791780087.0413158,
+    "ast_hash": "1bebb7b474041b598e5f3c4ae3f55725",
+    "semantic_hash": ""
+  },
+  "frontend/components/content/content-view.tsx": {
+    "mtime": 1791778691.1884475,
+    "seen": 1791780087.0413163,
+    "ast_hash": "1065327c2be0482e110b6c3164783400",
+    "semantic_hash": ""
+  },
+  "frontend/components/content/gui-content.tsx": {
+    "mtime": 1791778302.334202,
+    "seen": 1791780087.0413167,
+    "ast_hash": "741c12cdae0e171f4eed018a4d7fc3c7",
+    "semantic_hash": ""
+  },
+  "frontend/components/roadmaps/discussion-client.ts": {
+    "mtime": 1791777248.3261533,
+    "seen": 1791780087.0413337,
+    "ast_hash": "4cabd2ec000bce00f6c87e140bb92a17",
+    "semantic_hash": ""
+  },
+  "frontend/components/roadmaps/discussion-data.ts": {
+    "mtime": 1791776645.850461,
+    "seen": 1791780087.0413344,
+    "ast_hash": "05887ce3c461b9a29fb37ec7f256e0cd",
+    "semantic_hash": ""
+  },
+  "frontend/components/roadmaps/discussion-view.tsx": {
+    "mtime": 1791777248.2911537,
+    "seen": 1791780087.041335,
+    "ast_hash": "69690720af1a613ae1a5f43b98435caa",
+    "semantic_hash": ""
+  },
+  "frontend/components/roadmaps/gui-discussion.tsx": {
+    "mtime": 1791776756.6248426,
+    "seen": 1791780087.0413356,
+    "ast_hash": "42afbea87d642701a9d6d78166e0c894",
+    "semantic_hash": ""
+  },
+  "design-system/source-dev/pages/content.md": {
+    "mtime": 1791779412.5394816,
+    "seen": 1791780087.0413878,
+    "ast_hash": "e76f72e7d8a04cc0418907f5164a7490",
+    "semantic_hash": ""
+  },
+  "design-system/source-dev/pages/discussion.md": {
+    "mtime": 1791777572.9550679,
+    "seen": 1791780087.041389,
+    "ast_hash": "9f55480dba14c7589d30f66a0bebac2a",
     "semantic_hash": ""
   }
 }
