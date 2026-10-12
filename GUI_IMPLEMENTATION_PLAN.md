@@ -2,7 +2,8 @@
 
 Direction approved: clean, attractive and simple, inspired by https://www.gitbook.com/,
 with purposeful animation. Develop **one page at a time**, validate it and get visual feedback
-before moving on. No backend changes, commits or pushes. Preserve the CLI and existing APIs.
+before moving on. No commits or pushes. Preserve the CLI and existing APIs; backend changes require
+explicit approval (checkpoint 8 has approval for a read-only lesson media field).
 
 ## Design rules
 
@@ -25,14 +26,14 @@ with user approval. A completed visual redesign does not imply new backend work.
 | 1 | Homepage `/`: navigation, hero, interactive product preview, learning story, FAQ, CTA/footer | Approved; continued to login on user instruction |
 | 2 | Login `/login` | Approved; continued to register on user instruction |
 | 3 | Register `/register` | Approved; distinct left-side artwork added on user request |
-| 4 | Forgot/reset password and OAuth callback | Implemented; ready for visual review |
-| 5 | Developer dashboard `/developer/dashboard`: shared authenticated GUI shell | Planned |
-| 6 | Roadmap browser + roadmap overview (new learning routes) | Planned |
-| 7 | Module overview (new learning route) | Planned |
-| 8 | Lesson reader: diagrams, media, progress and accurate GUI↔CLI location mapping | Planned |
-| 9 | Quiz / answer feedback | Planned |
-| 10 | Review session and queue (FSRS read model) | Planned |
-| 11 | Lesson discussion + private Ask AI | Planned |
+| 4 | Forgot/reset password and OAuth callback | Approved; continued on user instruction |
+| 5 | Developer dashboard `/developer/dashboard`: shared authenticated GUI shell | Approved; continued on user instruction |
+| 6 | Roadmap browser + roadmap overview `/developer/roadmaps`, `/developer/roadmaps/[reference]` | Approved; continued on user instruction |
+| 7 | Module overview `/developer/roadmaps/[reference]/modules/[moduleReference]` | Approved; continued on user instruction |
+| 8 | Lesson reader: diagrams, media, progress and accurate GUI↔CLI location mapping | Approved; continued on user instruction |
+| 9 | Quiz / answer feedback | Approved; continued on user instruction |
+| 10 | Review session and queue (FSRS read model) | Implemented; ready for visual review |
+| 11 | Lesson discussion + private Ask AI | Backend privacy prerequisite implemented; migration user-operated; GUI planned |
 | 12 | Own content `/developer/content` | Planned |
 | 13 | Roadmap authoring `/developer/content/[roadmapId]` | Planned |
 | 14 | New lesson `/developer/concepts/new` | Planned |
@@ -248,3 +249,248 @@ The staged snapshot remains unchanged; this experiment is an unstaged working-co
   protected gates and OS-level reduced-motion smoke remain manual. No real auth action performed.
 - No backend/dependency changes, staging, commits or pushes. Dashboard checkpoint remains unstarted.
   Design note: `design-system/source-dev/pages/navigation-loading.md`.
+
+## Developer dashboard checkpoint — 2026-10-09
+
+- `/developer/dashboard` now selects a new orange GUI dashboard or the original terminal dashboard.
+  The latter was moved intact, with only the exported function renamed; terminal commands, motion,
+  data queries and account controls remain unchanged. Preference readiness remains mode-aware.
+- Added a reusable, opt-in workspace shell: recall-knot brand, named sidebar navigation, mobile
+  disclosure/Escape/focus return, account/profile/admin-view access, theme and CLI switches, and a
+  native GUI logout confirmation. Confirmed logout clears the same auth/query/terminal caches.
+  The developer auth layout remains unchanged; unfinished routes keep their own frames.
+- Primary cards cover most-recent in-progress concept and the real review queue. FSRS total due,
+  available session, held-back and unavailable counts are distinct. CLI learning/roadmap/review/
+  notification handoffs are explicitly marked and persist mode without racing default navigation.
+  GUI learning pages are the next checkpoint, not invented here.
+- Real account XP/streak/completed-concept/award metrics, year-of-XP activity with an exact-data
+  table, four real roadmap cards with individual progress, earned/catalog milestones and timestamped
+  recent events are wired to existing APIs and shared React Query keys. Only displayed roadmaps
+  fetch progress; failures do not become fake zero totals. No estimated historical XP awards.
+- Independent loading, empty, retry and stale-refresh feedback preserve usable sections. Dashboard
+  requests have abort signals, a 12-second timeout and one retry. Existing progress hook is reused.
+  Scoped light/dark tokens, finite entrances and reduced-motion CSS follow the UI skills.
+- Passed typecheck, new-code ESLint, sixteen Node test files (including thirteen dashboard checks),
+  theme separation and production build. Existing multiple-lockfile warning remains.
+- Browser visual QA used the actual components rendered in an isolated, visibly labelled sample-data
+  fixture with bundled project fonts: desktop, 375px phone, 768px tablet and 812px landscape bounds,
+  light/dark and loading/error/empty presentations. This is layout QA, not an authenticated API smoke.
+  Mode handoff, menu Escape/focus, modal focus restoration and logout cleanup are component-tested.
+  Live signed-in requests/navigation and OS reduced-motion still require a user-operated check.
+- No backend/dependency changes, agent staging, commits or pushes. User changes remain preserved.
+  Notes: `design-system/source-dev/pages/dashboard.md`. Stop for dashboard feedback; checkpoint 6
+  (roadmap browser/overview) has not started.
+
+## Roadmap browser / overview checkpoint — 2026-10-09
+
+- User approved the dashboard and requested the next checkpoint. Added opt-in GUI learning routes
+  under the existing developer auth guard; no changes to backend visibility or publishing rules.
+  Dashboard browse/view-all/roadmap links and the shared sidebar now lead to the GUI browser.
+- Browser: actual catalog cards, title/description search, origin filter, newest/A–Z sorting,
+  accessible result counts and eight-card pagination. Only displayed cards request progress.
+  Missing progress is a retryable error, not fake 0%; origin and private-draft labels use API data.
+- Overview: real description/counts, ordered native module disclosures, visible concepts, progress,
+  completion/in-progress/untracked states, difficulty/question counts and per-placement prerequisites.
+  Next-concept guidance requires loaded progress and satisfied prerequisites; stale errors retain
+  data but suppress the recommendation. Draft visibility and tracked totals are explained separately.
+- Module/lesson links remain explicitly labelled CLI handoffs until their own checkpoints. They carry
+  exact VFS placement plus concept ID. Shared VFS normalization/collision handling is reused rather
+  than inventing module slugs. Overview resolves API IDs and CLI names through the visible catalog.
+- GUI projection now renders roadmaps and uses them as the nearest page for deeper locations without
+  overwriting a same-roadmap concept/module position. Developer-shell mode switching stays in the
+  developer shell even for admins. CLI URL synchronization runs only on terminal routes, preventing
+  a GUI-to-CLI click from resetting location before navigation. Initial CLI visits redirect; explicit
+  GUI links own later mode navigation and are protected from a competing overview redirect.
+- Orange master tokens, light/dark, native labelled search/selects/disclosures, helpful no-results
+  guidance, persistent errors/retries, skeleton states and finite/reduced-motion entrances follow the
+  UI skills. Existing shared progress/detail hooks now accept abort signals and 12-second timeouts
+  with one retry; their keys/normalization/contracts are unchanged. The legacy bulk hook is untouched.
+- Passed typecheck, touched-file ESLint, seventeen Node test files (fifteen focused roadmap checks),
+  theme separation and production build. Existing multiple-lockfile workspace-root warning remains.
+- Browser QA used actual interactive components/bundled fonts in a visibly labelled sample-data
+  fixture, not a fabricated authenticated application session. Checked desktop, 375px phone, 768px
+  tablet and 812px landscape bounds, light/dark, search/no-results/clear/origin/sort, roadmap navigation,
+  module disclosure, mobile menu Escape/focus and loading/error/empty presentations. No console errors.
+  CLI handoffs/provider location preservation/initial redirects are component-tested. Live signed-in
+  API requests, permission revocation, retry recovery and OS reduced-motion remain manual checks.
+- Temporary preview stopped and browser overrides/tab cleaned up. No backend, dependency, account,
+  paid-provider, staging, commit or push actions. Existing user changes preserved. Notes:
+  `design-system/source-dev/pages/roadmaps.md`. Stop for review; module overview is next, not started.
+
+## Module overview checkpoint — 2026-10-09
+
+- User approved continuing from roadmaps. Added a nested module GUI route beneath the existing
+  developer auth guard. Server params are awaited and passed as plain strings; handlers stay client-side.
+- Warm orange module header, original finite path-drawing motif, ordered numbered lesson cards,
+  accurate difficulty/question counts, completion labels and per-placement prerequisite guidance.
+  Breadcrumbs, previous/next modules and the current-marked roadmap module index provide navigation.
+- Module-only progress counts tracked placements in the selected module, excluding other modules
+  and untracked drafts. Recommendations stay inside this module while checking prerequisite completion
+  across the roadmap. No reading-to-completion shortcut, invented timing or learning-state writes.
+- Reused visible catalog/detail/progress APIs, shared query keys, bounded/abortable requests and
+  feedback. Initial loading/errors, retries, empty modules, zero tracked concepts, cached refresh
+  warnings and generic missing/wrong-parent/404 feedback remain distinct. Failed reads never become
+  fabricated zero progress, and stale progress suppresses the next-lesson recommendation.
+- Roadmap module links now open GUI. Lessons retain labelled exact CLI path + concept-ID handoffs
+  until checkpoint 8. Module projection is real; a CLI concept projects to its nearest module without
+  discarding its precise saved position. API IDs and collision-safe VFS names resolve under the visible
+  parent; direct CLI module visits resolve names before handoff and explicit links own later navigation.
+- UI styling/UX skills informed the three-level breadcrumb, semantic lesson/navigation hierarchy,
+  persistent feedback, 44px controls and mobile wrapping. Scoped orange light/dark tokens are reused;
+  the brief drawing and page entrance stop for reduced motion. No CLI recoloring or new dependencies.
+- Passed typecheck, touched-file lint, seventeen Node test files including twenty-five focused
+  roadmap/module checks, theme-separation guard and production build. Existing multiple-lockfile
+  workspace-root warning remains. No backend, migration, credentials, paid-provider or Git publishing.
+- Actual components/bundled fonts checked in a labelled interactive sample fixture: desktop, 375px
+  phone, 768px tablet, 812px landscape, light/dark, module/roadmap navigation, mobile menu Escape/focus,
+  initial pending/error/empty and stale progress. No console errors or horizontal viewport overflow.
+  This is component layout/interaction QA, not live authenticated API smoke. Signed-in permission,
+  retry recovery and mode-switch smoke plus OS reduced-motion remain manual; seams are component-tested.
+- Temporary preview stopped and browser overrides/tab cleaned up; user changes preserved. Notes:
+  `design-system/source-dev/pages/module.md`. Stop for module review; lesson reader is next, unstarted.
+
+## Lesson reader checkpoint — 2026-10-09
+
+- User approved continuing from the module overview, plus the read-only media API field and Mermaid
+  dependency. Added `/developer/roadmaps/[reference]/modules/[moduleReference]/lessons/[conceptReference]`
+  beneath the existing auth guard. Server params remain plain strings; resolve roadmap, module and
+  lesson references under the visible parent using shared VFS names, IDs and placement IDs.
+- Warm orange reader with real Markdown, readable code/copy feedback, tables, quote callouts,
+  source-labelled diagrams, section links, module lessons and adjacent lessons across modules.
+  Desktop keeps a quiet reading column; phone/tablet navigation uses native collapsible disclosures
+  to put content first. Scoped light/dark, focus/44px controls and reduced-motion entrance rules.
+  UI styling/UX skills informed content hierarchy, accessible navigation and persistent feedback.
+- The existing lesson API now returns ordered `{id, kind, payload, license}` media after the shared
+  visibility guard. No migration, media generation, provider, publishing or quota changes. Stored
+  diagram placeholders and Mermaid fences render lazily with strict security, fixed configuration,
+  size/edge bounds and source fallback. SVG stays an inert image; raw author HTML and unsafe links
+  are blocked. External images and YouTube players require an explicit load click. Video IDs choose
+  a fixed privacy-enhanced embed host, with close-player and external-watch fallback links.
+- Opening an approved nonempty lesson starts progress once per mounted placement; failure remains
+  visible with retry and does not block reading. Completion is explicit, never automatic from reading.
+  Fresh parent/content visibility reads must finish before starting, changing location or completing.
+  Cached quiz/progress failures disable it. Before POST, four fresh reads verify accessible lesson,
+  current placement, tracking, per-placement prerequisites and resolved quiz status (zero questions
+  is valid). The existing completion API does not itself enforce those gates; these client checks
+  are UX safeguards, not a substitute for backend authorization. Backend hardening is outside this
+  approved read-only extension. Show saved success only after the actual completion acknowledgement.
+- Roadmap/module lesson and continue links now open GUI; developer concept projection reaches the
+  exact lesson instead of its module. Direct CLI visits and explicit reader handoffs preserve the
+  exact placement path plus concept ID, including developer-shell semantics for admins. Quiz GUI
+  remains checkpoint 9; the reader clearly directs knowledge checks to the existing terminal.
+- Passed frontend typecheck, touched lint, 223 regressions across 17 Node test files (37 roadmap/reader
+  checks), theme guard and production build; backend typecheck and 55 suites / 661 tests. Existing
+  multiple-lockfile warning remains. Mermaid is pinned to 12.1.0, with a scoped KaTeX 0.18.2 override
+  removing its new transitive advisory; 12 existing audit findings remain (11 high, 1 critical), with
+  affected dependency versions unchanged. No broad dependency upgrades or audit-fix actions.
+- Browser-checked actual production components in an explicitly labelled sample fixture: 1440px
+  desktop, 375px phone, 768px tablet and 812px landscape; light/dark; rendered flowchart and math;
+  invalid-source fallback; diagram disclosure; section targets; copy; mobile disclosures and menu
+  Escape/focus; pending/error/empty/stale/save-error/completion-error and sample success. No viewport
+  overflow or unexpected console errors. This is not an authenticated API smoke test; real permission,
+  start/completion/retry and mode-switch smoke, external video playback and OS reduced-motion remain
+  manual. Video opt-in/embed/close behavior is component-tested without third-party requests.
+- Temporary public fixture removed and preview server stopped. Browser tab/viewport cleanup was
+  blocked by the connection-error page URL policy; temporary preview tabs may remain. Existing
+  servers and user changes preserved. No staging, commits or pushes. Notes:
+  `design-system/source-dev/pages/lesson.md`. Stop for reader review; quiz page is next, not started.
+
+## Quiz checkpoint — 2026-10-10
+
+- Added the nested `/developer/roadmaps/[reference]/modules/[moduleReference]/lessons/[conceptReference]/quiz`
+  route under the existing developer auth guard. Reader knowledge-check links now open this GUI.
+  Shared parent-scoped placement/VFS resolution and exact concept location remain unchanged.
+- Orange question cards, native labelled radios, per-question saved counters, previous/skip/question
+  navigation, answer-key reveal after resolution only, resolved/correct summary and return-to-reader.
+  Skipping and selecting don't spend an attempt. Resolved by exhaustion is never called correct or
+  mastered. No made-up explanations, XP awards or new backend fields; existing status is authoritative.
+- UI styling/UX guidance shaped readable hierarchy, native keyboard selection, focused persistent
+  feedback, 44px controls, one-column small-screen flow and finite reduced-motion-aware entrance.
+  Existing orange master/fonts/Lucide/CSS modules retained; no packages or palette replacement.
+- Guarded lesson GET precedes question/status reads. Student-facing projection strips author/admin
+  answer and distractor metadata. Inconsistent/partial snapshots fail visibly, not as an empty quiz.
+  Fresh lesson, roadmap placement, progress, questions and attempts are rechecked before exactly one
+  POST. Changed questions/history, inaccessible placement, drafts and missing prerequisites block it.
+- Attempts are never retried automatically. Rapid clicks are deduplicated; pending saves lock choices
+  and question controls. Unconfirmed/invalid acknowledgements never show saved success and lock
+  answering until an explicit successful fresh-status review. Last-confirmed counters are labelled
+  when an answer is unconfirmed. Successful acknowledgements refresh quiz/progress/reward/review data.
+- Existing backend quiz question/status/attempt endpoints do not enforce the shared lesson visibility
+  predicate themselves. These GUI preflight/approval/prerequisite checks are UX safeguards, not server
+  authorization or a cross-tab transactional attempt limit. Server-side hardening is a separate task;
+  no backend/migration/generation/provider/quota changes in this checkpoint. Backend auto-completes a
+  lesson once all questions resolve, including exhausted attempts; GUI confirms via roadmap progress.
+- Explicit/direct quiz CLI handoffs retain exact placement and concept ID with `view=quiz`. The terminal
+  entry composes only literal `quiz` plus a validated single reference, never an arbitrary URL command.
+  General GUI/CLI appearance switching keeps concept location, not unsaved radio selection/session step.
+- Passed frontend typecheck, touched lint, theme-separation guard and 238 regressions across 17 files
+  (52 roadmap/reader/quiz checks). Production route built with Turbopack before preview; subsequent
+  Turbopack CSS worker port binding was blocked even after approved retry. Supported webpack build
+  verified the sample preview; final fixture-free webpack production build also passed. Existing
+  multiple-lockfile warning and previously recorded dependency advisories remain; no broad upgrades.
+- Actual component browser QA used labelled sample data without account/API writes: 1440px desktop,
+  375px phone, 768px tablet, 812px landscape, light/dark, radio keyboard selection, wrong/correct saved
+  feedback, next-heading focus, menu Escape/focus and empty/pending/resolved/unconfirmed/stale states.
+  No horizontal viewport overflow or browser console errors observed. Live authenticated API and
+  cross-tab/permission/mode-switch flows, initial-load retry and OS-level reduced motion remain manual.
+- Sample fixture removed, localhost preview stopped, browser viewport reset and temporary tab closed.
+  User servers/changes preserved. No staging/commits/pushes. Notes: `design-system/source-dev/pages/quiz.md`.
+  Stop for quiz review; checkpoint 10 (FSRS review queue/session) is next, not started.
+
+## Checkpoint 10 — review queue and session (2026-10-10)
+
+- User continued from quiz checkpoint 9. Added `/developer/review` under existing auth;
+  dashboard and shared workspace navigation now link to the real GUI review surface.
+- Orange queue/session, original finite recall-loop motif, light/dark responsive layout,
+  native radios, keyboard focus, persistent feedback and reduced-motion support. UI skills
+  shaped these interactions; off-topic generated styles were not adopted over the master.
+- Actual due, returned-session, held-back, unavailable and difficult-question values remain
+  distinct. Legacy missing fields stay unknown, not invented zeroes. Lesson grouping is
+  overview-only; sessions retain server order. Broken-option questions are disclosed/skipped.
+- Freeze an explicit local batch; no mount writes or automatic grading/advancement. Fresh
+  due/fingerprint/options and guarded concept preflight before one answer POST. Show only
+  acknowledged correctness, correct answer, next civil due date, interval and XP. Reward/count
+  cache invalidation uses shared keys. Finish/reload leaves unanswered items due on the server.
+- Uncertain/malformed answers lock submission until explicit successful fresh queue check.
+  Failed refresh does not unlock. Missing/rescheduled items aren't locally counted as saved or
+  awarded XP; held-back/new items don't silently enter the batch. End summary is not “all clear.”
+- Difficult-question lesson links resolve visible placements with existing guarded content,
+  catalog/detail APIs and shared VFS names. Lookup is abortable with a total 12-second budget.
+  Reviews never rewrite saved content position; explicit/direct CLI handoffs keep exact path
+  plus allowlisted `view=review`, using existing terminal queue and explicit `review start`.
+- Backend unchanged. Existing legacy review visibility and non-transactional concurrent-answer
+  limits remain documented; GUI guards are not backend authorization or cross-tab exactly-once.
+- Final frontend typecheck, touched-file ESLint, theme guard and **254 tests across 17 files**
+  (**68 roadmap/reader/quiz/review checks**) passed. Fixture-free webpack production build passed;
+  existing multiple-lockfile warning remains. Test harness now passes actual filenames to the
+  TypeScript transpiler so `.ts` generics aren't accidentally interpreted as JSX. Removing the
+  temporary preview briefly left stale generated Next types; final build regenerated them and
+  the final standalone typecheck passes, without deleting the user's active dev cache.
+- Labelled actual-component sample browser QA: 1440px desktop, 375px phone, 768px tablet,
+  812px landscape, light/dark; keyboard radio selection, correct/wrong saved results,
+  remediation, next/summary focus, pending/uncertain/loading/error/retry/empty/stale states,
+  finish and menu Escape/focus. No horizontal overflow or console errors. Final native focus
+  brings off-screen questions/feedback into view; disabled-option hover is suppressed.
+- No authenticated account/API/scheduling writes in visual QA. Live signed-in visibility,
+  actual scheduling/XP, uncertainty reconciliation, cross-tab/mode handoffs and OS reduced
+  motion remain manual. Temporary fixture/server/tab removed and viewport reset. User
+  servers/changes preserved; no migrations/dependencies/provider/staging/commits/pushes.
+  Notes: `design-system/source-dev/pages/review.md`. Stop for review; checkpoint 11
+  (lesson discussion + private Ask AI) is next, not started.
+
+## Discussion privacy prerequisite — 2026-10-11
+
+- User approved correcting the existing Ask AI question-body leak before the GUI.
+  Persisted `target` protects whole private threads, including failed generation;
+  access is asker/admin only, not concept author. Known-ID question/answer mutation
+  paths use the same privacy guard. Public discussion behavior remains intact.
+- New versioned migration backfills AI-backed questions without deleting text.
+  Old failed requests have no saved target/provenance and require manual audit.
+  Rollback refuses to remove privacy while any private questions exist.
+- CLI privacy copy/thread actions match the new contract. Live migration is for
+  the user to run; rollout and smoke checks: `backend/qa-privacy.md`. No live DB or
+  provider action, and no staging/commit/push. Discussion GUI remains planned.
+- Verified backend typecheck, 56 suites / 692 tests, touched backend lint; frontend
+  typecheck, 255 tests across 17 files, touched lint, theme guard and production
+  webpack build. Existing multiple-lockfile warning remains. Migration SQL tests
+  use mocks, not live PostgreSQL; signed-in privacy smoke remains user-operated.

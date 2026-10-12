@@ -43,7 +43,7 @@ export class QaController {
   @ApiResponse({
     status: 200,
     description:
-      'Questions and nested answers retrieved. AI answers are only included for the developer who asked (admins excepted).',
+      'Questions include persisted target and nested answers. Entire Ask AI threads are visible only to the asker and admins; other viewers receive public discussion only.',
   })
   async getQuestionsForConcept(
     @Param('conceptId') conceptId: string,
@@ -75,6 +75,14 @@ export class QaController {
     summary: 'Post an answer in the discussion (any developer)',
   })
   @ApiResponse({ status: 201, description: 'Answer posted.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Private Ask AI threads do not accept discussion replies.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Question missing or not visible to this viewer.',
+  })
   async createAnswer(
     @Param('id') questionId: string,
     @CurrentUser() user: User,

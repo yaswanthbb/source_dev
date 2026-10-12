@@ -168,13 +168,13 @@ Prerequisite: `$CONCEPT` published via 1.9 (authored by `A`, visible to all).
   ```
 - **Expected:** `201` with `askerId === <B's id>`. Save as `Q`.
 
-### 2.2 Ask AI — private answer (as B)
+### 2.2 Ask AI — private question and answer (as B)
 - **Endpoint:** `POST /concepts/$CONCEPT/qa-questions` (as `B`)
 - **Payload:**
   ```json
   { "body": "Explain closures simply", "target": "ai" }
   ```
-- **Expected:** `201`, `answers` has 1 entry with `isAiAnswer: true`, `responderId: null`. Save question as `QAI`.
+- **Expected:** `201`, `target === "ai"`, `answers` has 1 entry with `isAiAnswer: true`, `responderId: null`. Save question as `QAI`.
 
 ### 2.3 Old target value rejected
 - **Endpoint:** `POST /concepts/$CONCEPT/qa-questions` (as `B`)
@@ -185,10 +185,16 @@ Prerequisite: `$CONCEPT` published via 1.9 (authored by `A`, visible to all).
 - **Endpoint:** `GET /concepts/$CONCEPT/qa-questions` (as `B`, the asker)
 - **Expected:** `200`; `QAI` includes the AI answer (`responderName: "AI Assistant"`).
 - **Endpoint:** same (as `A`, not the asker)
-- **Expected:** `200`; `QAI` shows **no** AI answer (empty `answers` unless humans replied).
+- **Expected:** `200`; `QAI` is **absent entirely**, including its question text. Being the concept author does not grant access. Public `Q` remains present.
 - **Endpoint:** same (as `ADMIN`)
 - **Expected:** `200`; AI answer visible (admin exception).
-- **Shape check (any viewer):** question has `askerId`/`askerName` (no `student*` keys); answers have `responderId`/`responderName`, `isAiAnswer`, `isVerified`.
+- **Shape check (any viewer):** question has `askerId`/`askerName` and `target: "discussion" | "ai"` (no `student*` keys); answers have `responderId`/`responderName`, `isAiAnswer`, `isVerified`.
+
+### 2.4a Private IDs and failed generation (privacy upgrade)
+- As `A`, try `PATCH`/`DELETE /qa-questions/$QAI`, `POST /qa-questions/$QAI/answers`, and `PATCH`/`DELETE /answers/<private-answer-id>` including `verify`/`unverify`. **Expected:** `404`, no changes; concept authorship is not a privacy bypass.
+- As `B` or `ADMIN`, try `POST /qa-questions/$QAI/answers`. **Expected:** `403`; private AI threads are not public reply threads.
+- In a test environment, force an AI credential/quota/provider failure for `B` (do not spend money just to test this). Submit `target: "ai"` once. **Expected:** original error returned, and its saved unanswered question has `target === "ai"`; visible to `B`/`ADMIN`, completely absent for `A`. Reading it performs no provider call. Do not automatically retry a potentially billed request.
+- After migration, pre-upgrade AI-backed threads must also be absent for `A`. Old failed requests without a saved AI answer need manual intent audit; see `qa-privacy.md`. This is not evidence those historical bodies were always private.
 
 ### 2.5 Any developer can answer — author/admin auto-verified (as A answers B's question)
 - **Endpoint:** `POST /qa-questions/$Q/answers` (as `A`)

@@ -23,6 +23,10 @@ export class Question extends BaseEntity {
   @Column({ type: 'text' })
   body: string;
 
+  // Persist before generation: even a failed Ask AI request stays private.
+  @Column({ type: 'varchar', length: 16, default: 'discussion' })
+  target: 'discussion' | 'ai';
+
   @OneToMany(() => Answer, (answer) => answer.question)
   answers: Answer[];
 }

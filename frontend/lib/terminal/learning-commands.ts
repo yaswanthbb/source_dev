@@ -107,6 +107,7 @@ interface QaAnswer {
 interface QaThread {
   id: string;
   conceptId: string;
+  target?: "discussion" | "ai";
   askerId?: string;
   askerName?: string | null;
   body: string;
@@ -959,7 +960,7 @@ function printThread(ctx: CommandCtx, thread: QaThread, mine: boolean) {
   entry(
     ctx,
     answers ? "[ANS]" : "[OPEN]",
-    `[${short}] ${thread.conceptTitle ?? "lesson"} — ${mine ? "you" : askerOf(thread)} · ${shortDate(thread.createdAt)} · ${plural(answers, "answer")}`,
+    `[${short}] ${thread.conceptTitle ?? "lesson"} — ${mine ? "you" : askerOf(thread)} · ${shortDate(thread.createdAt)} · ${plural(answers, "answer")}${thread.target === "ai" ? " · private Ask AI" : ""}`,
     [
       { label: "qa open", command: `qa open ${thread.id}` },
       { label: "cat", command: `cat ${thread.conceptId}` },
@@ -1019,7 +1020,11 @@ function renderThread(
   canVerify = false,
 ) {
   const answers = thread.answers ?? [];
-  heading(ctx, `discussion / ${thread.conceptTitle ?? "lesson"}`);
+  const privateAi = thread.target === "ai";
+  heading(ctx, `${privateAi ? "private Ask AI" : "discussion"} / ${thread.conceptTitle ?? "lesson"}`);
+  if (privateAi) {
+    ctx.io.print("Question and replies are visible only to the asker and admins.", "dim");
+  }
   ctx.io.print(
     `${mine ? "you" : askerOf(thread)} · ${shortDate(thread.createdAt)}${
       thread.updatedAt &&
@@ -1036,7 +1041,9 @@ function renderThread(
   if (!answers.length) {
     ctx.io.print("", "rule");
     ctx.io.print(
-      "no answer yet — anyone reading this lesson can reply, or ask the AI privately",
+      privateAi
+        ? "No AI reply is saved. The request may have failed or may still be running; refresh the board before making another paid request."
+        : "no answer yet — anyone reading this lesson can reply, or ask the AI privately",
       "dim",
     );
   }
@@ -1044,7 +1051,7 @@ function renderThread(
   for (const answer of answers) {
     ctx.io.print("", "rule");
     const who = answer.isAiAnswer
-      ? "AI · private to the asker"
+      ? "AI · private to the asker and admins"
       : `${(answer.responderName || "Developer").toUpperCase()}${answer.isVerified ? " [VERIFIED]" : ""}`;
     ctx.io.print(`${who}  ${shortDate(answer.createdAt)}`, "head");
     body(ctx, answer.body);
@@ -1062,7 +1069,9 @@ function renderThread(
   next(ctx, [
     { label: "cat", command: `cat ${thread.conceptId}` },
     { label: "qa ask", command: `qa ask ${thread.conceptId}` },
-    { label: "qa answer", command: `qa answer ${thread.id}` },
+    ...(!privateAi
+      ? [{ label: "qa answer", command: `qa answer ${thread.id}` }]
+      : []),
     ...(mine && !answers.length
       ? [{ label: "edit", command: `qa edit ${thread.id}` }]
       : []),
@@ -1100,7 +1109,7 @@ async function askQuestion(ctx: CommandCtx, reference?: string) {
     ctx,
     "Who should answer?",
     [
-      "ai · instant, private — only you ever see it",
+      "ai · private — your question and reply are visible to you and admins",
       "discussion · public — any developer reading this lesson can reply",
     ],
     [["ai"], ["discussion"]],
@@ -1276,6 +1285,9 @@ const qa: CommandSpec = {
         return;
       }
       const thread = await locateThread(ctx, argument);
+      if (thread.target === "ai") {
+        throw new Error("Private Ask AI threads do not accept discussion replies.");
+      }
       let answerBody = "";
       for (;;) {
         answerBody = (await ctx.io.ask("Your answer")).trim();

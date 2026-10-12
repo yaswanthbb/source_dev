@@ -1,0 +1,124 @@
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.hero > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+.description {
+  color: var(--gui-muted);
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 65ch;
+  overflow-wrap: anywhere;
+}
+.stamp {
+  width: 150px;
+  flex-shrink: 0;
+  color: var(--gui-accent);
+}
+.stamp svg {
+  display: block;
+  width: 100%;
+}
+.stamp path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: connect 800ms var(--gui-ease) 120ms both;
+}
+@keyframes connect {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.moduleNav h3 {
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+.moduleNav ol {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.moduleNav a {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--gui-muted);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.moduleNav a span:first-child {
+  flex-shrink: 0;
+}
+.moduleNav a:hover {
+  background: var(--gui-soft);
+  color: var(--gui-ink);
+}
+.moduleNav a[aria-current="page"] {
+  background: var(--gui-accent-soft);
+  color: var(--gui-ink);
+  font-weight: 600;
+}
+.neighbors {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 28px;
+}
+.neighbors a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--gui-border);
+  border-radius: 12px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  font-size: 12px;
+  line-height: 1.6;
+  text-decoration: none;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.neighbors a:hover {
+  border-color: var(--gui-accent);
+}
+.neighbors svg {
+  flex-shrink: 0;
+  color: var(--gui-accent);
+}
+.neighbors small {
+  display: block;
+  color: var(--gui-muted);
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+@media (max-width: 900px) {
+  .stamp {
+    width: 110px;
+  }
+}
+@media (max-width: 600px) {
+  .stamp {
+    display: none;
+  }
+  .neighbors {
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stamp path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

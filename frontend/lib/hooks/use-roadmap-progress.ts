@@ -1,11 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
-import apiClient from '@/lib/api-client';
+import { useQuery } from "@tanstack/react-query";
+import apiClient from "@/lib/api-client";
 
 export interface ConceptProgressInfo {
   conceptId: string;
   conceptTitle: string;
   conceptSlug?: string;
-  status: 'not_started' | 'in_progress' | 'completed';
+  status: "not_started" | "in_progress" | "completed";
   completedAt: string | null;
   prerequisites?: Array<{
     prerequisiteConceptId: string;
@@ -36,7 +36,7 @@ export interface ModuleConceptItem {
     id: string;
     title: string;
     slug?: string;
-    difficulty?: 'easy' | 'medium' | 'hard';
+    difficulty?: "easy" | "medium" | "hard";
     body?: string;
   };
 }
@@ -64,44 +64,47 @@ export interface RoadmapDetailData {
 // Hook for fetching a single roadmap's user progress
 export function useRoadmapProgress(roadmapId: string | undefined) {
   return useQuery<RoadmapProgressData>({
-    queryKey: ['roadmaps', roadmapId, 'progress'],
-    queryFn: async () => {
-      if (!roadmapId) throw new Error('Roadmap ID required');
+    queryKey: ["roadmaps", roadmapId, "progress"],
+    queryFn: async ({ signal }) => {
+      if (!roadmapId) throw new Error("Roadmap ID required");
       const response = await apiClient.get<RoadmapProgressData>(
         `/roadmaps/${roadmapId}/progress`,
+        { signal, timeout: 12000 },
       );
       const data = response.data;
       return {
         ...data,
         completedConceptsCount:
           data.completedConceptsCount ?? data.completedConcepts ?? 0,
-        completionPercentage:
-          data.completionPercentage ?? data.percentage ?? 0,
+        completionPercentage: data.completionPercentage ?? data.percentage ?? 0,
       };
     },
     enabled: Boolean(roadmapId),
+    retry: 1,
   });
 }
 
 // Hook for fetching full roadmap structure by ID
 export function useRoadmapDetail(roadmapId: string | undefined) {
   return useQuery<RoadmapDetailData>({
-    queryKey: ['roadmaps', roadmapId, 'detail'],
-    queryFn: async () => {
-      if (!roadmapId) throw new Error('Roadmap ID required');
+    queryKey: ["roadmaps", roadmapId, "detail"],
+    queryFn: async ({ signal }) => {
+      if (!roadmapId) throw new Error("Roadmap ID required");
       const response = await apiClient.get<RoadmapDetailData>(
         `/roadmaps/${roadmapId}`,
+        { signal, timeout: 12000 },
       );
       return response.data;
     },
     enabled: Boolean(roadmapId),
+    retry: 1,
   });
 }
 
 // Hook for fetching progress across all roadmaps in bulk
 export function useAllRoadmapsProgress(roadmapIds: string[]) {
   return useQuery<Record<string, RoadmapProgressData>>({
-    queryKey: ['roadmaps', 'all-progress', roadmapIds],
+    queryKey: ["roadmaps", "all-progress", roadmapIds],
     queryFn: async () => {
       const entries = await Promise.all(
         roadmapIds.map(async (id) => {

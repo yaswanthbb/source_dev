@@ -23,6 +23,7 @@ import { hasSignificantContentChange } from '../../common/utils/content-diff.uti
 import { CreateConceptDto } from './dto/create-concept.dto';
 import { UpdateConceptDto } from './dto/update-concept.dto';
 import { User } from '../users/entities/user.entity';
+import { ConceptMedia } from '../ai-generate/entities/concept-media.entity';
 
 @Injectable()
 export class ConceptsService {
@@ -31,11 +32,11 @@ export class ConceptsService {
     private readonly conceptRepository: Repository<Concept>,
     @InjectRepository(ModuleConcept)
     private readonly moduleConceptRepository: Repository<ModuleConcept>,
+    @InjectRepository(ConceptMedia)
+    private readonly conceptMediaRepository: Repository<ConceptMedia>,
   ) {}
 
-  async checkContentCreator(
-    user: Omit<User, 'passwordHash'>,
-  ): Promise<void> {
+  async checkContentCreator(user: Omit<User, 'passwordHash'>): Promise<void> {
     if (user.role === UserRole.ADMIN || user.role === UserRole.DEVELOPER) {
       return;
     }
@@ -121,7 +122,10 @@ export class ConceptsService {
       });
     }
 
-    let merged = [...approved, ...own.filter((c) => c.reviewStatus !== ConceptReviewStatus.APPROVED)];
+    let merged = [
+      ...approved,
+      ...own.filter((c) => c.reviewStatus !== ConceptReviewStatus.APPROVED),
+    ];
 
     // Authors always keep their own concepts; everyone else's approved
     // concepts need a published placement.
@@ -149,9 +153,7 @@ export class ConceptsService {
 
     if (search) {
       const needle = search.toLowerCase();
-      merged = merged.filter((c) =>
-        c.title.toLowerCase().includes(needle),
-      );
+      merged = merged.filter((c) => c.title.toLowerCase().includes(needle));
     }
 
     let parsedLabel: OriginLabel | undefined;
@@ -229,8 +231,21 @@ export class ConceptsService {
       (user.role === UserRole.ADMIN ||
         (concept.authorId !== null && concept.authorId === user.id));
 
+    // Media belongs to the visible live concept. Query only AFTER the shared
+    // visibility guard, and expose presentation fields, not the full entity.
+    const media = await this.conceptMediaRepository.find({
+      where: { conceptId: id },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+
     return {
       ...concept,
+      media: media.map(({ id: mediaId, kind, payload, license }) => ({
+        id: mediaId,
+        kind,
+        payload,
+        license,
+      })),
       originLabel: conceptOriginLabel(concept.isAiGenerated),
       draftContent: canSeeDraft ? concept.draftContent : null,
       appearsIn: moduleConcepts.map((mc) => ({

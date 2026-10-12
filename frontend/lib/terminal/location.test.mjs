@@ -30,12 +30,15 @@ function load(filename) {
   // here with "same structure but not reference-equal", which reads like a
   // logic bug and is not one. The throwing `require` below is what enforces
   // purity; it does not need a separate realm to do it.
-  vm.runInThisContext(
-    `(function(require, module, exports) {${js}\n})`,
-    { filename },
-  )(() => {
-    throw new Error("location.ts must not import anything");
-  }, loadedModule, loadedModule.exports);
+  vm.runInThisContext(`(function(require, module, exports) {${js}\n})`, {
+    filename,
+  })(
+    () => {
+      throw new Error("location.ts must not import anything");
+    },
+    loadedModule,
+    loadedModule.exports,
+  );
   return loadedModule.exports;
 }
 
@@ -108,7 +111,11 @@ test("parsePath rejects what is not a location", () => {
     "/roadmaps/a/../../etc", // traversal, unresolved
     "", // not absolute
   ]) {
-    assert.equal(L.parsePath(bad), null, `should reject ${JSON.stringify(bad)}`);
+    assert.equal(
+      L.parsePath(bad),
+      null,
+      `should reject ${JSON.stringify(bad)}`,
+    );
   }
   assert.equal(L.parsePath(undefined), null);
   assert.equal(L.parsePath(42), null);
@@ -156,7 +163,10 @@ test("relative descent walks one level at a time", () => {
   assert.deepEqual(L.resolvePath(L.ROOT, "voip-basics"), ALL[1]);
   assert.deepEqual(L.resolvePath(ALL[1], "intro"), ALL[2]);
   assert.deepEqual(L.resolvePath(ALL[2], "what-is-voip"), ALL[3]);
-  assert.deepEqual(L.resolvePath(L.ROOT, "voip-basics/intro/what-is-voip"), ALL[3]);
+  assert.deepEqual(
+    L.resolvePath(L.ROOT, "voip-basics/intro/what-is-voip"),
+    ALL[3],
+  );
 });
 
 test("a dot segment stays put", () => {
@@ -199,27 +209,35 @@ test("an absolute path from anywhere equals cd-then-act", () => {
 
 // ─── The GUI projection ─────────────────────────────────────────────────────
 
-test("only the root has a GUI page in this build", () => {
+test("all developer location depths have GUI pages", () => {
   assert.equal(L.hasGuiPage(L.ROOT), true);
-  assert.equal(L.hasGuiPage(ALL[1]), false);
-  assert.equal(L.hasGuiPage(ALL[2]), false);
-  assert.equal(L.hasGuiPage(ALL[3]), false);
+  assert.equal(L.hasGuiPage(ALL[1]), true);
+  assert.equal(L.hasGuiPage(ALL[2]), true);
+  assert.equal(L.hasGuiPage(ALL[3]), true);
 });
 
 test("guiFallback lands on a real page per role", () => {
-  assert.equal(L.guiFallback(ALL[3], "developer"), "/developer/dashboard");
+  assert.equal(
+    L.guiFallback(ALL[3], "developer"),
+    "/developer/roadmaps/voip-basics/modules/intro/lessons/what-is-voip",
+  );
   assert.equal(L.guiFallback(ALL[3], "admin"), "/admin/dashboard");
-  assert.equal(L.guiFallback(ALL[3]), "/developer/dashboard");
+  assert.equal(
+    L.guiFallback(ALL[3]),
+    "/developer/roadmaps/voip-basics/modules/intro/lessons/what-is-voip",
+  );
+  assert.equal(L.guiFallback(L.ROOT, "developer"), "/developer/dashboard");
+  assert.equal(
+    L.guiFallback(ALL[1], "developer"),
+    "/developer/roadmaps/voip-basics",
+  );
 });
 
-test("the projection is lossy, which is why it must not be written back", () => {
-  // Every depth collapses onto one route. This test exists to document the
-  // hazard: if a caller stored guiFallback's result as the user's position,
-  // all three of these would become the dashboard and the concept would be
-  // lost. The provider therefore leaves lastLocation untouched on a GUI
-  // switch — see the round-trip test below.
+test("developer projection distinguishes all depths; admin fallback remains lossy", () => {
   const projected = new Set(ALL.map((loc) => L.guiFallback(loc, "developer")));
-  assert.equal(projected.size, 1);
+  assert.equal(projected.size, 4);
+  assert.notEqual(L.guiFallback(ALL[2]), L.guiFallback(ALL[3]));
+  assert.equal(new Set(ALL.map((loc) => L.guiFallback(loc, "admin"))).size, 1);
 });
 
 test("a mode round-trip through GUI preserves the exact concept", () => {
@@ -229,7 +247,10 @@ test("a mode round-trip through GUI preserves the exact concept", () => {
 
   const stored = L.serializeLocation(wasAt);
   const shown = L.guiFallback(wasAt, "developer"); // what GUI renders
-  assert.equal(shown, "/developer/dashboard");
+  assert.equal(
+    shown,
+    "/developer/roadmaps/voip-basics/modules/intro/lessons/what-is-voip",
+  );
 
   // Switching back reads the stored value, not the projection.
   const restored = L.deserializeLocation(stored);

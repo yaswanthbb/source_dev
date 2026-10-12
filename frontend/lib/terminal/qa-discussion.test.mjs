@@ -20,6 +20,7 @@ const loaded = new Map();
 const THREAD = {
   id: "thread-1111aaaa",
   conceptId: "c1",
+  target: "discussion",
   askerId: "u1",
   askerName: "Sam",
   body: "Does SIP run over TCP?",
@@ -109,6 +110,7 @@ function loadFile(filename) {
 
 const commands = loadFile(path.join(__dirname, "commands.ts"));
 const { runCommand } = commands;
+const { clearLearningCache } = loadFile(path.join(__dirname, "learning-commands.ts"));
 const { installGlyphs } = loadFile(path.join(__dirname, "theme-contract.ts"));
 
 installGlyphs({
@@ -214,6 +216,30 @@ test("the ask picker offers ai-private vs public discussion", async () => {
   });
   await picking.catch(() => {});
   assert.match(text(host.lines), /private/);
+  assert.match(text(host.lines), /question and reply.*you and admins/);
+  assert.doesNotMatch(text(host.lines), /only you ever see/);
   assert.match(text(host.lines), /public/);
   commands.setCurrentConcept(null);
+});
+
+test("an unanswered private AI thread is labelled and offers no public reply", async () => {
+  const savedTarget = THREAD.target;
+  THREAD.target = "ai";
+  clearLearningCache();
+  try {
+    const host = recorder();
+    await runCommand(`qa open ${THREAD.id}`, ctx(host.io));
+    const output = text(host.lines);
+    assert.match(output, /PRIVATE ASK AI/);
+    assert.match(output, /only to the asker and admins/);
+    assert.match(output, /No AI reply is saved/);
+    assert.doesNotMatch(output, /anyone reading this lesson can reply|qa answer/);
+    const before = calls.length;
+    await runCommand(`qa answer ${THREAD.id}`, ctx(host.io));
+    assert.match(text(host.lines), /do not accept discussion replies/);
+    assert.equal(calls.length, before, "refusal performs no request or paid retry");
+  } finally {
+    THREAD.target = savedTarget;
+    clearLearningCache();
+  }
 });

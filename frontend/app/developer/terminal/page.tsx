@@ -23,7 +23,8 @@ function openingCommand({
   roadmap?: string;
 }): string | undefined {
   if (view === "profile") return "profile";
-  if (concept && SAFE_REFERENCE.test(concept)) return `cat ${concept}`;
+  if (concept && SAFE_REFERENCE.test(concept))
+    return view === "quiz" ? `quiz ${concept}` : `cat ${concept}`;
   if (roadmap && SAFE_REFERENCE.test(roadmap)) return `cd ${roadmap}`;
   // The catalogue is the root listing.
   if (view === "roadmaps") return "ls";
@@ -40,5 +41,10 @@ export default async function DeveloperTerminalPage({
   const params = await searchParams;
   // The view decides the registry, never the user role: an admin in the
   // developer shell gets the full developer set (ls, authoring, QA board).
-  return <TerminalWorkspace commandsRole="developer" initialCommand={openingCommand(params)} />;
+  return (
+    <TerminalWorkspace
+      commandsRole="developer"
+      initialCommand={openingCommand(params)}
+    />
+  );
 }

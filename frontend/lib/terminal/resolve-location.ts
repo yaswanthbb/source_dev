@@ -67,7 +67,7 @@ export function slugify(text: string): string {
  *  with two identically named children has an unreachable child. Callers sort
  *  by `orderIndex` first, so the suffix a collision gets is stable from one
  *  request to the next rather than depending on arrival order. */
-function uniqueNames(preferred: string[]): string[] {
+export function uniqueNames(preferred: string[]): string[] {
   const seen = new Map<string, number>();
   return preferred.map((base) => {
     const count = seen.get(base) ?? 0;

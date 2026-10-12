@@ -6,6 +6,7 @@ import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
 import { ModuleConceptPrerequisite } from './entities/module-concept-prerequisite.entity';
 import { McqQuestion } from '../quiz/entities/mcq-question.entity';
+import { ConceptMedia } from '../ai-generate/entities/concept-media.entity';
 import { RoadmapsService } from './roadmaps.service';
 import { RoadmapsController } from './roadmaps.controller';
 import { ConceptsService } from './concepts.service';
@@ -22,6 +23,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       ModuleConcept,
       ModuleConceptPrerequisite,
       McqQuestion,
+      ConceptMedia,
     ]),
     NotificationsModule,
   ],

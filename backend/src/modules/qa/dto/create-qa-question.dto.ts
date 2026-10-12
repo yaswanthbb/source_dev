@@ -14,7 +14,7 @@ export class CreateQaQuestionDto {
     enum: ['discussion', 'ai'],
     default: 'discussion',
     description:
-      'Target: post publicly in the discussion, or ask AI privately (visible only to you)',
+      'Target: post publicly in the discussion, or ask AI privately (question and reply visible only to the asker and admins)',
   })
   @IsOptional()
   @IsIn(['discussion', 'ai'])

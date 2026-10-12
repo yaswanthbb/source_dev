@@ -19,7 +19,7 @@
      Location is TOTAL. Every path below is representable and preservable.
      GUI rendering is PARTIAL. Only some locations have a page to render.
 
-   Deep content — roadmap, module, concept — is CLI-only in this build. When
+   Concept content is CLI-only in this build. When
    GUI mode cannot render where the user is, it shows the nearest real page
    instead. That projection is *lossy*, so it must never be written back as
    the user's position: `guiFallback` answers "what do I show", never "where
@@ -141,7 +141,9 @@ export function displayPath(loc: Location): string {
 }
 
 /** The location one level up. Root's parent is root, exactly as `cd ..` at `/`
- *  in a real shell leaves you at `/` rather than erroring. */export function parentOf(loc: Location): Location {
+ *  in a real shell leaves you at `/` rather than erroring. */ export function parentOf(
+  loc: Location,
+): Location {
   const segments = segmentsOf(loc);
   return fromSegments(segments.slice(0, -1)) ?? ROOT;
 }
@@ -273,32 +275,34 @@ export function fromCliParam(param?: string | null): Location | null {
 }
 
 // ─── The GUI projection ─────────────────────────────────────────────────────
-// Deep content has no GUI page in this build. These two functions are the
+// Root, roadmaps, modules and lessons have developer GUI pages.
+// These two functions are the
 // entire seam, kept together so the rule is read in one place.
 
 /** Does this location have a GUI page that can render it?
  *
- *  Only the root does. A roadmap, module or concept is CLI-only until the
- *  redesigned content pages land in a later phase; when they do, this is the
- *  one function that changes. */
+ *  All four developer location depths now have real pages. */
 export function hasGuiPage(loc: Location): boolean {
-  return loc.kind === "root";
+  return ["root", "roadmap", "module", "concept"].includes(loc.kind);
 }
 
 /** The GUI route to show for a location — the page itself where one exists,
  *  and the nearest real page for this user where it does not.
  *
  *  This answers "what do I render", never "where is the user". The result is
- *  lossy — every depth below root collapses onto one dashboard — so a caller
+ *  lossless for developers, but admins still project to their dashboard. A caller
  *  must not store it back as the user's position. `lastLocation` stays put
  *  across a GUI switch precisely so switching back can restore the concept
  *  the user was actually on. */
 export function guiFallback(loc: Location, role?: Role): string {
   if (role === "admin") return "/admin/dashboard";
-  // Developers: the dashboard is the nearest thing to "inside the curriculum"
-  // that has a page, and it is where continue/resume already lives.
-  void loc;
-  return "/developer/dashboard";
+  if (loc.kind === "root") return "/developer/dashboard";
+  const roadmap = `/developer/roadmaps/${encodeURIComponent(loc.roadmap)}`;
+  if (loc.kind === "roadmap") return roadmap;
+  const moduleHref = `${roadmap}/modules/${encodeURIComponent(loc.module)}`;
+  return loc.kind === "module"
+    ? moduleHref
+    : `${moduleHref}/lessons/${encodeURIComponent(loc.concept)}`;
 }
 
 // ─── Persistence ────────────────────────────────────────────────────────────
