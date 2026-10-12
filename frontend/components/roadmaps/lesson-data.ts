@@ -125,7 +125,7 @@ type MarkdownNode = {
   alt?: string;
 };
 export const DIAGRAM_URL = "source-dev-diagram:";
-export function lessonMarkdownPlugin() {
+export function lessonMarkdownPlugin(idPrefix = "lesson-section") {
   return (tree: MarkdownNode) => {
     function visit(node: MarkdownNode) {
       if (node.type === "heading") {
@@ -133,7 +133,7 @@ export function lessonMarkdownPlugin() {
           ...node.data,
           hProperties: {
             ...node.data?.hProperties,
-            id: `lesson-section-${node.position?.start.offset ?? 0}`,
+            id: `${idPrefix}-${node.position?.start.offset ?? 0}`,
           },
         };
       }

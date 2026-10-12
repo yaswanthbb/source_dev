@@ -112,19 +112,21 @@ export function LearningCliLink({
   children,
   primary = false,
   quiz = false,
+  discussion = false,
 }: {
   location: Location;
   conceptId?: string;
   children: ReactNode;
   primary?: boolean;
   quiz?: boolean;
+  discussion?: boolean;
 }) {
   const { setMode } = useUiMode();
   const route = toCliRoute(location, "developer");
   return (
     <Link
       className={primary ? styles.primary : styles.textLink}
-      href={`${route}${conceptId ? `${route.includes("?") ? "&" : "?"}concept=${encodeURIComponent(conceptId)}${quiz ? "&view=quiz" : ""}` : ""}`}
+      href={`${route}${conceptId ? `${route.includes("?") ? "&" : "?"}concept=${encodeURIComponent(conceptId)}${discussion ? "&view=qa" : quiz ? "&view=quiz" : ""}` : ""}`}
       onClick={() => setMode("cli", { navigate: false })}
     >
       {children}

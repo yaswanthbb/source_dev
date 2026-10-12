@@ -102,14 +102,16 @@ function CodeBlock({ text, children }: { text: string; children: ReactNode }) {
 export function LessonMarkdown({
   content,
   media = [],
+  idPrefix = "lesson-section",
 }: {
   content: string;
   media?: LessonMedia[];
+  idPrefix?: string;
 }) {
   return (
     <div className={styles.prose}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, lessonMarkdownPlugin]}
+        remarkPlugins={[remarkGfm, () => lessonMarkdownPlugin(idPrefix)]}
         skipHtml
         urlTransform={(url, key) =>
           key === "src" && url.startsWith(DIAGRAM_URL)

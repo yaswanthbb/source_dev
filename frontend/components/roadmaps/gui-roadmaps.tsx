@@ -38,6 +38,7 @@ import {
 import { ModuleOverview } from "./module-view";
 import { GuiLesson } from "./gui-lesson";
 import { GuiQuiz } from "./gui-quiz";
+import { GuiDiscussion } from "./gui-discussion";
 import styles from "./roadmaps.module.css";
 
 function useCatalog() {
@@ -77,13 +78,15 @@ function OverviewPage({
   moduleReference,
   conceptReference,
   quiz = false,
+  discussion = false,
 }: {
   reference: string;
   moduleReference?: string;
   conceptReference?: string;
   quiz?: boolean;
+  discussion?: boolean;
 }) {
-  const Reader = quiz ? GuiQuiz : GuiLesson;
+  const Reader = discussion ? GuiDiscussion : quiz ? GuiQuiz : GuiLesson;
   const catalog = useCatalog();
   const found = findRoadmap(catalog.data ?? [], reference);
   // The detail API accepts an ID, whereas the mode-switch location uses a VFS name.
@@ -227,11 +230,13 @@ function GuiLearningPage({
   moduleReference,
   conceptReference,
   quiz,
+  discussion,
 }: {
   reference?: string;
   moduleReference?: string;
   conceptReference?: string;
   quiz?: boolean;
+  discussion?: boolean;
 }) {
   const user = useQuery<User>({
     queryKey: ["users", "me"],
@@ -251,6 +256,7 @@ function GuiLearningPage({
             moduleReference={moduleReference}
             conceptReference={conceptReference}
             quiz={quiz}
+            discussion={discussion}
           />
         ) : (
           <GuiFeedback kind="error" title="Invalid roadmap link">
@@ -272,12 +278,14 @@ export function ModuleCliHandoff({
   guiWasShown,
   conceptReference,
   quiz,
+  discussion,
 }: {
   reference: string;
   moduleReference: string;
   guiWasShown?: RefObject<boolean>;
   conceptReference?: string;
   quiz?: boolean;
+  discussion?: boolean;
 }) {
   const catalog = useCatalog();
   const found = findRoadmap(catalog.data ?? [], reference);
@@ -312,7 +320,7 @@ export function ModuleCliHandoff({
           "developer",
         ) +
           (lesson
-            ? `&concept=${encodeURIComponent(lesson.placement.conceptId)}${quiz ? "&view=quiz" : ""}`
+            ? `&concept=${encodeURIComponent(lesson.placement.conceptId)}${discussion ? "&view=qa" : quiz ? "&view=quiz" : ""}`
             : ""),
       );
   }, [
@@ -325,6 +333,7 @@ export function ModuleCliHandoff({
     router,
     guiWasShown,
     quiz,
+    discussion,
   ]);
   const label = conceptReference ? "Lesson" : "Module";
   if (!failure)
@@ -361,11 +370,13 @@ export function RoadmapPage({
   moduleReference,
   conceptReference,
   quiz,
+  discussion,
 }: {
   reference?: string;
   moduleReference?: string;
   conceptReference?: string;
   quiz?: boolean;
+  discussion?: boolean;
 }) {
   const { ready, isCli } = useUiMode();
   const router = useRouter();
@@ -394,6 +405,7 @@ export function RoadmapPage({
           guiWasShown={guiWasShown}
           conceptReference={conceptReference}
           quiz={quiz}
+          discussion={discussion}
         />
       );
     return (
@@ -415,6 +427,7 @@ export function RoadmapPage({
       moduleReference={moduleReference}
       conceptReference={conceptReference}
       quiz={quiz}
+      discussion={discussion}
     />
   );
 }

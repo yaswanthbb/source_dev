@@ -296,6 +296,13 @@ export function LessonView({
               </>
             )}
             <div className={styles.cliActions}>
+              <Link
+                className={shared.primary}
+                href={`${lessonRoute(lesson.location)}/discussion`}
+              >
+                Discussion & Ask AI
+                <ArrowRight size={16} aria-hidden="true" />
+              </Link>
               {!!quiz.data?.totalQuestions && !quiz.error && (
                 <Link
                   className={shared.primary}

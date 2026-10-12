@@ -24,7 +24,11 @@ function openingCommand({
 }): string | undefined {
   if (view === "profile") return "profile";
   if (concept && SAFE_REFERENCE.test(concept))
-    return view === "quiz" ? `quiz ${concept}` : `cat ${concept}`;
+    return view === "qa"
+      ? `qa concept ${concept}`
+      : view === "quiz"
+        ? `quiz ${concept}`
+        : `cat ${concept}`;
   if (roadmap && SAFE_REFERENCE.test(roadmap)) return `cd ${roadmap}`;
   // The catalogue is the root listing.
   if (view === "roadmaps") return "ls";

@@ -32,9 +32,9 @@ with user approval. A completed visual redesign does not imply new backend work.
 | 7 | Module overview `/developer/roadmaps/[reference]/modules/[moduleReference]` | Approved; continued on user instruction |
 | 8 | Lesson reader: diagrams, media, progress and accurate GUI↔CLI location mapping | Approved; continued on user instruction |
 | 9 | Quiz / answer feedback | Approved; continued on user instruction |
-| 10 | Review session and queue (FSRS read model) | Implemented; ready for visual review |
-| 11 | Lesson discussion + private Ask AI | Backend privacy prerequisite implemented; migration user-operated; GUI planned |
-| 12 | Own content `/developer/content` | Planned |
+| 10 | Review session and queue (FSRS read model) | Approved; continued on user instruction |
+| 11 | Lesson discussion + private Ask AI | Approved; continued on user instruction |
+| 12 | Own content `/developer/content` | Implemented; ready for visual review |
 | 13 | Roadmap authoring `/developer/content/[roadmapId]` | Planned |
 | 14 | New lesson `/developer/concepts/new` | Planned |
 | 15 | Edit lesson `/developer/concepts/[id]/edit` | Planned |
@@ -494,3 +494,56 @@ The staged snapshot remains unchanged; this experiment is an unstaged working-co
   typecheck, 255 tests across 17 files, touched lint, theme guard and production
   webpack build. Existing multiple-lockfile warning remains. Migration SQL tests
   use mocks, not live PostgreSQL; signed-in privacy smoke remains user-operated.
+
+## Lesson discussion / Ask AI checkpoint — 2026-10-12
+
+- User reported the privacy migration succeeded and requested the next page. Added
+  nested lesson discussion route and reader link, scoped orange public/private
+  forms, search/pagination, native validation/consent, ownership-based maintenance,
+  author/admin verified controls and explicit deletion confirmation. Shared safe
+  Markdown replies use unique heading prefixes; light/dark and reduced motion.
+- Fresh guarded placement/account/thread checks precede every single write. No
+  progress writes, automatic provider calls, optimistic content or mutation retries.
+  Persisted privacy contracts fail closed. Uncertain outcomes lock until explicit
+  fresh reads; warn about unfinished requests/duplicate charges, require new AI
+  consent, keep text on errors and question/reply drafts across channel changes.
+- Lesson/placement CLI handoff uses literal allowlisted `qa concept` and safe IDs;
+  existing general mode projection stays at the reader. No quota balance invented.
+- Labelled no-account/no-API sample checks desktop/mobile/tablet/landscape, light/
+  dark, forms/focus/cancellation, privacy and all feedback states without overflow or
+  console errors. Live authenticated/paid/cross-tab/mode smoke remains manual.
+- Notes: `design-system/source-dev/pages/discussion.md`. No new dependencies,
+  backend/migration actions, staging/commits/pushes. Own-content checkpoint 12 is next.
+- Final frontend typecheck, 270 tests across 17 files (83 learning checks), touched
+  lint (one pre-existing unused test variable warning), theme guard and fixture-free
+  webpack production build pass. Existing multiple-lockfile warning remains.
+
+## My content checkpoint — 2026-10-12
+
+- User approved discussion and continued to checkpoint 12. `/developer/content` now
+  selects a scoped orange GUI library or the preserved classic page. Search, status
+  filters, newest/title sorting, six-card pagination, real dates/counts/origin, review
+  feedback and effective scheduled changes use existing roadmap metadata.
+- Only the signed-in user's own roadmaps are listed, including for admins. Missing
+  counts stay unknown; initial loading/errors never imply an empty library. Contract
+  and access failures hide private cache/form; ordinary refresh errors retain drafts
+  and the last library while pausing creation. No learning-location writes.
+- Native private-roadmap creation uses existing APIs: focused linked validation,
+  current-account preflight, one guarded POST, no automatic retry, confirmed-only
+  success and persistent pending/error feedback. Ambiguous results require an explicit
+  successful fresh library check and warn about outstanding requests/duplicates.
+  No exactly-once guarantee, AI generation, optimistic content or auto-redirect.
+- Card and success links label the existing editor as classic. The original library
+  implementation is identical apart from its export name; mode switching stays on
+  this route. Roadmap authoring checkpoint 13 is not redesigned yet.
+- Labelled local-only sample browser QA checks 1280px desktop, 375px phone, 768px
+  tablet, 812px landscape, light/dark, filters/search/sort/pagination, validation and
+  success focus, retained drafts, loading/error/empty/stale/pending/uncertain feedback,
+  recovery and mobile menu Escape/focus. No overflow or console errors observed.
+- Frontend typecheck, touched lint, 283 tests across 17 files (96 learning/authoring
+  checks), theme guard and fixture-free webpack build pass. Existing unused test
+  variable warning and multiple-lockfile build warning remain. Live signed-in
+  creation/permission/mode and OS reduced-motion smoke remain manual.
+- Temporary sample removed, its server/tab closed and viewport reset. No backend,
+  migration, package, real-account, paid-provider, staging, commit or push actions.
+  Notes: `design-system/source-dev/pages/content.md`. Stop for review; editor is next.

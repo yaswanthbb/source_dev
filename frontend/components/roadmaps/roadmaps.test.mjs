@@ -553,6 +553,1015 @@ export const ready = (data) => ({
   error: false,
   retry() {},
 });
+const discussionRaw = {
+  id: "q-public",
+  conceptId: "c2",
+  askerId: "u1",
+  askerName: "Sam",
+  target: "discussion",
+  body: "How does a branch move?",
+  createdAt: "2026-10-01T10:00:00Z",
+  updatedAt: "2026-10-01T10:00:00Z",
+  answers: [],
+};
+const discussionAnswer = {
+  id: "a-public",
+  questionId: "q-public",
+  responderId: "u2",
+  responderName: "Alex",
+  body: "It moves to the new commit.",
+  isAiAnswer: false,
+  isVerified: false,
+  createdAt: "2026-10-02T10:00:00Z",
+  updatedAt: "2026-10-02T10:00:00Z",
+};
+function discussionSetup(options = {}) {
+  const h = roadmapHarness(options),
+    dataModule = h.load(new URL("./discussion-data.ts", import.meta.url)),
+    client = h.load(new URL("./discussion-client.ts", import.meta.url));
+  const snapshot = dataModule.parseDiscussion(
+    { ...sampleLesson, authorId: "author" },
+    { id: "u1", role: "developer" },
+    [discussionRaw],
+    "c2",
+  );
+  const entry = h.data.findModule(sample, "git", "m1"),
+    lesson = h.data.findLesson(entry, "c2");
+  return {
+    h,
+    dataModule,
+    client,
+    snapshot,
+    entry,
+    lesson,
+    props: {
+      roadmap: sample,
+      entry,
+      lesson,
+      data: snapshot,
+      onAction() {},
+      onRefresh() {},
+    },
+  };
+}
+function discussionApi({
+  questions = [discussionRaw],
+  actor = { id: "u1", role: "developer" },
+  parent = sample,
+  write,
+  reads,
+} = {}) {
+  return {
+    get: async (path, options) => {
+      reads?.push([path, options]);
+      return {
+        data:
+          path === "/roadmaps/r1"
+            ? parent
+            : path === "/users/me"
+              ? actor
+              : path.endsWith("qa-questions")
+                ? questions
+                : { ...sampleLesson, authorId: "author" },
+      };
+    },
+    post: write,
+    patch: write,
+    delete: write,
+  };
+}
+test("discussion parser requires persisted privacy and rejects other users' private threads without leaking text", () => {
+  const { dataModule } = discussionSetup();
+  for (const patch of [
+    { target: undefined },
+    { target: "ai", askerId: "other" },
+    { conceptId: "wrong" },
+    { createdAt: "bad" },
+  ])
+    assert.throws(() =>
+      dataModule.parseDiscussion(
+        sampleLesson,
+        { id: "u1", role: "developer" },
+        [{ ...discussionRaw, ...patch }],
+        "c2",
+      ),
+    );
+  assert.throws(() =>
+    dataModule.parseDiscussion(
+      sampleLesson,
+      { id: "u1", role: "developer" },
+      [discussionRaw, discussionRaw],
+      "c2",
+    ),
+  );
+  const privateQ = {
+    ...discussionRaw,
+    target: "ai",
+    answers: [
+      {
+        ...discussionAnswer,
+        isAiAnswer: true,
+        responderId: null,
+        responderName: "AI Assistant",
+      },
+    ],
+  };
+  assert.equal(
+    dataModule.parseDiscussion(
+      sampleLesson,
+      { id: "u1", role: "developer" },
+      [privateQ],
+      "c2",
+    ).threads[0].target,
+    "ai",
+  );
+  assert.equal(
+    dataModule.parseDiscussion(
+      sampleLesson,
+      { id: "admin", role: "admin" },
+      [privateQ],
+      "c2",
+    ).threads.length,
+    1,
+  );
+});
+test("discussion permissions mirror owner, answered lock, verifier and AI privacy rules", () => {
+  const { snapshot, dataModule } = discussionSetup(),
+    thread = snapshot.threads[0];
+  assert.equal(
+    dataModule.discussionPermissions(snapshot, thread).editQuestion,
+    true,
+  );
+  assert.equal(
+    dataModule.discussionPermissions(snapshot, {
+      ...thread,
+      answers: [discussionAnswer],
+    }).editQuestion,
+    false,
+  );
+  assert.equal(
+    dataModule.discussionPermissions(snapshot, thread, discussionAnswer)
+      .editAnswer,
+    false,
+  );
+  const author = { ...snapshot, viewer: { id: "author", role: "developer" } };
+  assert.equal(
+    dataModule.discussionPermissions(author, thread, discussionAnswer).verify,
+    true,
+  );
+  assert.equal(
+    dataModule.discussionPermissions(
+      author,
+      { ...thread, target: "ai" },
+      discussionAnswer,
+    ).verify,
+    false,
+  );
+  assert.equal(
+    dataModule.discussionPermissions(
+      { ...snapshot, viewer: { id: "admin", role: "admin" } },
+      { ...thread, target: "ai" },
+      { ...discussionAnswer, isAiAnswer: true },
+    ).verify,
+    false,
+  );
+});
+test("discussion loading is guarded, abortable and never generates AI", async () => {
+  const reads = [],
+    signal = new AbortController().signal;
+  const { client } = discussionSetup({
+    api: discussionApi({ reads, write: () => assert.fail("no entry writes") }),
+  });
+  const result = await client.loadDiscussion("c2", signal);
+  assert.equal(result.threads.length, 1);
+  assert.equal(reads.length, 3);
+  for (const [, options] of reads) {
+    assert.equal(options.signal, signal);
+    assert.equal(options.timeout, 12000);
+  }
+});
+test("a new public or private question is saved once after fresh placement/account/thread checks", async () => {
+  for (const target of ["discussion", "ai"]) {
+    const reads = [],
+      writes = [];
+    const { client, snapshot, entry, lesson } = discussionSetup({
+      api: discussionApi({
+        reads,
+        write: async (path, body, options) => {
+          writes.push([path, body, options]);
+          return {
+            data: {
+              ...discussionRaw,
+              id: "q-new",
+              body: body.body,
+              target: body.target,
+              answers:
+                target === "ai"
+                  ? [
+                      {
+                        id: "a-new",
+                        questionId: "q-new",
+                        responderId: null,
+                        isAiAnswer: true,
+                        body: "AI explanation",
+                      },
+                    ]
+                  : [],
+            },
+          };
+        },
+      }),
+    });
+    const saved = await client.submitDiscussionAction(
+      sample,
+      "git",
+      entry,
+      lesson,
+      snapshot,
+      { kind: "ask", target, body: "  What is a branch?  " },
+    );
+    assert.equal(
+      saved.message,
+      target === "ai" ? "AI reply saved" : "Question posted",
+    );
+    assert.equal(writes.length, 1);
+    assert.equal(reads.length, 4);
+    assert.equal(writes[0][1].body, "What is a branch?");
+    assert.equal(writes[0][2].timeout, target === "ai" ? 180000 : 12000);
+  }
+});
+test("changed placement/account/privacy and blank text never perform a discussion write", async () => {
+  for (const scenario of ["placement", "actor", "privacy", "blank"]) {
+    const { client, snapshot, entry, lesson } = discussionSetup({
+      api: discussionApi({
+        parent: scenario === "placement" ? { ...sample, modules: [] } : sample,
+        actor:
+          scenario === "actor" ? { id: "other", role: "developer" } : undefined,
+        questions:
+          scenario === "privacy"
+            ? [{ ...discussionRaw, target: undefined }]
+            : undefined,
+        write: () => assert.fail("no write before successful preflight"),
+      }),
+    });
+    await assert.rejects(
+      client.submitDiscussionAction(sample, "git", entry, lesson, snapshot, {
+        kind: "ask",
+        target: "discussion",
+        body: scenario === "blank" ? " " : "Question",
+      }),
+    );
+  }
+});
+test("discussion writes reconcile thread fingerprints and permission changes before posting", async () => {
+  const { client, snapshot, entry, lesson, dataModule } = discussionSetup({
+    api: discussionApi({
+      questions: [{ ...discussionRaw, body: "Changed" }],
+      write: () => assert.fail("no stale edit"),
+    }),
+  });
+  await assert.rejects(
+    client.submitDiscussionAction(sample, "git", entry, lesson, snapshot, {
+      kind: "edit-question",
+      questionId: discussionRaw.id,
+      fingerprint: dataModule.threadFingerprint(snapshot.threads[0]),
+      body: "Edited",
+    }),
+    /changed/,
+  );
+});
+test("reply, edit, delete, verify and unverify use their exact guarded endpoints", async () => {
+  for (const kind of [
+    "reply",
+    "edit-question",
+    "delete-question",
+    "edit-answer",
+    "delete-answer",
+    "verify",
+    "unverify",
+  ]) {
+    const questions = [{ ...discussionRaw, answers: [discussionAnswer] }],
+      writes = [];
+    const { client, snapshot, entry, lesson, dataModule } = discussionSetup({
+      api: discussionApi({
+        questions,
+        actor: { id: "admin", role: "admin" },
+        write: async (path, body) => {
+          writes.push(path);
+          return {
+            data:
+              kind === "reply"
+                ? { ...discussionAnswer, responderId: "admin", body: body.body }
+                : kind === "edit-question"
+                  ? { ...discussionRaw, body: body.body }
+                  : {
+                      ...discussionAnswer,
+                      body: body?.body ?? discussionAnswer.body,
+                      isVerified: kind === "verify",
+                    },
+          };
+        },
+      }),
+    });
+    const adminSnapshot = {
+      ...snapshot,
+      viewer: { id: "admin", role: "admin" },
+      threads: dataModule.parseDiscussion(
+        sampleLesson,
+        { id: "admin", role: "admin" },
+        questions,
+        "c2",
+      ).threads,
+    };
+    await client.submitDiscussionAction(
+      sample,
+      "git",
+      entry,
+      lesson,
+      adminSnapshot,
+      {
+        kind,
+        questionId: discussionRaw.id,
+        answerId: discussionAnswer.id,
+        body: "Edited",
+        fingerprint: dataModule.threadFingerprint(adminSnapshot.threads[0]),
+      },
+    );
+    assert.equal(
+      writes[0],
+      kind === "reply"
+        ? "/qa-questions/q-public/answers"
+        : kind.endsWith("question")
+          ? "/qa-questions/q-public"
+          : `/answers/a-public${kind === "verify" || kind === "unverify" ? `/${kind}` : ""}`,
+    );
+    assert.equal(writes.length, 1);
+  }
+});
+test("AI failures and malformed save acknowledgements are uncertain and never retried", async () => {
+  for (const failure of ["timeout", "quota", "invalid"]) {
+    let writes = 0;
+    const { client, snapshot, entry, lesson } = discussionSetup({
+      api: discussionApi({
+        write: async () => {
+          writes++;
+          if (failure !== "invalid")
+            throw {
+              response: failure === "quota" ? { status: 429 } : undefined,
+            };
+          return { data: { id: "q-new" } };
+        },
+      }),
+    });
+    await assert.rejects(
+      client.submitDiscussionAction(sample, "git", entry, lesson, snapshot, {
+        kind: "ask",
+        target: "ai",
+        body: "Why does this work?",
+      }),
+      (error) => error.uncertain === true,
+    );
+    assert.equal(writes, 1);
+  }
+});
+test("discussion view renders truthful public/private controls, feedback and exact CLI placement", () => {
+  const { h, props } = discussionSetup(),
+    View = h.load(
+      new URL("./discussion-view.tsx", import.meta.url),
+    ).DiscussionView;
+  const html = h.render(createElement(View, props));
+  assert.match(html, /Public discussion/);
+  assert.match(html, /Private Ask AI/);
+  assert.match(html, /Your question is shared/);
+  assert.match(html, /view=qa/);
+  assert.match(html, /concept=c2/);
+  assert.match(html, /Delete question/);
+  assert.match(html, /Edit question/);
+  assert.doesNotMatch(html, /AI reply saved/);
+  const failed = h.render(
+    createElement(View, {
+      ...props,
+      error: "Not confirmed",
+      uncertain: true,
+      canWrite: false,
+    }),
+  );
+  assert.match(failed, /Check saved threads/);
+  assert.match(failed, /role="alert"/);
+});
+test("private discussion view explains admin/provider access and requires explicit AI consent", () => {
+  let i = 0;
+  const { h, props } = discussionSetup({
+    hooks: {
+      useState: (initial) => [i++ === 0 ? "ai" : initial, () => {}],
+      useEffect() {},
+      useRef: (value) => ({ current: value }),
+    },
+  });
+  const View = h.load(
+    new URL("./discussion-view.tsx", import.meta.url),
+  ).DiscussionView;
+  const html = h.render(
+    createElement(View, {
+      ...props,
+      data: {
+        ...props.data,
+        threads: [{ ...props.data.threads[0], target: "ai" }],
+      },
+    }),
+  );
+  assert.match(html, /visible only to you and admins/);
+  assert.match(html, /configured AI provider/);
+  assert.match(html, /type="checkbox"/);
+  assert.match(html, /No AI reply is saved/);
+  assert.doesNotMatch(html, />Reply</);
+});
+test("discussion controller does not write on mount, deduplicates clicks and preserves drafts on stale reads", () => {
+  const { snapshot, props } = discussionSetup();
+  for (const stale of [false, true]) {
+    const h = roadmapHarness({
+      queries: {
+        "concepts/c2/discussion": {
+          data: snapshot,
+          isPending: false,
+          isFetching: false,
+          isError: stale,
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useEffect() {},
+        useRef: (v) => ({ current: v }),
+      },
+    });
+    const tree = h
+      .load(new URL("./gui-discussion.tsx", import.meta.url))
+      .GuiDiscussion({ ...props, name: "git" });
+    const view = tree.props.children[1];
+    assert.equal(h.calls.length, 0);
+    view.props.onAction({
+      kind: "ask",
+      target: "discussion",
+      body: "Question",
+    });
+    view.props.onAction({
+      kind: "ask",
+      target: "discussion",
+      body: "Question",
+    });
+    assert.equal(
+      h.calls.filter((c) => c[0] === "mutation").length,
+      stale ? 0 : 1,
+    );
+    assert.equal(view.props.canWrite, !stale);
+  }
+});
+test("private cached discussion is hidden on denied or incompatible refresh", () => {
+  const { snapshot, props } = discussionSetup();
+  const h = roadmapHarness({
+    queries: {
+      "concepts/c2/discussion": {
+        data: snapshot,
+        isPending: false,
+        isError: true,
+        error: { response: { status: 404 } },
+      },
+    },
+    hooks: {
+      useState: (v) => [v, () => {}],
+      useEffect() {},
+      useRef: (v) => ({ current: v }),
+    },
+  });
+  const html = h.render(
+    createElement(
+      h.load(new URL("./gui-discussion.tsx", import.meta.url)).GuiDiscussion,
+      { ...props, name: "git" },
+    ),
+  );
+  assert.match(html, /cached threads have been hidden/);
+  assert.doesNotMatch(html, /How does a branch move/);
+});
+test("AI uncertainty unlocks only after an explicit successful fresh thread read", async () => {
+  const { snapshot, props } = discussionSetup();
+  for (const failed of [true, false]) {
+    const mutationResult = {};
+    const h = roadmapHarness({
+      mutationResult,
+      queries: {
+        "concepts/c2/discussion": {
+          data: snapshot,
+          isPending: false,
+          isFetching: false,
+          refetch: async () => ({ isError: failed, data: snapshot }),
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useEffect() {},
+        useRef: (v) => ({ current: v }),
+      },
+    });
+    const { DiscussionFailure } = h.load(
+      new URL("./discussion-client.ts", import.meta.url),
+    );
+    mutationResult.error = new DiscussionFailure("uncertain", true);
+    const view = h
+      .load(new URL("./gui-discussion.tsx", import.meta.url))
+      .GuiDiscussion({ ...props, name: "git" }).props.children[1];
+    assert.equal(view.props.canWrite, false);
+    view.props.onAction({ kind: "ask", target: "ai", body: "Question" });
+    assert.equal(h.calls.filter((c) => c[0] === "mutation").length, 0);
+    view.props.onRefresh();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      h.calls.filter((c) => c[0] === "reset-mutation").length,
+      failed ? 0 : 1,
+    );
+  }
+});
+test("question and reply drafts survive public/private channel changes without writing", () => {
+  const states = [];
+  let index = 0;
+  const { h, props } = discussionSetup({
+    hooks: {
+      useState: (initial) => {
+        const at = index++;
+        if (!(at in states)) states[at] = initial;
+        return [
+          states[at],
+          (value) => {
+            states[at] =
+              typeof value === "function" ? value(states[at]) : value;
+          },
+        ];
+      },
+      useEffect() {},
+      useRef: (v) => ({ current: v }),
+    },
+  });
+  const View = h.load(
+    new URL("./discussion-view.tsx", import.meta.url),
+  ).DiscussionView;
+  const render = () => {
+    index = 0;
+    return View({
+      ...props,
+      onAction: () => assert.fail("no writes from switching channels"),
+    });
+  };
+  function find(root, match) {
+    if (!root) return;
+    if (Array.isArray(root))
+      return root.map((node) => find(node, match)).find(Boolean);
+    return match(root) ? root : find(root.props?.children, match);
+  }
+  let tree = render();
+  find(
+    tree,
+    (e) => e.type === "textarea" && e.props.id === "discussion-question",
+  ).props.onChange({ target: { value: "Public draft" } });
+  tree = render();
+  find(
+    tree,
+    (e) => e.type === "button" && e.props.children === "Reply",
+  ).props.onClick({ currentTarget: { focus() {} } });
+  tree = render();
+  find(
+    tree,
+    (e) => e.type === "textarea" && e.props.id.startsWith("reply-"),
+  ).props.onChange({ target: { value: "Reply draft" } });
+  tree = render();
+  find(
+    tree,
+    (e) => e.type === "button" && e.props["aria-pressed"] === false,
+  ).props.onClick();
+  tree = render();
+  find(
+    tree,
+    (e) => e.type === "textarea" && e.props.id === "discussion-question",
+  ).props.onChange({ target: { value: "Private draft" } });
+  tree = render();
+  find(
+    tree,
+    (e) => e.type === "button" && e.props["aria-pressed"] === false,
+  ).props.onClick();
+  tree = render();
+  assert.equal(
+    find(
+      tree,
+      (e) => e.type === "textarea" && e.props.id === "discussion-question",
+    ).props.value,
+    "Public draft",
+  );
+  assert.equal(
+    find(tree, (e) => e.type === "textarea" && e.props.id.startsWith("reply-"))
+      .props.value,
+    "Reply draft",
+  );
+});
+test("discussion styles retain the orange theme and lesson route is wired", () => {
+  const source = readFileSync(
+    new URL("./discussion.module.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /prefers-reduced-motion/);
+  assert.match(source, /var\(--gui-primary\)/);
+  assert.match(
+    readFileSync(new URL("./lesson-view.tsx", import.meta.url), "utf8"),
+    /\/discussion/,
+  );
+});
+
+const contentUser = {
+  id: "author-1",
+  name: "Sam",
+  email: "sam@example.test",
+  role: "developer",
+};
+const ownRoadmapRaw = {
+  id: "own-1",
+  title: "Foundations of Git",
+  description: "Connect commits and branches.",
+  createdById: contentUser.id,
+  reviewStatus: "draft",
+  modules: [],
+  createdAt: "2026-10-01T00:00:00Z",
+  updatedAt: "2026-10-01T00:00:00Z",
+};
+function contentSetup(options) {
+  const h = roadmapHarness(options),
+    data = h.load(new URL("../content/content-data.ts", import.meta.url)),
+    client = h.load(new URL("../content/content-client.ts", import.meta.url));
+  const library = data.parseContentLibrary(
+    contentUser,
+    [ownRoadmapRaw],
+    Date.parse("2026-10-12T00:00:00Z"),
+  );
+  return { h, data, client, library };
+}
+test("own content projects only the signed-in author's roadmaps, including for admins", () => {
+  const { data } = contentSetup();
+  for (const role of ["developer", "admin"]) {
+    const library = data.parseContentLibrary({ ...contentUser, role }, [
+      ownRoadmapRaw,
+      { ...ownRoadmapRaw, id: "other", createdById: "other" },
+      { ...ownRoadmapRaw, id: "orphan", createdById: null },
+    ]);
+    assert.equal(library.roadmaps.length, 1);
+    assert.equal(library.roadmaps[0].moduleCount, 0);
+    assert.equal(
+      library.roadmaps[0].modules,
+      undefined,
+      "no lesson/draft payloads cached by the presentation",
+    );
+  }
+});
+test("own library evaluates effective unpublish/deletion without inventing review readiness", () => {
+  const { data } = contentSetup(),
+    now = Date.parse("2026-10-12T00:00:00Z");
+  const parse = (patch) =>
+    data.parseOwnRoadmap(
+      { ...ownRoadmapRaw, reviewStatus: "published", ...patch },
+      contentUser.id,
+      now,
+    );
+  assert.equal(parse({ unpublishStatus: "requested" }).status, "published");
+  assert.equal(
+    parse({
+      unpublishStatus: "approved",
+      unpublishEffectiveAt: "2026-10-11T00:00:00Z",
+    }).status,
+    "draft",
+  );
+  assert.equal(
+    parse({
+      unpublishStatus: "approved",
+      unpublishEffectiveAt: "2026-10-13T00:00:00Z",
+    }).status,
+    "published",
+  );
+  assert.equal(
+    parse({ deleteEffectiveAt: "2026-10-11T00:00:00Z" }).status,
+    "removed",
+  );
+  assert.equal(parse({ reviewStatus: "submitted" }).status, "submitted");
+  assert.equal(
+    parse({ moduleCount: undefined, modules: undefined }).moduleCount,
+    undefined,
+  );
+});
+test("own library rejects malformed private metadata and filters without mutating catalog data", () => {
+  const { data, library } = contentSetup();
+  for (const patch of [
+    { reviewStatus: "approved" },
+    { createdAt: "bad" },
+    { createdById: "other" },
+  ])
+    assert.throws(() =>
+      data.parseOwnRoadmap(
+        { ...ownRoadmapRaw, ...patch },
+        contentUser.id,
+        Date.now(),
+      ),
+    );
+  assert.throws(() =>
+    data.parseContentLibrary({ ...contentUser, role: "student" }, [
+      ownRoadmapRaw,
+    ]),
+  );
+  const rows = [
+    ...library.roadmaps,
+    {
+      ...library.roadmaps[0],
+      id: "own-2",
+      title: "Async JavaScript",
+      status: "published",
+    },
+  ];
+  assert.equal(
+    data.filterOwnRoadmaps(rows, "async", "published", "title")[0].id,
+    "own-2",
+  );
+  assert.equal(rows[0].id, "own-1");
+});
+test("roadmap draft validation keeps existing limits and allows international titles", () => {
+  const { data } = contentSetup();
+  assert.match(data.roadmapDraftErrors(" ", "").title, /title/);
+  assert.match(data.roadmapDraftErrors("x".repeat(121), "").title, /120/);
+  assert.match(
+    data.roadmapDraftErrors("Title", "x".repeat(2001)).description,
+    /2,000/,
+  );
+  assert.equal(data.roadmapDraftErrors("தமிழ் கற்றல்", "").title, undefined);
+});
+test("content entry checks identity before abortable timed library reads, with no writes", async () => {
+  const calls = [],
+    signal = new AbortController().signal;
+  const { client } = contentSetup({
+    api: {
+      get: async (path, options) => {
+        calls.push([path, options]);
+        return { data: path === "/users/me" ? contentUser : [ownRoadmapRaw] };
+      },
+      post: () => assert.fail("no entry writes"),
+    },
+  });
+  const result = await client.loadContentLibrary(signal);
+  assert.equal(result.roadmaps.length, 1);
+  assert.deepEqual(
+    calls.map(([p]) => p),
+    ["/users/me", "/roadmaps"],
+  );
+  for (const [, options] of calls) {
+    assert.equal(options.timeout, 12000);
+    assert.equal(options.signal, signal);
+  }
+});
+test("create private roadmap uses one POST after fresh identity and preserves the established payload", async () => {
+  for (const description of ["  Connect the ideas.  ", "  "]) {
+    const calls = [];
+    const { client } = contentSetup({
+      api: {
+        get: async (path) => {
+          calls.push(["GET", path]);
+          return { data: contentUser };
+        },
+        post: async (path, body, options) => {
+          calls.push(["POST", path, body, options]);
+          return {
+            data: {
+              ...ownRoadmapRaw,
+              title: body.title,
+              description: body.description ?? null,
+            },
+          };
+        },
+      },
+    });
+    const outcome = await client.createPrivateRoadmap(contentUser, {
+      title: "  New roadmap  ",
+      description,
+    });
+    assert.equal(outcome.roadmap.status, "draft");
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1][1], "/roadmaps");
+    assert.equal(calls[1][2].title, "New roadmap");
+    assert.equal(calls[1][3].timeout, 12000);
+    assert.equal("description" in calls[1][2], !!description.trim());
+  }
+});
+test("changed or unconfirmed authoring identity and invalid fields cannot create content", async () => {
+  for (const scenario of ["account", "role", "malformed", "blank"]) {
+    const { client } = contentSetup({
+      api: {
+        get: async () => ({
+          data:
+            scenario === "account"
+              ? { ...contentUser, id: "other" }
+              : scenario === "role"
+                ? { ...contentUser, role: "admin" }
+                : scenario === "malformed"
+                  ? {}
+                  : contentUser,
+        }),
+        post: () => assert.fail("no create"),
+      },
+    });
+    await assert.rejects(
+      client.createPrivateRoadmap(contentUser, {
+        title: scenario === "blank" ? " " : "Title",
+        description: "",
+      }),
+    );
+  }
+});
+test("timed-out or malformed roadmap creation never retries or claims success", async () => {
+  for (const scenario of ["timeout", "server", "malformed", "published"]) {
+    let writes = 0;
+    const { client } = contentSetup({
+      api: {
+        get: async () => ({ data: contentUser }),
+        post: async () => {
+          writes++;
+          if (scenario === "timeout" || scenario === "server")
+            throw {
+              response: scenario === "server" ? { status: 500 } : undefined,
+            };
+          return {
+            data:
+              scenario === "malformed"
+                ? {}
+                : {
+                    ...ownRoadmapRaw,
+                    title: "Title",
+                    reviewStatus: "published",
+                  },
+          };
+        },
+      },
+    });
+    await assert.rejects(
+      client.createPrivateRoadmap(contentUser, {
+        title: "Title",
+        description: "",
+      }),
+      (error) => error.uncertain === true,
+    );
+    assert.equal(writes, 1);
+  }
+});
+test("GUI content presents real statuses, classic editor links and honest loading/error/empty states", () => {
+  const { h, library } = contentSetup(),
+    View = h.load(
+      new URL("../content/content-view.tsx", import.meta.url),
+    ).ContentLibraryView;
+  const props = { data: library, onCreate() {}, onRefresh() {} };
+  const html = h.render(createElement(View, props));
+  assert.match(html, /Draft · private/);
+  assert.match(html, /Classic view/);
+  assert.match(html, /\/developer\/content\/own-1/);
+  assert.match(html, /does not run AI/);
+  const loading = h.render(
+    createElement(View, { ...props, data: undefined, loading: true }),
+  );
+  assert.match(loading, /Loading your content/);
+  assert.doesNotMatch(loading, /Your first roadmap/);
+  const error = h.render(
+    createElement(View, {
+      ...props,
+      data: undefined,
+      readError: "Failed to load",
+    }),
+  );
+  assert.match(error, /Content couldn’t load/);
+  assert.doesNotMatch(error, /Your first roadmap/);
+  const empty = h.render(
+    createElement(View, { ...props, data: { ...library, roadmaps: [] } }),
+  );
+  assert.match(empty, /Your first roadmap starts/);
+});
+test("own-content controller reads only on entry and deduplicates creation while guarding stale state", () => {
+  const { library } = contentSetup();
+  for (const stale of [false, true]) {
+    const h = roadmapHarness({
+      queries: {
+        "content/mine": {
+          data: library,
+          isPending: false,
+          isFetching: false,
+          isError: stale,
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+      },
+    });
+    const tree = h
+        .load(new URL("../content/gui-content.tsx", import.meta.url))
+        .GuiContent(),
+      view = tree.props.children;
+    assert.equal(h.calls.length, 0);
+    view.props.onCreate({ title: "Title", description: "" });
+    view.props.onCreate({ title: "Title", description: "" });
+    assert.equal(
+      h.calls.filter((c) => c[0] === "mutation").length,
+      stale ? 0 : 1,
+    );
+    assert.equal(view.props.canCreate, !stale);
+  }
+});
+test("unconfirmed creation unlocks only after explicit successful library review", async () => {
+  const { library } = contentSetup();
+  for (const failed of [true, false]) {
+    const mutationResult = {},
+      h = roadmapHarness({
+        mutationResult,
+        queries: {
+          "content/mine": {
+            data: library,
+            isPending: false,
+            isFetching: false,
+            refetch: async () => ({ data: library, isError: failed }),
+          },
+        },
+        hooks: {
+          useState: (v) => [v, () => {}],
+          useRef: (v) => ({ current: v }),
+        },
+      });
+    const { ContentFailure } = h.load(
+      new URL("../content/content-client.ts", import.meta.url),
+    );
+    mutationResult.error = new ContentFailure("uncertain", true);
+    const view = h
+      .load(new URL("../content/gui-content.tsx", import.meta.url))
+      .GuiContent().props.children;
+    assert.equal(view.props.canCreate, false);
+    view.props.onCreate({ title: "Title", description: "" });
+    assert.equal(h.calls.length, 0);
+    view.props.onRefresh();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      h.calls.filter((c) => c[0] === "reset-mutation").length,
+      failed ? 0 : 1,
+    );
+  }
+});
+test("private owned content is hidden on an access-denied refresh", () => {
+  const { library } = contentSetup(),
+    h = roadmapHarness({
+      queries: {
+        "content/mine": {
+          data: library,
+          isPending: false,
+          isError: true,
+          error: { response: { status: 403 } },
+        },
+      },
+      hooks: {
+        useState: (v) => [v, () => {}],
+        useRef: (v) => ({ current: v }),
+      },
+    });
+  const tree = h
+    .load(new URL("../content/gui-content.tsx", import.meta.url))
+    .GuiContent();
+  const html = h.render(tree.props.children);
+  assert.match(html, /Cached private roadmaps are hidden/);
+  assert.doesNotMatch(html, /Foundations of Git/);
+});
+test("My content mode gate keeps the route and never writes learning location", () => {
+  const h = roadmapHarness({
+    mode: {
+      ready: true,
+      isCli: true,
+      location: {
+        kind: "concept",
+        roadmap: "git",
+        module: "basics",
+        concept: "branches",
+      },
+    },
+  });
+  const tree = h
+    .load(new URL("../content/gui-content.tsx", import.meta.url))
+    .ContentPage();
+  tree.props.children[0].props.children.props.onClick();
+  assert.equal(
+    JSON.stringify(h.calls.at(-1)),
+    JSON.stringify(["mode", "gui", { navigate: false }]),
+  );
+  assert.ok(!h.calls.some((c) => c[0] === "location"));
+  const css = readFileSync(
+    new URL("../content/content.module.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /var\(--gui-primary\)/);
+});
+
 export function roadmapHarness({
   hooks,
   mode = { ready: true, isCli: false, location: { kind: "root" } },
@@ -585,6 +1594,7 @@ export function roadmapHarness({
       URLSearchParams,
       ...globals,
       require: (name) => {
+        if (name === "./cli-content") return { CliContent: () => null };
         if (name === "react" && hooks)
           return { ...requirePackage(name), ...hooks };
         if (name.endsWith(".css")) {
@@ -2418,6 +3428,8 @@ test("terminal quiz URL composes only a literal allowlisted command with a safe 
   });
   for (const [params, command] of [
     [{ view: "quiz", concept: "c2" }, "quiz c2"],
+    [{ view: "qa", concept: "c2" }, "qa concept c2"],
+    [{ view: "qa", concept: "c2;bad" }, "qa"],
     [{ concept: "c2" }, "cat c2"],
     [{ view: "quiz", concept: "c2;logout" }, undefined],
     [{ view: "quiz", concept: "c2 other" }, undefined],

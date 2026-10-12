@@ -1,0 +1,467 @@
+.page {
+  animation: arrive 450ms var(--gui-ease) both;
+}
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: var(--gui-muted);
+  margin-bottom: 30px;
+}
+.breadcrumb a {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 16px 0 34px;
+}
+.hero > div {
+  max-width: 620px;
+}
+.eyebrow {
+  color: var(--gui-accent);
+  font-size: 0.68rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  font-weight: 650;
+  margin: 0 0 16px;
+}
+.hero h1 {
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1.12;
+  letter-spacing: -0.045em;
+  margin: 0 0 20px;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.hero h1 span {
+  color: var(--gui-accent);
+}
+.hero p:not(.eyebrow) {
+  color: var(--gui-muted);
+  max-width: 56ch;
+  line-height: 1.8;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.85rem;
+}
+.motif {
+  width: 200px;
+  flex-shrink: 0;
+  color: var(--gui-accent);
+  fill: currentColor;
+  align-self: center;
+}
+.draw {
+  stroke-dasharray: 350;
+  stroke-dashoffset: 0;
+  animation: draw 850ms var(--gui-ease) both;
+}
+.channels {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: var(--gui-soft);
+  border: 1px solid var(--gui-border);
+  border-radius: 18px;
+  margin-bottom: 30px;
+}
+.page button {
+  cursor: pointer;
+  font: inherit;
+}
+.channels button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  color: var(--gui-muted);
+  background: transparent;
+}
+.channels button[aria-pressed="true"] {
+  background: var(--gui-surface);
+  border-color: var(--gui-border);
+  color: var(--gui-ink);
+}
+.channels button span {
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  background: var(--gui-accent-soft);
+  color: var(--gui-accent);
+  border-radius: 20px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 32px;
+  align-items: start;
+}
+.main {
+  min-width: 0;
+  display: grid;
+  gap: 22px;
+}
+.composer,
+.thread {
+  border: 1px solid var(--gui-border);
+  border-radius: 20px;
+  padding: 26px;
+  background: var(--gui-surface);
+}
+.composer {
+  display: grid;
+  gap: 14px;
+}
+.composerHeading,
+.listHeading,
+.threadMeta,
+.answerMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.composerHeading h2,
+.listHeading h2 {
+  font-size: 1.2rem;
+  margin: 0;
+  letter-spacing: -0.025em;
+  flex: 1;
+}
+.composer p {
+  color: var(--gui-muted);
+  font-size: 0.84rem;
+  line-height: 1.7;
+  margin: 0;
+}
+.badge,
+.verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 24px;
+  background: var(--gui-accent-soft);
+  color: var(--gui-accent);
+}
+.page label {
+  font-size: 0.82rem;
+  font-weight: 550;
+}
+.page textarea,
+.search input {
+  border: 1px solid var(--gui-muted);
+  background: var(--gui-bg);
+  color: var(--gui-ink);
+  border-radius: 12px;
+  padding: 14px;
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.page textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.7;
+  color: var(--gui-muted);
+  padding: 10px 0;
+  cursor: pointer;
+}
+.consent input {
+  accent-color: var(--gui-accent);
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.formFooter > span {
+  font-size: 0.75rem;
+  color: var(--gui-muted);
+}
+.primary,
+.secondary,
+.actions button,
+.pagination button {
+  border: 1px solid var(--gui-border);
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 550;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  transition:
+    filter 180ms ease,
+    background 180ms ease;
+}
+.page .primary {
+  background: var(--gui-primary);
+  border-color: var(--gui-primary);
+  color: var(--gui-on-primary);
+}
+.page button:not(:disabled):hover {
+  filter: brightness(0.94);
+}
+.page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.search {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  color: var(--gui-muted);
+}
+.search input {
+  padding: 10px 14px;
+  min-height: 44px;
+}
+.empty {
+  border: 1px dashed var(--gui-border);
+  padding: 42px 26px;
+  text-align: center;
+  border-radius: 20px;
+  color: var(--gui-muted);
+}
+.empty svg {
+  color: var(--gui-accent);
+}
+.empty h3 {
+  color: var(--gui-ink);
+  font-size: 1rem;
+  font-weight: 550;
+}
+.empty p {
+  max-width: 45ch;
+  margin: 0 auto;
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+.thread {
+  margin-bottom: 18px;
+  overflow-wrap: anywhere;
+  scroll-margin-top: 24px;
+}
+.threadMeta > div {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  font-size: 0.85rem;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  background: var(--gui-soft);
+  border: 1px solid var(--gui-border);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+}
+.thread time {
+  color: var(--gui-muted);
+  font-size: 0.7rem;
+}
+.question {
+  white-space: pre-wrap;
+  font-size: 1rem;
+  line-height: 1.8;
+  margin: 22px 0 14px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.actions button:not(.primary):not(.secondary) {
+  background: transparent;
+  border-color: transparent;
+  padding: 8px 10px;
+  color: var(--gui-accent);
+}
+.quiet {
+  color: var(--gui-muted);
+  font-size: 0.8rem;
+  line-height: 1.8;
+  margin-top: 22px;
+}
+.answer {
+  border-top: 1px solid var(--gui-border);
+  padding-top: 22px;
+  margin-top: 22px;
+}
+.answerMeta {
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+.answerMeta time {
+  margin-left: auto;
+}
+.answer :global(pre) {
+  font-size: 0.8rem;
+}
+.editor,
+.confirmation {
+  border: 1px solid var(--gui-border);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--gui-soft);
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+}
+.confirmation h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+.confirmation p {
+  color: var(--gui-muted);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  margin: 0;
+}
+.aside {
+  display: grid;
+  gap: 28px;
+  padding: 26px 8px;
+  color: var(--gui-muted);
+  font-size: 0.83rem;
+  line-height: 1.8;
+}
+.aside h2 {
+  font-size: 1.4rem;
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+  font-weight: 550;
+  color: var(--gui-ink);
+}
+.aside h3 {
+  color: var(--gui-ink);
+  font-size: 0.85rem;
+  margin: 0 0 8px;
+}
+.aside ol {
+  padding-left: 18px;
+}
+.aside li {
+  margin: 12px 0;
+  padding-left: 6px;
+}
+.aside a {
+  color: var(--gui-accent);
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+}
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+}
+.page :is(button, a, textarea, input, h3):focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 350;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (max-width: 1000px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .aside {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px 0;
+  }
+}
+@media (max-width: 600px) {
+  .hero {
+    padding: 8px 0 22px;
+  }
+  .motif {
+    display: none;
+  }
+  .composer,
+  .thread {
+    padding: 20px 16px;
+  }
+  .channels button {
+    flex: 1;
+    padding: 10px;
+    justify-content: center;
+    font-size: 0.8rem;
+  }
+  .channels {
+    gap: 4px;
+    padding: 6px;
+  }
+  .aside {
+    grid-template-columns: 1fr;
+  }
+  .formFooter .primary {
+    width: 100%;
+  }
+  .answerMeta time {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .draw {
+    animation: none;
+  }
+  .page button {
+    transition: none;
+  }
+}
