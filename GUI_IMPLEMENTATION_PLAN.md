@@ -38,18 +38,21 @@ with user approval. A completed visual redesign does not imply new backend work.
 | 13 | Roadmap authoring `/developer/content/[roadmapId]` | Approved; continued on user instruction |
 | 14 | New lesson `/developer/concepts/new` | Approved; continued on user instruction |
 | 15 | Edit lesson `/developer/concepts/[id]/edit` | Approved; continued on user instruction |
-| 16 | AI generation/jobs `/developer/generate` (existing APIs; explicit paid actions only) | Implemented; ready for visual review |
-| 17 | Provider keys `/developer/keys` | Planned |
-| 18 | Public articles `/articles` | Planned |
-| 19 | Article reader `/articles/[id]` | Planned |
-| 20 | Own articles `/developer/articles` | Planned |
-| 21 | Article editor `/developer/articles/[id]/edit` | Planned |
-| 22 | Profile `/profile` | Planned |
-| 23 | Notifications (shared surface) | Planned |
-| 24 | Admin dashboard `/admin/dashboard` | Planned |
-| 25 | Users `/admin/users` | Planned |
-| 26 | Content review `/admin/content-review` | Planned |
-| 27 | Remaining admin moderation/analytics/eval surfaces; audit API parity before defining routes | Planned |
+| 16 | AI generation/jobs `/developer/generate` (existing APIs; explicit paid actions only) | Approved; continued on user instruction |
+| 17 | Provider keys `/developer/keys` | Approved; continued on user instruction |
+| 18 | Public articles `/articles` | Implemented; ready for visual review |
+| 19 | Article reader `/articles/[id]` | Implemented; ready for visual review |
+| 20 | Own articles `/developer/articles` | Implemented; ready for visual review |
+| 21 | Article editor `/developer/articles/[id]/edit` | Implemented; ready for visual review |
+| 22 | Profile `/profile` | Implemented; ready for visual review |
+| 23 | Notifications (shared surface) | Implemented; ready for visual review |
+| 24 | Admin dashboard `/admin/dashboard` | Implemented; ready for visual review |
+| 25 | Users `/admin/users` | Implemented; ready for visual review |
+| 26 | Content review `/admin/content-review` | Implemented; ready for visual review |
+| 27 | Admin API-parity audit + AI jobs `/admin/jobs` | Implemented; ready for visual review |
+| 28 | Admin article moderation (existing public reader + reasoned admin deletion; audit admin edit parity) | Planned |
+| 29 | Contextual discussion moderation parity + remaining admin navigation audit | Planned; define scope after service/UI audit |
+| 30 | Evaluation / prompt release / question quality surfaces | Planned; audit service and paid/write boundaries before defining routes |
 
 ## Per-page acceptance
 
@@ -742,3 +745,396 @@ The staged snapshot remains unchanged; this experiment is an unstaged working-co
 - Temporary sample/server/tabs removed, viewport reset. No backend/schema/package,
   staging/commit/push or migration work. Notes: `design-system/source-dev/pages/ai-generation.md`.
   Stop for visual review; checkpoint 17 (provider keys) has not started.
+
+## Provider keys checkpoint — 2026-10-19
+
+- User approved generation/jobs and continued to provider keys. Orange GUI at
+  `/developer/keys`, scoped responsive light/dark styling, finite vector motif,
+  shared shell/feedback/authoring controls. Classic implementation is preserved
+  apart from its export; same-page appearance controls preserve learner location.
+- Real metadata-only key/provider reads, independent current quota, two-key capacity,
+  first-key default, explicit default/clear-default, labels, cap 1–50, current-key
+  model choices and selected-key removal through existing APIs. No entry provider
+  lookup or write. Shared-service quota failure does not block key management.
+- Masked volatile key input; no query/mutation-cache, URL, storage or error-body
+  retention. Fixed safe errors strip Axios request/config/response. Explicit unchecked
+  named-provider contact/storage consent resets on relevant changes; synchronous
+  saved-fingerprint binding prevents stale permission before effects run. Pre-save
+  live lookup is separate from saving; changing the key/provider discards its catalog.
+- Fresh account/role/owned list/fingerprint before one write; strict ACK plus fresh
+  matching saved list before success. Unknown outcomes pause writes; only a successful
+  explicit check unlocks, failed checks remain locked and unfinished-request warning
+  remains. Native key-specific removal confirmation explains permanent stored-key
+  loss, active-job guard, exact default fallback and lack of provider revocation.
+- Shared key/provider parsers reuse generation metadata validation; generation page
+  links now open the new GUI. No backend/schema/dependencies or migration work.
+- 375 frontend tests across 17 files (21 new provider-key cases), typecheck, touched
+  lint, theme guard, diff check, classic comparison and fixture-free webpack build.
+  Existing unused test variable and multiple-lockfile warnings remain. Labelled
+  local-only actual-component sample checked desktop/375/768/812, light/dark,
+  metadata edits, validation, renewed consent, fallback catalogs, local saved/default/
+  cap/removal state, modal Escape/focus, empty/full/unavailable/admin/pending/unknown
+  states and recovery. No real credential/provider/account or billing test.
+- Temporary sample/server/tabs removed, viewport reset. Signed-in persistence/access,
+  real provider/model billing, worker deletion lock, multi-tab/account/default races
+  and OS reduced motion remain manual; no atomicity/exactly-once/secret-erasure claim.
+  All changes stay local, with no Git staging/commit/push. Details:
+  `design-system/source-dev/pages/provider-keys.md`. Stop for visual review;
+  checkpoint 18 (public articles) is unstarted.
+
+## Public articles checkpoint — 2026-10-20
+
+- User approved provider keys and continued to `/articles`. Orange public notebook,
+  shared reading header/footer and GUI tokens, original finite vector artwork,
+  responsive light/dark article cards with actual author/date/plain-text previews.
+  Classic composition is retained, with error/loading/paging parity and a same-page
+  return-to-GUI control; learner location and existing terminal behavior are unchanged.
+- Server-only anonymous existing article GET, encoded title search, no credentials
+  forwarded, 12-second abort and fresh no-store reads. Validated plain summaries only
+  cross to clients; full body/account/curriculum metadata is not passed through.
+  Invalid/repeated queries make no API read. Existing newest-first/title-match semantics
+  stay intact. Backend returns a full array; 12-per-page presentation slices, totals,
+  safe clamping and URL navigation do not imply new backend pagination.
+- Native search resets pages, preserves shareable query URLs and distinguishes empty,
+  no-match, unavailable, invalid and loading states. Native pager anchors and a guarded
+  post-hydration animation-frame step focus the visible GUI/classic results heading;
+  ordinary/loading/passive states do not steal focus. Both public HTML surfaces use
+  the existing before-paint appearance selector. No auth gate or fabricated counts,
+  popularity, reading times, models, writes or provider actions.
+- Reader links remain existing ID routes with prefetch disabled; checkpoint 19 is
+  unchanged. Writing links now use the real `/developer/articles` workspace rather
+  than the previously missing `/developer/articles/new` route.
+- 392 frontend tests across 17 files (17 new article cases), typecheck, touched lint,
+  theme guard, diff check and final fixture-free production build. Existing unused test
+  variable and multi-lockfile warnings remain. Local-only actual-component samples
+  checked desktop/375/768/812, light/dark, search/page reset/counts, both-appearance
+  native navigation/focus, reload, menu Escape, long titles/names, deleted author,
+  empty/no-match/loading/unavailable states without overflow or app console errors.
+- Temporary sample/server/tabs removed and viewport reset. No real article API/account,
+  provider, content/progress write or billing test. Real service/persistence/large-list,
+  live reader/authoring transitions, OS motion and screen-reader smoke remain manual.
+  No backend/schema/dependency/migration/staging/commit/push work; existing local
+  checkpoint 17 changes are preserved. Notes:
+  `design-system/source-dev/pages/public-articles.md`. Stop for visual review;
+  checkpoint 19 (article reader) has not started.
+
+
+## Article reader checkpoint — 2026-10-21
+
+- User continued to checkpoint 19, `/articles/[id]`. Shared orange public reading shell,
+  responsive title/byline/UTC dates, bounded body, collapsible section navigation,
+  safe formatted Markdown, copyable code, scrollable tables and local diagrams.
+  Restored article-only bullet/number markers after the shared CSS reset. External
+  images remain opt-in with host disclosure and retry; HTML/unsafe links stay inert.
+- Anonymous server-only existing GET with omitted credentials, 12-second abort,
+  fresh no-store reads and strict ID/body/author/date validation. Plain reading props
+  exclude raw accounts, email/credentials, linked IDs/draft titles. Only true 404 or
+  invalid IDs use the custom missing boundary; failures remain unavailable with fresh
+  retry. Distinct loading, blank body and deleted-author states. Existing linked
+  curriculum sign-in invitation retained without fetching protected targets.
+- Classic JSX preserved with projected fields, literal Markdown, before-paint appearance
+  selection and same-page return-to-GUI; no learner-location change. Shared renderer
+  accepts an optional article label while preserving lesson defaults.
+- 402 frontend tests across 17 files (10 new reader cases), standalone typecheck,
+  touched lint, theme guard, classic comparison, diff check and final fixture-free
+  webpack build pass. Baseline unused-variable/multiple-lockfile warnings remain.
+  Labelled local samples checked desktop/375/768/812, light/dark, section navigation,
+  copy/diagram/opt-in image failure, mobile menu Escape/focus, classic reload/return,
+  every reading state and unbroken metadata/code/tables without GUI overflow.
+  Actual invalid-ID route shows the custom not-found boundary and noindex, without API
+  access. Screenshot saved; sample/server/tabs removed, viewport restored.
+- No real article API/account/provider/progress/content/billing operation. Live service,
+  real authoring/reader transitions, preference sync, curriculum visibility, remote
+  image delivery, screen readers and OS motion remain manual. No backend/schema/package,
+  migration or Git publishing changes; local checkpoints 17–18 preserved. Notes:
+  `design-system/source-dev/pages/article-reader.md`. Stop for visual review;
+  checkpoint 20 (own articles) has not started.
+
+
+## Own articles checkpoint — 2026-10-21
+
+- User continued to checkpoint 20, `/developer/articles`. Orange shared workspace,
+  original finite pen/paper vector, responsive composer/library, actual last-checked
+  own counts, title search/sort/six-item pagination and distinct loading/read-error/
+  empty/no-match states. Safe local Markdown preview; linked validation summary,
+  optional UUID fields, readable scoped errors, native 44px controls, reduced motion.
+- Explicit publication review explains immediate public text/author visibility and no
+  approval step; selected deletion confirms permanent loss. Native dialogs focus Cancel,
+  support Escape/trapping/return. Drafts remain on ordinary failures/checks and after
+  confirmed publication; explicit Start another clears and focuses title. No autosave,
+  URL/storage/query-cache draft persistence or provider work.
+- Existing account/list/detail/POST/DELETE APIs only; timed abortable reads without auto
+  retry/refocus/reconnect writes. Account-scoped cache, fresh account/role/session and
+  owned-list checks, strict projected metadata and exact ownership even for admins.
+  Publishing requires matching acknowledgement plus detail/list readback. Deletion
+  checks selected fingerprint/ownership, one DELETE, boolean ACK, actual 404 and list
+  absence. Safe errors discard backend request/config/body; no optimistic writes.
+- In-flight busy guard; ambiguous timeout/408/5xx/malformed ACK/readback pauses all writes
+  and retains known IDs/context. Read-only checks never repeat mutations. Failed checks
+  stay locked; successful checks require explicit review before resume, with retained
+  late-request/duplicate warning. No atomicity/idempotency/cross-tab guarantee.
+- Classic JSX preserved except named export, same-page GUI return, no learner-location
+  change. Existing edit links explicitly say classic; checkpoint 21 editor is unchanged.
+- 422 frontend tests across 17 files (20 new cases), standalone typecheck, touched lint,
+  theme guard, classic/editor comparison, diff check and final fixture-free production
+  webpack build pass. Existing test-variable and multi-lockfile warnings remain.
+  Labelled resettable local sample checked desktop/375/768/812 light/dark, validation/
+  focus/preview/long-content, publish/delete/cancel, retained drafts, start-another,
+  search/sort/paging, loading/error/pending/empty, uncertain/failed-check/resume, admin
+  and mobile menu Escape/focus without overflow or browser warning/error logs.
+- Screenshot saved; sample/server/tabs removed and viewport restored. No real account,
+  article/content/progress/provider/billing action in browser QA. Live persistence,
+  authorization, link resolution, reader/editor transitions, preference sync, races,
+  assistive technology and OS motion remain manual. No backend/schema/dependency,
+  migration or Git publishing work; local checkpoints 17–19 preserved. Notes:
+  `design-system/source-dev/pages/own-articles.md`. Stop for visual review;
+  checkpoint 21 (article editor) is unstarted.
+
+
+## Article editor checkpoint — 2026-10-21
+
+- User continued to checkpoint 21, `/developer/articles/[id]/edit`. Shared orange
+  workspace, original finite refinement vector, writing desk/saved-reference sidebar,
+  actual author/UTC dates and ID-based public link. Responsive light/dark, local safe
+  Markdown preview, escaped saved-text comparison, linked focused field validation,
+  optional UUID/null clearing and no invented review/staging state.
+- Explicit immediate-public-save confirmation, Keep writing initial focus, Escape/
+  trapping/return, long-title wrapping and retained text after confirmed save. Dirty
+  page-memory drafts survive ordinary failures and checks; no autosave/query/URL/
+  storage draft payloads or navigation-persistence claim. Author/admin/orphan roles
+  mirror the existing endpoint, with explicit admin override copy and stable authorship.
+- Account/detail GETs and one PATCH only. Shared timed/abortable account/session helpers,
+  actor/article-scoped cache, strict permission-checked projection and full saved-body/
+  metadata fingerprint before writing. No-change/invalid/stale edits stop before PATCH;
+  matching ACK plus checked readback before success. No optimistic update or raw errors.
+- Busy guard; ambiguous transport/408/5xx/malformed ACK/readback pauses saves. Read-only
+  checks stage saved text without overwriting the draft. Failed checks stay locked;
+  explicit keep-draft rebase or separately confirmed local replacement resumes editing.
+  Earlier-request warnings persist; no atomic conditional-write/idempotency guarantee.
+- Server route/plain keyed ID client leaf, classic editor retained except export/ID
+  boundary, same-page GUI return and no learner-location writes. Own-list Edit labels
+  now open the implemented editor; nested routes keep My articles active.
+- 438 frontend tests across 17 files (16 new editor cases), standalone typecheck,
+  touched lint, theme guard, classic comparison, diff check and final fixture-free
+  webpack build pass. Existing test-variable/multi-lockfile warnings remain. Labelled
+  resettable local sample checked desktop/375/768/812, light/dark, validation/focus,
+  preview/link clearing, save/cancel, retained drafts, saved-version compare/adoption/
+  replacement, failed checks/late warnings, admin/orphan notices, long content/modal,
+  pending/read-error/loading and menu Escape without page overflow or console errors.
+- Screenshot saved; sample/server/tabs removed, viewport restored, port 3211 closed.
+  No live API/account/article/provider/progress/billing operation in browser QA. Real
+  permissions/persistence/link resolution/handoffs, appearance sync, races/late saves,
+  navigation, assistive technology and OS motion remain manual. No backend/schema/
+  dependency/migration/Git publishing work; prior local checkpoints preserved. Notes:
+  `design-system/source-dev/pages/article-editor.md`. Stop for visual review;
+  checkpoint 22 (profile) is unstarted.
+
+
+## Profile checkpoint — 2026-10-24
+
+- User continued checkpoint 22, `/profile`. Shared scoped orange workspace, original
+  finite identity-card vector, responsive profile/security desk and account/sidebar,
+  light/dark, reduced motion and 44px native controls. Existing name/timezone/photo/
+  read-only email/password capabilities; focused linked validation, local bounded
+  256px photo crop, explicit null removal and preserved external provider photos.
+- Separate password form only for password-capable accounts, specific visibility
+  labels, Keep editing-first native confirmation/Escape/focus and fields cleared
+  before submit. Provider-only accounts show actual sign-in method. No connection,
+  deletion or new security endpoint. Existing 401 login redirect remains inherited.
+- Current-account GET and existing PATCHes only. Account-scoped projected cache,
+  timed/abortable reads, original-session checks before actions and across requests,
+  fresh account/editable-field fingerprint before one profile PATCH. Matching ACK
+  and checked readback before profile success; password success uses exact ACK only.
+  Raw errors/credentials never enter query/mutation caches or storage.
+- Dirty profile drafts stay in page memory, including ordinary failures/checks.
+  Uncertain saves pause writes, failed checks stay locked and checked saved details
+  require explicit keep or separately confirmed replacement. Late-request warning
+  persists; password ambiguity directs sign-in/recovery without pretending a profile
+  read verifies it. No atomic/idempotent/cross-tab or navigation-persistence claim.
+- Server route/client leaf; classic original retained except export, same-page GUI
+  return, no learner-location writes. Account/session changes hide cached details
+  and drafts; busy guard blocks overlapping profile/password/check actions.
+- 459 frontend tests in 17 files (21 new), standalone typecheck, touched lint, theme
+  guard, exact classic comparison, diff check and fixture-free production webpack
+  build pass. Three preserved lint warnings and multi-lockfile build warning remain.
+  Labelled resettable sample checked desktop/375/768/812 light/dark, validation/focus,
+  save/discard/Escape, empty-password validation, social/admin/long-account, loading/
+  error/pending/uncertain/failed-check/review and menu without overflow or console logs.
+- Review screenshot saved; sample route/server/tab removed, viewport reset and port
+  3211 closed. No real account/photo/password/provider/progress/billing action in QA;
+  API behavior is mocked. Live persistence/permissions, photo decoding/upload, password
+  success/refusal/recovery, auth redirects, preference sync, navigation, races, screen
+  readers and OS motion remain manual. No backend/schema/dependency/migration or Git
+  publishing work; prior local checkpoints preserved. Notes:
+  `design-system/source-dev/pages/profile.md`. Stop for visual review;
+  checkpoint 23 (notifications) is unstarted.
+
+
+## Notifications checkpoint — 2026-10-24
+
+- User continued checkpoint 23, shared notifications. The redesigned workspace bell
+  now opens a scoped orange native inbox dialog. Authenticated count read, lazy history,
+  manual refresh and explicit last-checked copy; unknown counts are not zero. No opening
+  or link-following marks an item read, and no polling or automatic retry is added.
+- All-type/unread filters and six-item paging over the complete checked history;
+  reason/reviewer/removal/effective-date/job details, explicit UTC timestamps, checked
+  internal targets and honest scheduled-deletion/future-type labels. Raw provider errors,
+  arbitrary entities/URLs and foreign-recipient rows are excluded. No deletion action.
+- Explicit Mark as read plus Keep unread-first account-wide Mark all confirmation,
+  including outside-filter/new-arrival scope. Native Escape/focus return, visible phone
+  confirmation focus, 44px controls, responsive long text and reduced-motion empty art.
+  Read success never removes history. Current shell chooses the CLI handoff, including
+  admins in the developer workspace; admin review destination is explicitly classic.
+- Existing account/list/count GETs and one PATCH/POST only. Timed abortable reads,
+  account-scoped cache, identity/session/recipient/selected-version checks, matching ACK
+  plus fresh readback, safe fixed errors and synchronous busy guards. Already-read is
+  a checked no-op; no optimistic badge decrement. Account changes hide cached history.
+- Ambiguity pauses writes. Failed checks remain paused, successful read-only checks
+  require explicit saved-inbox adoption, and earlier-request warnings persist. New
+  unread arrivals prevent false all-read success. No atomic exact-count/set, idempotency,
+  cancellation, cross-tab or navigation/remount-persistent pause guarantee is claimed.
+- 480 frontend tests in 17 files (21 new), standalone typecheck, touched lint, theme
+  guard, backend/terminal unchanged comparison, diff check and final fixture-free webpack
+  build pass. Existing test-variable and multi-lockfile warnings remain. Labelled actual-
+  view sample checked desktop/375/768/812 light/dark, filter/paging/reset/read/history,
+  details/confirm/cancel/Escape/focus, long text, all read/error/pending/empty/unavailable/
+  recovery states and admin links without page/dialog overflow or console warnings/errors.
+- Screenshot saved; temporary sample/server/tab removed, viewport reset and port 3211
+  closed. No live account/notification/content/provider/progress/billing operation;
+  APIs are mocked in tests. Live persistence/recipient authorization/emission/counts,
+  destinations, cross-tab/concurrency/late requests, preference sync, screen readers
+  and OS motion remain manual. No backend/schema/dependency/migration or Git publishing
+  work; prior dirty checkpoints preserved. Notes:
+  `design-system/source-dev/pages/notifications.md`. Stop for visual review;
+  checkpoint 24 (admin dashboard) is unstarted.
+
+
+## Admin dashboard checkpoint — 2026-10-27
+
+- Implemented `/admin/dashboard` with the shared orange admin workspace, original finite
+  vector, real platform totals, creation-ordered review highlight/queue, local filters and
+  paging, sortable roadmap analytics, contribution/lesson lists and own notification activity.
+  Scope copy follows existing backend metrics; unknown/error values never become zero.
+- Existing read-only endpoints only. Fresh matching admin checks before/after resource reads,
+  original-session guards, account-scoped cache, safe projections/errors, auth-change hiding
+  and synchronous refresh deduplication. Denied access hides the whole private overview.
+  Shared inbox cache lets the existing bell update recipient activity; no dashboard writes.
+- Explicit admin shell keeps developer navigation unchanged for admins in developer view.
+  Unfinished review/users links say Classic; terminal destinations say CLI. Mode handoffs
+  preserve learning location. Server wrapper/client leaf; classic source exact except export.
+- 499 frontend tests in 17 files (19 new), standalone typecheck, touched lint, theme guard,
+  diff/classic/source comparisons and final fixture-free webpack build pass. Existing unused
+  test-variable and lockfile warnings remain. Labelled local actual-view sample checked
+  desktop/375/768/812, light/dark, filter/paging/sort/refresh/focus, long content and zero/loading/
+  partial-error states without page overflow or console warnings/errors. Table focus checked;
+  keyboard horizontal scrolling and OS motion remain manual.
+- Screenshot saved; sample/server/tab removed, viewport reset, light theme restored, port3211
+  closed. No real admin/account/content/provider/progress/billing action. API tests are mocked;
+  live permissions/metrics/notification integration, actual destinations, preferences, races
+  and assistive technology remain manual. No backend/schema/dependency/migration or Git
+  publishing changes; earlier dirty work preserved. Notes:
+  `design-system/source-dev/pages/admin-dashboard.md`. Stop for visual review;
+  checkpoint 25 (users) is unstarted.
+
+
+## Users checkpoint — 2026-10-27
+
+- Implemented `/admin/users` in the approved admin workspace: checked account/admin/pending
+  totals, local name/email search, role/name/newest filters, eight-item paging and deletion
+  request status/history/details. Empty, loading, failed and legitimate zero states differ.
+  Admin/current accounts are protected; unmatched requests expose no actions. Native confirmations
+  name the account/reason/consequences, default to keeping it, and support Escape/focus return.
+- Existing APIs only. Fresh matching admin and full-list preflight, original-session guards,
+  selected identity/request fingerprints, one explicit write, matching ACK plus checked readback,
+  minimal projections/fixed errors and synchronous deduplication. Deletion checks cascade-aware
+  absence; rejection checks saved review while preserving the account. Approval can partially
+  write before deletion, so even approval 4xx pauses further actions. Read-only recovery never
+  repeats a write; failed checks stay paused, checked-list adoption is explicit and the earlier-
+  request warning persists. No atomicity/idempotency/cross-tab/remount-persistent pause promise.
+- Server wrapper/client leaf, original users page exact except export in CLI appearance with
+  legacy chrome preserved; GUI owns its admin frame. Users navigation/dashboard links now lead
+  to the GUI. No role-edit/create endpoint, backend/schema/dependency/migration or Git publishing.
+- 522 frontend tests in 17 files (23 new), final focused run, standalone typecheck, touched lint,
+  theme guard, diff/classic/source checks and final fixture-free webpack build pass. Four baseline
+  lint warnings and the lockfile warning remain. Labelled local actual-view sample checked
+  desktop/375/768/812 light/dark, search/filter/sort/paging/history, confirmation/cancel/Escape/focus,
+  sample feedback, empty/loading/error/pending/paused/recovery, long data and mobile menu. Fixed
+  and rechecked phone select containment; no final overflow or console warnings/errors observed.
+- Screenshot saved; sample/server/tab removed, viewport reset, light restored and port3211 closed.
+  No real admin/account/content/provider/progress/billing operation. API tests are mocked; live
+  authorization/cascades/partial-write outcomes/races/preferences/destinations, screen readers,
+  keyboard reason scrolling and OS motion remain manual. Earlier dirty checkpoints preserved.
+  Notes: `design-system/source-dev/pages/admin-users.md`. Stop for visual review;
+  checkpoint 26 (content review) remains unstarted.
+
+
+## Content review checkpoint — 2026-10-29
+
+- Implemented the scoped admin GUI with lesson/roadmap/maintenance views, checked totals,
+  local search/origin/staged/state filters and six-item paging. Complete saved/staged text
+  (including empty drafts), safe explicit Markdown preview and the saved admin answer key;
+  no quiz attempts, learner progress or provider calls. Unknown/error/loading remain distinct
+  from zero; creation dates are not labelled submission dates.
+- Fresh roadmap module review exposes endpoint-aligned publication/takedown/deletion actions.
+  No new submission structure gate. Existing date schedules remain after publication, overdue
+  deletion and elapsed takedown are distinguished, and cancellation consequences are explicit.
+  Maintenance purge is globally scoped, lists reviewed targets and requires acknowledgement;
+  it can partially finish and does not promise an exact set/count.
+- Native exact-version/consequence confirmations default to keeping content, retain per-item
+  reason drafts, validate/focus rejection feedback, guard pending close/actions and focus checked
+  result/error feedback. Fresh actor/library/selected source/questions/report preflight, original-
+  session guards, account/role cache, minimal projections/fixed errors, one write and matching
+  ACK plus saved-state/queue readback. Every sent-write failure pauses decisions. GET-only
+  recovery never repeats one, failed checks stay paused, explicit checked-state adoption is
+  required and an earlier-request warning persists. No atomicity/idempotency/cross-tab/snapshot/
+  cancellation/remount-persistent lock claim. Existing review GET can lazily normalize a date;
+  the row is read afterwards. Backend behavior is unchanged.
+- Server wrapper/client leaf; classic exact except export and legacy frame retained in CLI
+  appearance. Shared sidebar/dashboard/notification destinations now identify GUI review;
+  explicit CLI handoffs preserve learning location. No backend/schema/migration/dependency/
+  terminal/Git publishing work; prior dirty checkpoints preserved.
+- 550 frontend tests in 17 files (28 new; two updated navigation expectations), final focused
+  30 checks, standalone typecheck, touched lint/theme/diff/classic/source checks and final
+  fixture-free webpack build pass. Four baseline lint warnings and the lockfile warning remain.
+  Labelled actual-view sample checked desktop/375/768/812 light/dark, full text/preview/key,
+  filters/paging, validation/draft/cancel/Escape/focus, sample decisions, roadmap states,
+  global scope, all loading/error/pending/uncertain/recovery states and long data without final
+  overflow or console warnings/errors. Screenshots saved; sample/server/tab removed, viewport
+  reset, light restored and port3211 closed. No live moderation/API/provider/progress/billing
+  operation; contracts mocked. Live permissions/state transitions/emission/cascades/races/clocks/
+  preferences/destinations/media, screen readers and OS motion remain manual.
+  Notes: `design-system/source-dev/pages/content-review.md`. Stop for visual review;
+  checkpoint 27, remaining admin surfaces and API-parity audit, is unstarted.
+
+
+## Admin jobs and API-parity checkpoint — 2026-10-29
+
+- Audited remaining admin terminal/controller contracts. All four analytics resources already have
+  GUI dashboard coverage. Jobs lists remain requester-scoped, admin known-ID lookup may inspect
+  other requesters, and unread results are capped at 20. Article moderation, contextual discussion
+  parity and evaluation are recorded as separate future checkpoints; no invented global job/run/
+  discussion queue or paid/serving changes in this page. Audit: `design-system/source-dev/pages/admin-parity-audit.md`.
+- Implemented `/admin/jobs` in the approved orange admin workspace with active/unread views,
+  literal local search, six-item paging, progress/summary/failure details, manual refresh and
+  known-ID inspection. Shared job cards retain developer behavior; admin hides the generic own-
+  content link. Tablet cards use one column, long values wrap, page/result feedback receives focus.
+- Fresh matching admin before/after reads, original-session/auth/storage guards, actor/role cache,
+  strict existing parsers, fixed errors, honest unavailable/loading/zero states and synchronous
+  duplicate blocking. One explicit owned finished result per acknowledgement, exact fresh row
+  preflight, strict count/saved-row/feed readback; no empty-ID bulk request. Every sent failure
+  pauses acknowledgement. GET-only recovery, explicit checked-state adoption, retained late-request
+  warning and local-pause limits. No generation/provider/quota/eval action or content approval.
+- Server wrapper/client leaf, GUI sidebar destination, explicit same-route GUI return/admin terminal
+  handoff in CLI appearance. Backend/schema/dependencies/terminal registry and Git publishing unchanged.
+- 568 full frontend tests in 17 files (18 new), final 31 affected checks, standalone TypeScript,
+  touched lint with no introduced diagnostics, diff checks and final fixture-free webpack build pass.
+  Four baseline lint warnings and the lockfile warning remain. Removed preview types caused the
+  documented stale Next.js cache failure; cleared only generated `.next` and reran successfully.
+- Labelled disposable local actual-view/shell QA covered desktop/375/768/812, light/dark, filters,
+  paging/focus, details, known-ID lookup, sample acknowledgement/refresh, empty/loading/error/pending,
+  pause/check/adopt, long targets and mobile menu/Escape/focus return. No checked horizontal overflow
+  or console warnings/errors. Screenshots saved; sample/both owned tabs/server removed, viewport
+  reset, light restored and port 3211 closed. Mock contracts/local callbacks are not real API proof;
+  live admin permissions, cross-requester records, acknowledgements/banner sync/concurrency/late
+  outcomes, destinations/preferences, screen readers and OS motion remain manual.
+- Notes: `design-system/source-dev/pages/admin-jobs.md`. Stop for visual review before checkpoint 28.

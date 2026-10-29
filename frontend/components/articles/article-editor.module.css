@@ -1,0 +1,240 @@
+.page {
+  max-width: 1250px;
+}
+.header {
+  padding: 0 0 8px;
+}
+.back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 30px;
+  margin-top: 25px;
+}
+.titleRow > div {
+  max-width: 620px;
+}
+.titleRow h1 {
+  font-size: clamp(32px, 4vw, 44px);
+  letter-spacing: -1.8px;
+  font-weight: 580;
+  line-height: 1.2;
+  margin: 10px 0 16px;
+}
+.titleRow h1 span {
+  color: var(--gui-accent);
+}
+.titleRow div > p:last-child {
+  color: var(--gui-muted);
+  font-size: 14px;
+  line-height: 1.85;
+}
+.titleRow > svg {
+  width: 135px;
+  flex-shrink: 0;
+}
+.pen {
+  animation: pen-in 600ms ease-out both;
+  transform-origin: center;
+}
+@keyframes pen-in {
+  from {
+    opacity: 0;
+    transform: translate(7px, -7px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+.desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 290px);
+  gap: 24px;
+  align-items: start;
+}
+.sidebar {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.saved,
+.explainer,
+.recovery {
+  padding: 24px;
+  border: 1px solid var(--gui-border);
+  border-radius: 18px;
+  background: var(--gui-surface);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.page .saved h2 {
+  font-size: 18px;
+  line-height: 1.6;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin: 13px 0;
+}
+.saved > p:not(:first-child) {
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+}
+.saved dl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  font-size: 11px;
+  margin: 22px 0 15px;
+}
+.saved dt {
+  color: var(--gui-muted);
+  margin-top: 8px;
+}
+.saved dd {
+  margin: 0;
+}
+.saved > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  min-height: 44px;
+}
+.saved button,
+.recovery button {
+  min-height: 44px;
+  border: 1px solid var(--gui-border);
+  border-radius: 24px;
+  padding: 9px 14px;
+  color: var(--gui-ink);
+  background: var(--gui-bg);
+  font-size: 11px;
+}
+.saved button {
+  margin: 12px 0 18px;
+}
+.saved details,
+.recovery details {
+  border-top: 1px solid var(--gui-border);
+  padding-top: 10px;
+}
+.saved summary,
+.recovery summary {
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.8;
+  padding: 12px 0;
+}
+.saved pre,
+.recovery pre {
+  font:
+    11px/1.8 ui-monospace,
+    monospace;
+  max-height: 370px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--gui-border);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--gui-bg);
+}
+.explainer {
+  background: var(--gui-accent-soft);
+}
+.explainer > svg {
+  color: var(--gui-accent);
+  margin-bottom: 14px;
+}
+.page .explainer h2 {
+  font-size: 15px;
+  margin-bottom: 13px;
+}
+.page .explainer p {
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--gui-muted);
+  margin-top: 13px;
+}
+.recovery {
+  background: var(--gui-soft);
+}
+.recovery h2 {
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.page .recovery p {
+  max-width: 80ch;
+  margin: 15px 0;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--gui-muted);
+}
+.recoveryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.recovery dl {
+  font-size: 11px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.recovery dt {
+  margin-top: 12px;
+  color: var(--gui-muted);
+}
+.recovery dd {
+  margin: 0;
+}
+@media (max-width: 1150px) {
+  .desk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 650px) {
+  .titleRow {
+    gap: 14px;
+    margin-top: 20px;
+  }
+  .titleRow > svg {
+    width: 70px;
+  }
+  .titleRow div > p:last-child {
+    font-size: 12px;
+  }
+  .sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .saved,
+  .explainer,
+  .recovery {
+    padding: 20px;
+  }
+  .recoveryActions {
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pen {
+    animation: none;
+  }
+}
+
+.page pre:focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}

@@ -141,12 +141,7 @@ function unique<T extends { id: string }>(rows: T[]) {
     throw new Error("Duplicate generation records.");
   return rows;
 }
-export function parseGenerationSettings(
-  user: User,
-  keysValue: unknown,
-  providersValue: unknown,
-  quotaValue: unknown,
-): GenerationSettings {
+export function parseGenerationKeys(keysValue: unknown): GenerationKey[] {
   const keys = unique(
     array(keysValue).map((value) => {
       const row = editorObject(value),
@@ -180,6 +175,11 @@ export function parseGenerationSettings(
   ).sort((a, b) => a.id.localeCompare(b.id));
   if (keys.length > 2 || keys.filter((k) => k.isDefault).length > 1)
     throw new Error("Default key selection is incomplete.");
+  return keys;
+}
+export function parseGenerationProviders(
+  providersValue: unknown,
+): GenerationSettings["providers"] {
   const providers = array(providersValue)
     .map((value) => {
       const row = editorObject(value);
@@ -198,6 +198,16 @@ export function parseGenerationSettings(
     new Set(providers.map((p) => p.provider)).size !== providers.length
   )
     throw new Error("Provider metadata is incomplete.");
+  return providers;
+}
+export function parseGenerationSettings(
+  user: User,
+  keysValue: unknown,
+  providersValue: unknown,
+  quotaValue: unknown,
+): GenerationSettings {
+  const keys = parseGenerationKeys(keysValue),
+    providers = parseGenerationProviders(providersValue);
   const row = editorObject(quotaValue),
     selected = keys.find((k) => k.isDefault),
     quotaProvider = provider(row.provider);

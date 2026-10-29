@@ -652,7 +652,7 @@ export function GenerationView({
             </>
           )}
           <Link className={base.textLink} href="/developer/keys">
-            Manage provider keys · Classic view
+            Manage provider keys
             <ArrowUpRight size={15} aria-hidden="true" />
           </Link>
           <div className={base.noteDivider} />
@@ -961,11 +961,13 @@ export function GenerationView({
     </div>
   );
 }
-function JobCard({
+export function JobCard({
   job,
   canReview,
   onReview,
+  showContentLink = true,
 }: {
+  showContentLink?: boolean;
   job: GenerationJob;
   canReview: boolean;
   onReview: (job: GenerationJob) => void;
@@ -1083,10 +1085,12 @@ function JobCard({
           </button>
         )
       )}
-      <Link className={base.textLink} href="/developer/content">
-        Review generated content
-        <ArrowUpRight size={14} aria-hidden="true" />
-      </Link>
+      {showContentLink && (
+        <Link className={base.textLink} href="/developer/content">
+          Review generated content
+          <ArrowUpRight size={14} aria-hidden="true" />
+        </Link>
+      )}
     </article>
   );
 }

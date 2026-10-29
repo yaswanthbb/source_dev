@@ -78,6 +78,15 @@ export function dashboardHarness({
               toggleTheme: () => calls.push("theme"),
             }),
           };
+        if (name === "@/components/notifications/gui-notifications")
+          return {
+            GuiNotifications: () =>
+              createElement(
+                "button",
+                { "aria-label": "Notifications" },
+                "Notifications",
+              ),
+          };
         if (name === "@/lib/api-client") return { default: {} };
         if (name === "@/lib/auth")
           return { clearAuth: () => calls.push("clearAuth") };
@@ -330,7 +339,7 @@ test("shell provides named navigation, skip target, GUI confirmation and admin e
   assert.match(html, /id="workspace-content"/);
   assert.match(html, /aria-controls="workspace-sidebar"/);
   assert.match(html, /aria-expanded="false"/);
-  assert.match(html, /Notifications — opens in CLI/);
+  assert.match(html, /aria-label="Notifications"/);
   assert.match(html, /href="\/admin\/dashboard"/);
   assert.match(html, /Log out of source:dev\?/);
   assert.match(html, /Stay here/);

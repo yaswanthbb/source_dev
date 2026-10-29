@@ -27,7 +27,15 @@ function containsImage(node?: ExtraProps["node"]): boolean {
   );
 }
 
-function RemoteImage({ src, alt }: { src?: string; alt?: string }) {
+function RemoteImage({
+  src,
+  alt,
+  label,
+}: {
+  src?: string;
+  alt?: string;
+  label: string;
+}) {
   const [loaded, setLoaded] = useState(false),
     [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
@@ -44,7 +52,7 @@ function RemoteImage({ src, alt }: { src?: string; alt?: string }) {
       {loaded ? (
         <img
           src={url}
-          alt={alt || "Lesson illustration"}
+          alt={alt || `${label} illustration`}
           loading="lazy"
           onLoad={() => setPending(false)}
           onError={() => {
@@ -103,10 +111,12 @@ export function LessonMarkdown({
   content,
   media = [],
   idPrefix = "lesson-section",
+  label = "Lesson",
 }: {
   content: string;
   media?: LessonMedia[];
   idPrefix?: string;
+  label?: "Lesson" | "Article";
 }) {
   return (
     <div className={styles.prose}>
@@ -180,7 +190,7 @@ export function LessonMarkdown({
                 </span>
               );
             }
-            return <RemoteImage key={url} src={url} alt={alt} />;
+            return <RemoteImage key={url} src={url} alt={alt} label={label} />;
           },
           pre: ({ node, children }) => {
             const code = node?.children.find(
@@ -196,7 +206,7 @@ export function LessonMarkdown({
               code?.type === "element" ? code.properties.className : [];
             return Array.isArray(classes) &&
               classes.includes("language-mermaid") ? (
-              <LessonDiagram source={text} />
+              <LessonDiagram source={text} caption={`${label} diagram`} />
             ) : (
               <CodeBlock text={text}>{children}</CodeBlock>
             );
@@ -207,7 +217,7 @@ export function LessonMarkdown({
             <div
               className={styles.tableScroll}
               tabIndex={0}
-              aria-label="Scrollable lesson table"
+              aria-label={`Scrollable ${label.toLowerCase()} table`}
             >
               <table>{children}</table>
             </div>

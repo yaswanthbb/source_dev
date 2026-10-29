@@ -1,0 +1,220 @@
+.page {
+  max-width: 1250px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 14px 0 26px;
+}
+.eyebrow {
+  color: var(--gui-muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1.5px;
+  margin: 0 0 13px;
+}
+.header h1 {
+  font-size: clamp(32px, 3.7vw, 43px);
+  line-height: 1.2;
+  letter-spacing: -1.6px;
+  font-weight: 570;
+  margin: 0 0 16px;
+}
+.header h1 span {
+  color: var(--gui-accent);
+}
+.header p:last-child,
+.toolbar p,
+.hint {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--gui-muted);
+}
+.art {
+  flex-shrink: 0;
+  animation: arrive 600ms ease-out both;
+}
+.toolbar,
+.sectionTop,
+.paging {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin: 18px 0;
+}
+.page button,
+.link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--gui-border);
+  border-radius: 24px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  font: inherit;
+  font-size: 11px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.page button:hover:not(:disabled) {
+  background: var(--gui-soft);
+}
+.page button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.page :is(button, a, input, summary, h2, p[tabindex]):focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+.page h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gui-border);
+}
+.tabs button[aria-pressed="true"] {
+  background: var(--gui-accent-soft);
+  border-color: var(--gui-accent);
+}
+.sectionTop span,
+.paging span {
+  font-size: 11px;
+  color: var(--gui-muted);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+  margin: 20px 0;
+}
+.page label {
+  font-size: 12px;
+}
+.page label {
+  display: grid;
+  gap: 8px;
+}
+.page input {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--gui-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  font: inherit;
+  font-size: 13px;
+}
+.search {
+  max-width: 480px;
+  margin-top: 20px;
+}
+.empty {
+  padding: 30px 20px;
+  border: 1px dashed var(--gui-border);
+  border-radius: 16px;
+  color: var(--gui-muted);
+  font-size: 13px;
+}
+.lookup {
+  margin: 36px 0 24px;
+  border-top: 1px solid var(--gui-border);
+  padding-top: 22px;
+}
+.lookup form {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  max-width: 700px;
+}
+.lookup label {
+  flex: 1;
+  min-width: 0;
+}
+.lookup form button {
+  flex-shrink: 0;
+}
+.checked {
+  max-width: 650px;
+  margin-top: 20px;
+}
+.notice {
+  border-left: 3px solid var(--gui-accent);
+  padding: 14px 18px;
+  background: var(--gui-accent-soft);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.link {
+  text-decoration: none;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 700px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .header {
+    gap: 8px;
+  }
+  .art {
+    width: 100px;
+    height: 100px;
+  }
+  .toolbar {
+    align-items: start;
+    flex-direction: column;
+  }
+  .paging {
+    flex-wrap: wrap;
+  }
+  .lookup form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+@media (max-width: 430px) {
+  .art {
+    display: none;
+  }
+  .sectionTop {
+    align-items: start;
+    flex-direction: column;
+    gap: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .art {
+    animation: none;
+  }
+}
+
+@media (max-width: 1050px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

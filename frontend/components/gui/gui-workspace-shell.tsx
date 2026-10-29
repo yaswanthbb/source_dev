@@ -6,8 +6,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
-  Bell,
   BookOpen,
+  ClipboardCheck,
+  Users,
+  BarChart3,
   FileText,
   KeyRound,
   LayoutDashboard,
@@ -22,6 +24,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { GuiNotifications } from "@/components/notifications/gui-notifications";
 import { SourceMark } from "@/components/brand/source-mark";
 import { clearAuth, type User } from "@/lib/auth";
 import { clearTerminalSessions } from "@/lib/terminal/session";
@@ -54,10 +57,12 @@ export function GuiWorkspaceShell({
   user,
   children,
   section = "Overview",
+  shell = "developer",
 }: {
   user?: User;
   children: ReactNode;
   section?: string;
+  shell?: "developer" | "admin";
 }) {
   const { isDark, toggleTheme } = useTheme();
   const { setMode, location } = useUiMode();
@@ -93,6 +98,50 @@ export function GuiWorkspaceShell({
     };
   }, [logoutOpen]);
 
+  const home = shell === "admin" ? "/admin/dashboard" : "/developer/dashboard";
+  const navigation: {
+    href: string;
+    title: string;
+    icon: typeof LayoutDashboard;
+    kind?: "classic" | "cli";
+  }[] =
+    shell === "admin"
+      ? [
+          {
+            href: "/admin/dashboard",
+            title: "Overview",
+            icon: LayoutDashboard,
+          },
+          {
+            href: "/admin/content-review",
+            title: "Content review",
+            icon: ClipboardCheck,
+          },
+          {
+            href: "/admin/users",
+            title: "Users",
+            icon: Users,
+          },
+          {
+            href: "/admin/jobs",
+            title: "AI jobs",
+            icon: Sparkles,
+          },
+          {
+            href: "/admin/terminal?view=articles",
+            title: "Articles",
+            icon: FileText,
+            kind: "cli",
+          },
+          {
+            href: "/admin/terminal?view=overview",
+            title: "Analytics",
+            icon: BarChart3,
+            kind: "cli",
+          },
+        ]
+      : NAVIGATION;
+
   const enterCli = () => setMode("cli", { navigate: false });
   const confirmLogout = () => {
     clearTerminalSessions();
@@ -106,7 +155,7 @@ export function GuiWorkspaceShell({
         Skip to content
       </a>
       <header className={styles.mobileHeader}>
-        <Link href="/developer/dashboard" className={styles.brand}>
+        <Link href={home} className={styles.brand}>
           <SourceMark />
           source:dev
         </Link>
@@ -134,16 +183,20 @@ export function GuiWorkspaceShell({
         id="workspace-sidebar"
         className={`${styles.sidebar} ${menuOpen ? styles.open : ""}`}
       >
-        <Link
-          href="/developer/dashboard"
-          className={`${styles.brand} ${styles.desktopBrand}`}
-        >
+        <Link href={home} className={`${styles.brand} ${styles.desktopBrand}`}>
           <SourceMark />
           source:dev
         </Link>
-        <span className={styles.workspaceLabel}>Your workspace</span>
-        <nav aria-label="Workspace navigation" className={styles.navigation}>
-          {NAVIGATION.map(({ href, title, icon: Icon }) => (
+        <span className={styles.workspaceLabel}>
+          {shell === "admin" ? "Admin workspace" : "Your workspace"}
+        </span>
+        <nav
+          aria-label={
+            shell === "admin" ? "Admin navigation" : "Workspace navigation"
+          }
+          className={styles.navigation}
+        >
+          {navigation.map(({ href, title, icon: Icon, kind }) => (
             <Link
               key={href}
               href={href}
@@ -154,17 +207,24 @@ export function GuiWorkspaceShell({
                   (pathname === "/developer/concepts/new" ||
                     /^\/developer\/concepts\/[^/]+\/edit$/.test(pathname))) ||
                 ((href === "/developer/roadmaps" ||
-                  href === "/developer/content") &&
+                  href === "/developer/content" ||
+                  href === "/developer/articles") &&
                   pathname.startsWith(`${href}/`))
                   ? "page"
                   : undefined
               }
               onClick={() => {
                 setMenuOpen(false);
+                if (kind === "cli") enterCli();
               }}
             >
               <Icon size={18} aria-hidden="true" />
               {title}
+              {kind && (
+                <span className={styles.cliHint}>
+                  {kind === "cli" ? "CLI" : "Classic"}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -172,7 +232,14 @@ export function GuiWorkspaceShell({
           <div className={styles.recipe}>
             <SourceMark size={24} />
             <p>
-              Learn. Connect. Recall.<span>One concept at a time.</span>
+              {shell === "admin"
+                ? "Keep learning moving."
+                : "Learn. Connect. Recall."}
+              <span>
+                {shell === "admin"
+                  ? "Review with care."
+                  : "One concept at a time."}
+              </span>
             </p>
           </div>
           <button
@@ -189,7 +256,7 @@ export function GuiWorkspaceShell({
           </button>
           <Link
             className={styles.navLink}
-            href={toCliRoute(location, "developer")}
+            href={toCliRoute(location, shell)}
             onClick={enterCli}
           >
             <Terminal size={18} aria-hidden="true" />
@@ -209,25 +276,25 @@ export function GuiWorkspaceShell({
       <div className={styles.workspace}>
         <header className={styles.topbar}>
           <p>
-            Workspace<span aria-hidden="true">/</span>
+            {shell === "admin" ? "Admin workspace" : "Workspace"}
+            <span aria-hidden="true">/</span>
             <strong>{section}</strong>
           </p>
           <div className={styles.account}>
             {user?.role === "admin" && (
-              <Link href="/admin/dashboard" className={styles.adminLink}>
-                Admin view
+              <Link
+                href={
+                  shell === "admin"
+                    ? "/developer/dashboard"
+                    : "/admin/dashboard"
+                }
+                className={styles.adminLink}
+              >
+                {shell === "admin" ? "Developer view" : "Admin view"}
                 <ArrowUpRight size={14} aria-hidden="true" />
               </Link>
             )}
-            <Link
-              href="/developer/terminal?view=notify"
-              onClick={enterCli}
-              className={styles.iconButton}
-              aria-label="Notifications — opens in CLI"
-              title="Notifications — opens in CLI"
-            >
-              <Bell size={19} aria-hidden="true" />
-            </Link>
+            <GuiNotifications user={user} shell={shell} />
             <Link
               href="/profile"
               className={styles.profile}
