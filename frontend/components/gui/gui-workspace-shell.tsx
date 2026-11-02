@@ -128,16 +128,19 @@ export function GuiWorkspaceShell({
             icon: Sparkles,
           },
           {
-            href: "/admin/terminal?view=articles",
+            href: "/admin/articles",
             title: "Articles",
             icon: FileText,
-            kind: "cli",
           },
           {
-            href: "/admin/terminal?view=overview",
+            href: "/admin/evaluation",
+            title: "Evaluation",
+            icon: ClipboardCheck,
+          },
+          {
+            href: "/admin/dashboard#admin-analytics",
             title: "Analytics",
             icon: BarChart3,
-            kind: "cli",
           },
         ]
       : NAVIGATION;

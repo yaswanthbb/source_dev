@@ -178,9 +178,21 @@ export function threadFingerprint(thread: DiscussionThread) {
   return JSON.stringify([
     thread.id,
     thread.target,
+    thread.conceptId,
+    thread.askerId,
+    thread.createdAt,
     thread.body,
     thread.updatedAt,
-    thread.answers.map((a) => [a.id, a.body, a.isVerified, a.updatedAt]),
+    thread.answers.map((a) => [
+      a.id,
+      a.questionId,
+      a.responderId,
+      a.isAiAnswer,
+      a.createdAt,
+      a.body,
+      a.isVerified,
+      a.updatedAt,
+    ]),
   ]);
 }
 export function discussionDate(value: string) {

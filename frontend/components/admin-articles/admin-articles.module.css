@@ -1,0 +1,368 @@
+.page {
+  max-width: 1250px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 14px 0 26px;
+}
+.eyebrow {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1.5px;
+  color: var(--gui-muted);
+  margin: 0 0 13px;
+}
+.header h1 {
+  font-size: clamp(31px, 3.7vw, 43px);
+  font-weight: 570;
+  line-height: 1.2;
+  letter-spacing: -1.5px;
+  margin: 0 0 16px;
+}
+.header h1 span {
+  color: var(--gui-accent);
+}
+.header p:last-child,
+.hint {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--gui-muted);
+}
+.art {
+  flex-shrink: 0;
+  animation: arrive 600ms ease-out both;
+}
+.toolbar,
+.sectionTop,
+.paging,
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0;
+}
+.toolbar p {
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+}
+.page button,
+.page a,
+.dialog button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--gui-border);
+  border-radius: 24px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  font: inherit;
+  font-size: 11px;
+  padding: 10px 16px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.page button:hover:not(:disabled),
+.page a:hover,
+.dialog button:hover:not(:disabled) {
+  background: var(--gui-soft);
+}
+.page button:disabled,
+.dialog button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.page
+  :is(a, button, input, select, textarea, pre, h2, p[tabindex]):focus-visible,
+.dialog :is(button, textarea, summary, pre, p[tabindex]):focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+.page h2 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+.filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  border-top: 1px solid var(--gui-border);
+  padding-top: 24px;
+}
+.page label,
+.dialog label {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+.page :is(input, select),
+.dialog textarea {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  border: 1px solid var(--gui-border);
+  border-radius: 12px;
+  padding: 12px;
+  font: inherit;
+  font-size: 12px;
+}
+.page select {
+  padding-right: 24px;
+}
+.sectionTop span,
+.paging span {
+  font-size: 11px;
+  color: var(--gui-muted);
+}
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--gui-border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--gui-surface);
+}
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid var(--gui-border);
+}
+.list li:last-child {
+  border: 0;
+}
+.list li > svg {
+  color: var(--gui-accent);
+  flex-shrink: 0;
+}
+.list li > div {
+  flex: 1;
+  min-width: 0;
+}
+.list h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.list p {
+  font-size: 11px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+  margin: 0 0 5px;
+}
+.list code {
+  font-size: 10px;
+  color: var(--gui-muted);
+}
+.list button {
+  flex-shrink: 0;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.empty {
+  padding: 30px 20px;
+  border: 1px dashed var(--gui-border);
+  border-radius: 16px;
+  font-size: 13px;
+  color: var(--gui-muted);
+}
+.notice {
+  border-left: 3px solid var(--gui-accent);
+  padding: 14px 18px;
+  background: var(--gui-accent-soft);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.detail {
+  border: 1px solid var(--gui-border);
+  border-radius: 20px;
+  background: var(--gui-surface);
+  padding: 26px;
+  margin-top: 32px;
+  min-width: 0;
+}
+.detail h2 {
+  font-size: 25px;
+  line-height: 1.4;
+}
+.actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.page pre,
+.dialog pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--gui-border);
+  background: var(--gui-soft);
+  border-radius: 12px;
+  padding: 18px;
+  font-size: 12px;
+  line-height: 1.9;
+  margin: 20px 0;
+}
+.decision {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--gui-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.decision h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.decision p {
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+}
+.page .danger,
+.dialog .danger {
+  background: var(--gui-accent);
+  color: var(--gui-on-primary);
+  border-color: var(--gui-accent);
+}
+.dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid var(--gui-border);
+  border-radius: 20px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  padding: 28px;
+  margin: auto;
+  overflow-wrap: anywhere;
+}
+.dialog::backdrop {
+  background: #000a;
+}
+.dialog h2 {
+  font-size: 23px;
+  line-height: 1.4;
+  margin: 10px 0 18px;
+}
+.dialog p {
+  font-size: 12px;
+  line-height: 1.85;
+}
+.selectedTitle {
+  display: block;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.dialog summary {
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--gui-accent);
+}
+.dialog textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+.dialog .actions {
+  justify-content: flex-end;
+}
+.dialog .hint {
+  font-size: 11px;
+}
+.page .paging {
+  justify-content: flex-end;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 800px) {
+  .filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .filters label:first-child {
+    grid-column: 1/-1;
+  }
+  .art {
+    width: 100px;
+    height: 100px;
+  }
+  .toolbar {
+    align-items: start;
+    flex-direction: column;
+  }
+  .list li {
+    flex-wrap: wrap;
+  }
+  .list li > div {
+    flex-basis: calc(100% - 40px);
+  }
+  .list button {
+    margin-left: 35px;
+  }
+  .decision {
+    align-items: start;
+    flex-direction: column;
+  }
+  .detail {
+    padding: 20px;
+  }
+}
+@media (max-width: 430px) {
+  .art {
+    display: none;
+  }
+  .page select {
+    font-size: 11px;
+  }
+  .sectionTop {
+    align-items: start;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .page .paging {
+    justify-content: space-between;
+  }
+  .dialog {
+    padding: 20px;
+  }
+  .dialog .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .art {
+    animation: none;
+  }
+}

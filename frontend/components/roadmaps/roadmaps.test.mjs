@@ -576,7 +576,11 @@ const discussionAnswer = {
   updatedAt: "2026-10-02T10:00:00Z",
 };
 function discussionSetup(options = {}) {
-  const h = roadmapHarness(options),
+  const h = roadmapHarness({
+      authToken: "discussion-session",
+      authUser: { id: "u1", role: "developer" },
+      ...options,
+    }),
     dataModule = h.load(new URL("./discussion-data.ts", import.meta.url)),
     client = h.load(new URL("./discussion-client.ts", import.meta.url));
   const snapshot = dataModule.parseDiscussion(
@@ -734,7 +738,7 @@ test("discussion loading is guarded, abortable and never generates AI", async ()
   });
   const result = await client.loadDiscussion("c2", signal);
   assert.equal(result.threads.length, 1);
-  assert.equal(reads.length, 3);
+  assert.equal(reads.length, 4);
   for (const [, options] of reads) {
     assert.equal(options.signal, signal);
     assert.equal(options.timeout, 12000);
@@ -785,7 +789,7 @@ test("a new public or private question is saved once after fresh placement/accou
       target === "ai" ? "AI reply saved" : "Question posted",
     );
     assert.equal(writes.length, 1);
-    assert.equal(reads.length, 4);
+    assert.equal(reads.length, 5);
     assert.equal(writes[0][1].body, "What is a branch?");
     assert.equal(writes[0][2].timeout, target === "ai" ? 180000 : 12000);
   }
@@ -840,7 +844,9 @@ test("reply, edit, delete, verify and unverify use their exact guarded endpoints
     "verify",
     "unverify",
   ]) {
-    const questions = [{ ...discussionRaw, answers: [discussionAnswer] }],
+    const questions = [
+        { ...discussionRaw, answers: [{ ...discussionAnswer }] },
+      ],
       writes = [];
     const { client, snapshot, entry, lesson, dataModule } = discussionSetup({
       api: discussionApi({
@@ -848,18 +854,31 @@ test("reply, edit, delete, verify and unverify use their exact guarded endpoints
         actor: { id: "admin", role: "admin" },
         write: async (path, body) => {
           writes.push(path);
-          return {
-            data:
-              kind === "reply"
-                ? { ...discussionAnswer, responderId: "admin", body: body.body }
-                : kind === "edit-question"
-                  ? { ...discussionRaw, body: body.body }
-                  : {
-                      ...discussionAnswer,
-                      body: body?.body ?? discussionAnswer.body,
-                      isVerified: kind === "verify",
-                    },
-          };
+          let saved;
+          if (kind === "reply") {
+            saved = {
+              ...discussionAnswer,
+              id: "new-reply",
+              responderId: "admin",
+              body: body.body,
+              isVerified: true,
+            };
+            questions[0].answers.push(saved);
+          } else if (kind === "delete-question") questions.splice(0);
+          else if (kind === "delete-answer") questions[0].answers = [];
+          else if (kind === "edit-question") {
+            questions[0].body = body.body;
+            saved = { ...questions[0] };
+          } else {
+            Object.assign(
+              questions[0].answers[0],
+              kind === "edit-answer"
+                ? { body: body.body }
+                : { isVerified: kind === "verify" },
+            );
+            saved = { ...questions[0].answers[0] };
+          }
+          return { data: saved };
         },
       }),
     });
@@ -980,8 +999,11 @@ test("discussion controller does not write on mount, deduplicates clicks and pre
   const { snapshot, props } = discussionSetup();
   for (const stale of [false, true]) {
     const h = roadmapHarness({
+      authToken: "discussion-session",
+      authUser: { id: "u1", role: "developer" },
       queries: {
-        "concepts/c2/discussion": {
+        "concepts/c2/discussion/u1/developer": {
+          isFetchedAfterMount: true,
           data: snapshot,
           isPending: false,
           isFetching: false,
@@ -989,7 +1011,7 @@ test("discussion controller does not write on mount, deduplicates clicks and pre
         },
       },
       hooks: {
-        useState: (v) => [v, () => {}],
+        useState: (v) => [typeof v === "function" ? v() : v, () => {}],
         useEffect() {},
         useRef: (v) => ({ current: v }),
       },
@@ -997,7 +1019,11 @@ test("discussion controller does not write on mount, deduplicates clicks and pre
     const tree = h
       .load(new URL("./gui-discussion.tsx", import.meta.url))
       .GuiDiscussion({ ...props, name: "git" });
-    const view = tree.props.children[1];
+    const view = walk(tree, (n) => n.type?.name === "DiscussionView")[0];
+    if (stale) {
+      assert.equal(view, undefined);
+      continue;
+    }
     assert.equal(h.calls.length, 0);
     view.props.onAction({
       kind: "ask",
@@ -1019,8 +1045,11 @@ test("discussion controller does not write on mount, deduplicates clicks and pre
 test("private cached discussion is hidden on denied or incompatible refresh", () => {
   const { snapshot, props } = discussionSetup();
   const h = roadmapHarness({
+    authToken: "discussion-session",
+    authUser: { id: "u1", role: "developer" },
     queries: {
-      "concepts/c2/discussion": {
+      "concepts/c2/discussion/u1/developer": {
+        isFetchedAfterMount: true,
         data: snapshot,
         isPending: false,
         isError: true,
@@ -1028,7 +1057,7 @@ test("private cached discussion is hidden on denied or incompatible refresh", ()
       },
     },
     hooks: {
-      useState: (v) => [v, () => {}],
+      useState: (v) => [typeof v === "function" ? v() : v, () => {}],
       useEffect() {},
       useRef: (v) => ({ current: v }),
     },
@@ -1042,42 +1071,58 @@ test("private cached discussion is hidden on denied or incompatible refresh", ()
   assert.match(html, /cached threads have been hidden/);
   assert.doesNotMatch(html, /How does a branch move/);
 });
-test("AI uncertainty unlocks only after an explicit successful fresh thread read", async () => {
+test("discussion uncertainty needs successful GET-only checking and explicit adoption", async () => {
   const { snapshot, props } = discussionSetup();
   for (const failed of [true, false]) {
-    const mutationResult = {};
+    const hooks = profileHookState(),
+      mutationResult = {},
+      api = discussionApi();
+    if (failed)
+      api.get = async () => {
+        throw new Error("Read failed");
+      };
     const h = roadmapHarness({
+      authToken: "discussion-session",
+      authUser: snapshot.viewer,
+      hooks: hooks.hooks,
+      api,
       mutationResult,
       queries: {
-        "concepts/c2/discussion": {
+        "concepts/c2/discussion/u1/developer": {
           data: snapshot,
           isPending: false,
           isFetching: false,
-          refetch: async () => ({ isError: failed, data: snapshot }),
+          isFetchedAfterMount: true,
         },
-      },
-      hooks: {
-        useState: (v) => [v, () => {}],
-        useEffect() {},
-        useRef: (v) => ({ current: v }),
       },
     });
     const { DiscussionFailure } = h.load(
       new URL("./discussion-client.ts", import.meta.url),
     );
     mutationResult.error = new DiscussionFailure("uncertain", true);
-    const view = h
-      .load(new URL("./gui-discussion.tsx", import.meta.url))
-      .GuiDiscussion({ ...props, name: "git" }).props.children[1];
-    assert.equal(view.props.canWrite, false);
-    view.props.onAction({ kind: "ask", target: "ai", body: "Question" });
+    const Controller = h.load(
+      new URL("./gui-discussion.tsx", import.meta.url),
+    ).GuiDiscussion;
+    const render = () => {
+      hooks.reset();
+      return walk(
+        Controller({ ...props, name: "git" }),
+        (n) => n.type?.name === "DiscussionView",
+      )[0].props;
+    };
+    let view = render();
+    assert.equal(view.canWrite, false);
+    view.onAction({ kind: "ask", target: "ai", body: "Question" });
     assert.equal(h.calls.filter((c) => c[0] === "mutation").length, 0);
-    view.props.onRefresh();
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(
-      h.calls.filter((c) => c[0] === "reset-mutation").length,
-      failed ? 0 : 1,
-    );
+    await view.onRefresh();
+    view = render();
+    assert.equal(h.calls.filter((c) => c[0] === "reset-mutation").length, 0);
+    assert.equal(view.checked, !failed);
+    assert.equal(view.canWrite, false);
+    if (!failed) {
+      view.onAdopt();
+      assert.equal(h.calls.filter((c) => c[0] === "reset-mutation").length, 1);
+    }
   }
 });
 test("question and reply drafts survive public/private channel changes without writing", () => {
@@ -11266,10 +11311,7 @@ test("admin shell and dashboard CLI links set mode without changing saved learni
     shell: "admin",
     children: "Sample",
   });
-  walk(
-    tree,
-    (n) => n.props?.href === "/admin/terminal?view=articles",
-  )[0].props.onClick();
+  walk(tree, (n) => n.props?.href === "/admin/terminal")[0].props.onClick();
   tree = view.AdminDashboardView(adminViewProps(data));
   walk(tree, (n) =>
     n.props?.href?.includes("view=review&ref="),
@@ -13343,4 +13385,3801 @@ test("admin jobs controller keeps uncertain acknowledgements paused through fail
     setup.render().props.notice,
     /earlier acknowledgement may still finish/,
   );
+});
+
+// Checkpoint 28: public article moderation, separate from author deletion.
+function articleModerationSetup(options = {}) {
+  const h = roadmapHarness({
+    authUser: adminActor,
+    authToken: "moderation-session",
+    ...options,
+  });
+  return {
+    h,
+    client: h.load(
+      new URL("../admin-articles/admin-articles-client.ts", import.meta.url),
+    ),
+    view: h.load(
+      new URL("../admin-articles/admin-articles-view.tsx", import.meta.url),
+    ),
+  };
+}
+function articleModerationApi() {
+  const state = {
+    user: { ...adminActor },
+    article: ownRaw({ slug: "a-useful-connection" }),
+    calls: [],
+    failure: null,
+    ack: { success: true },
+    keepAfter: false,
+    listOverride: null,
+    readError: false,
+  };
+  const api = {
+    async get(path, options) {
+      state.calls.push(["GET", path, options]);
+      if (path === "/users/me") return { data: state.user };
+      if (state.readError) throw new Error("private internal server detail");
+      if (path === "/articles")
+        return {
+          data: state.listOverride ?? (state.article ? [state.article] : []),
+        };
+      if (!state.article) throw { response: { status: 404 } };
+      return { data: state.article };
+    },
+    async delete(path, options) {
+      state.calls.push(["DELETE", path, options]);
+      if (state.failure) throw state.failure;
+      if (!state.keepAfter) state.article = null;
+      return { data: state.ack };
+    },
+  };
+  return { state, api };
+}
+function articleModerationProps(setup, patch = {}) {
+  const raw = ownRaw({ slug: "a-useful-connection" }),
+    article = setup.client.parseModerationArticle(raw, adminActor, raw.id);
+  return {
+    library: {
+      user: adminActor,
+      articles: [setup.client.articleRow(article)],
+      checkedAt: "2026-10-29T00:00:00Z",
+    },
+    pending: false,
+    busy: false,
+    detail: { article, checkedAt: "2026-10-29T00:00:00Z" },
+    detailError: "",
+    notice: "",
+    paused: false,
+    earlier: false,
+    decisionVersion: 0,
+    onRefresh() {},
+    onInspect() {},
+    onDelete() {},
+    onRecover() {},
+    onAdopt() {},
+    ...patch,
+  };
+}
+test("article moderation projects minimal list rows and preserves full selected source including whitespace", () => {
+  const { client } = articleModerationSetup(),
+    raw = ownRaw({ slug: "", title: "  Exact title  ", content: "  \n" });
+  const row = client.parseAdminArticles([raw], adminActor)[0];
+  assert.equal(row.title, "  Exact title  ");
+  assert.equal(row.slug, "");
+  assert.equal(row.content, undefined);
+  assert.equal(row.author, undefined);
+  assert.equal(row.passwordHash, undefined);
+  const detail = client.parseModerationArticle(raw, adminActor, raw.id);
+  assert.equal(detail.content, "  \n");
+  assert.equal(detail.authorId, contentUser.id);
+});
+test("article moderation parser rejects duplicates, malformed ownership and incomplete public records", () => {
+  const { client } = articleModerationSetup(),
+    raw = ownRaw({ slug: "valid" });
+  assert.throws(() => client.parseAdminArticles([raw, raw], adminActor));
+  for (const patch of [
+    { authorId: undefined },
+    { content: null },
+    { slug: null },
+    { updatedAt: "bad" },
+    { id: "../other" },
+  ])
+    assert.throws(() =>
+      client.parseAdminArticles([{ ...raw, ...patch }], adminActor),
+    );
+  const orphan = client.parseAdminArticles(
+    [{ ...raw, authorId: null, author: null }],
+    adminActor,
+  )[0];
+  assert.equal(orphan.authorId, null);
+});
+test("article moderation library checks matching admin before and after GET and propagates abort timeout", async () => {
+  const { api, state } = articleModerationApi(),
+    { client } = articleModerationSetup({ api }),
+    signal = { sample: true };
+  const library = await client.loadAdminArticles(adminActor, signal);
+  assert.equal(library.articles.length, 1);
+  assert.deepEqual(
+    state.calls.map((c) => c[1]),
+    ["/users/me", "/articles", "/users/me"],
+  );
+  assert.equal(state.calls[1][2].signal, signal);
+  assert.equal(state.calls[1][2].timeout, 12000);
+});
+test("article moderation refuses mismatched admin identity and role", async () => {
+  for (const patch of [{ role: "developer" }, { id: noticeId(99) }]) {
+    const { api, state } = articleModerationApi(),
+      { client } = articleModerationSetup({ api });
+    Object.assign(state.user, patch);
+    await assert.rejects(
+      client.loadAdminArticles(adminActor),
+      (e) => e.unavailable === true,
+    );
+    assert.equal(state.calls.length, 1);
+  }
+});
+test("article moderation session replacement blocks all API reads and writes", async () => {
+  let token = "moderation-session";
+  const { api, state } = articleModerationApi(),
+    setup = articleModerationSetup({ api, authToken: () => token }),
+    p = articleModerationProps(setup);
+  token = "other";
+  await assert.rejects(
+    setup.client.loadAdminArticles(adminActor, undefined, "moderation-session"),
+  );
+  await assert.rejects(
+    setup.client.removeAdminArticle(
+      p.library,
+      p.detail,
+      "Spam",
+      "moderation-session",
+    ),
+  );
+  assert.equal(state.calls.length, 0);
+});
+test("article moderation saved detail must match the reviewed list metadata", async () => {
+  const { api, state } = articleModerationApi(),
+    setup = articleModerationSetup({ api }),
+    p = articleModerationProps(setup);
+  state.article.title = "Changed";
+  await assert.rejects(
+    setup.client.inspectAdminArticle(p.library, p.library.articles[0]),
+    /changed/,
+  );
+  assert.equal(state.calls.filter((c) => c[0] === "DELETE").length, 0);
+});
+test("article moderation preflight checks complete text even when metadata dates are unchanged", async () => {
+  const { api, state } = articleModerationApi(),
+    setup = articleModerationSetup({ api }),
+    p = articleModerationProps(setup);
+  state.article.content = "Different public text";
+  await assert.rejects(
+    setup.client.removeAdminArticle(p.library, p.detail, "Spam"),
+    /full article text changed/,
+  );
+  assert.equal(state.calls.filter((c) => c[0] === "DELETE").length, 0);
+});
+test("article moderation preflight refuses changed author, links, slug, title or absence", async () => {
+  for (const patch of [
+    { authorId: adminActor.id },
+    { roadmapId: "another-roadmap" },
+    { slug: "new-slug" },
+    { title: "Changed title" },
+    null,
+  ]) {
+    const { api, state } = articleModerationApi(),
+      setup = articleModerationSetup({ api }),
+      p = articleModerationProps(setup);
+    state.article = patch === null ? null : { ...state.article, ...patch };
+    await assert.rejects(
+      setup.client.removeAdminArticle(p.library, p.detail, "Spam"),
+    );
+    assert.equal(state.calls.filter((c) => c[0] === "DELETE").length, 0);
+  }
+});
+test("article moderation validates trimmed reason before sending any request", async () => {
+  const { api, state } = articleModerationApi(),
+    setup = articleModerationSetup({ api }),
+    p = articleModerationProps(setup);
+  for (const reason of ["  ", "x".repeat(2001)])
+    await assert.rejects(
+      setup.client.removeAdminArticle(p.library, p.detail, reason),
+      /1–2000/,
+    );
+  assert.equal(state.calls.length, 0);
+});
+test("article moderation uses one reasoned admin DELETE and verifies detail 404 plus list absence", async () => {
+  const { api, state } = articleModerationApi(),
+    setup = articleModerationSetup({ api }),
+    p = articleModerationProps(setup);
+  const saved = await setup.client.removeAdminArticle(
+    p.library,
+    p.detail,
+    "  Duplicate spam  ",
+  );
+  assert.equal(saved.articles.length, 0);
+  const writes = state.calls.filter((c) => c[0] === "DELETE");
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][1], "/articles/admin/own-article-1");
+  assert.equal(writes[0][2].data.reason, "Duplicate spam");
+  assert.equal(
+    state.calls.filter((c) => c[1] === "/articles/own-article-1").length,
+    2,
+  );
+});
+test("article moderation every sent error including 4xx is uncertain and never replays deletion", async () => {
+  for (const failure of [
+    new Error("private detail"),
+    { response: { status: 400 } },
+    { response: { status: 403 } },
+    { response: { status: 500 } },
+  ]) {
+    const { api, state } = articleModerationApi(),
+      setup = articleModerationSetup({ api }),
+      p = articleModerationProps(setup);
+    state.failure = failure;
+    await assert.rejects(
+      setup.client.removeAdminArticle(p.library, p.detail, "Spam"),
+      (e) => e.uncertain === true && !e.message.includes("private detail"),
+    );
+    assert.equal(state.calls.filter((c) => c[0] === "DELETE").length, 1);
+  }
+});
+test("article moderation incomplete ACK, surviving detail and stale list all remain uncertain", async () => {
+  for (const kind of ["ack", "detail", "list"]) {
+    const { api, state } = articleModerationApi(),
+      setup = articleModerationSetup({ api }),
+      p = articleModerationProps(setup);
+    if (kind === "ack") state.ack = {};
+    if (kind === "detail") state.keepAfter = true;
+    if (kind === "list") state.listOverride = [state.article];
+    await assert.rejects(
+      setup.client.removeAdminArticle(p.library, p.detail, "Spam"),
+      (e) => e.uncertain === true,
+    );
+    assert.equal(state.calls.filter((c) => c[0] === "DELETE").length, 1);
+  }
+});
+test("article moderation recovery is GET-only and distinguishes checked presence and absence", async () => {
+  for (const removed of [false, true]) {
+    const { api, state } = articleModerationApi(),
+      setup = articleModerationSetup({ api });
+    if (removed) state.article = null;
+    const recovery = await setup.client.recoverAdminArticle(
+      adminActor,
+      "own-article-1",
+    );
+    assert.equal(recovery.removed, removed);
+    assert.equal(!!recovery.detail, !removed);
+    assert.equal(state.calls.filter((c) => c[0] !== "GET").length, 0);
+  }
+});
+test("article moderation recovery refuses disagreeing detail/list and fixed errors hide internals", async () => {
+  const { api, state } = articleModerationApi(),
+    setup = articleModerationSetup({ api });
+  state.listOverride = [];
+  await assert.rejects(
+    setup.client.recoverAdminArticle(adminActor, "own-article-1"),
+    /couldn’t be confirmed/,
+  );
+  state.readError = true;
+  await assert.rejects(
+    setup.client.loadAdminArticles(adminActor),
+    (e) => !e.message.includes("private internal"),
+  );
+});
+test("article moderation view separates missing, loading, failed and empty counts", () => {
+  const setup = articleModerationSetup();
+  for (const [patch, expected] of [
+    [
+      { pending: true, library: undefined, detail: undefined },
+      /Checking the public library/,
+    ],
+    [
+      { error: "Not checked", library: undefined, detail: undefined },
+      /Article library unavailable/,
+    ],
+    [
+      {
+        library: {
+          user: adminActor,
+          articles: [],
+          checkedAt: "2026-10-29T00:00:00Z",
+        },
+        detail: undefined,
+      },
+      /No public articles were returned/,
+    ],
+  ]) {
+    const html = setup.h.render(
+      createElement(
+        setup.view.AdminArticlesView,
+        articleModerationProps(setup, patch),
+      ),
+    );
+    assert.match(html, expected);
+  }
+});
+test("article moderation view shows full literal source and existing reader/admin editor destinations", () => {
+  const setup = articleModerationSetup(),
+    p = articleModerationProps(setup),
+    html = setup.h.render(createElement(setup.view.AdminArticlesView, p));
+  assert.match(html, /Complete saved article Markdown/);
+  assert.match(html, /handwritten public explanation/);
+  assert.match(html, /href="\/articles\/own-article-1"/);
+  assert.match(html, /href="\/developer\/articles\/own-article-1\/edit"/);
+  assert.match(html, /Admin edits publish immediately/);
+  assert.doesNotMatch(html, /do-not-retain/);
+});
+test("article moderation paused view blocks deletion and edit handoff until explicit checked-state adoption", () => {
+  const setup = articleModerationSetup({ hooks: profileHookState().hooks });
+  let adopts = 0;
+  const p = articleModerationProps(setup, {
+      paused: true,
+      recovery: { removed: true },
+      onAdopt() {
+        adopts++;
+      },
+    }),
+    tree = setup.view.AdminArticlesView(p),
+    html = setup.h.render(tree);
+  assert.match(html, /Article deletions paused/);
+  assert.doesNotMatch(html, /href="\/developer\/articles/);
+  const remove = walk(
+    tree,
+    (n) => n.type === "button" && n.props.className?.includes("danger"),
+  )[0];
+  assert.equal(remove.props.disabled, true);
+  walk(
+    tree,
+    (n) =>
+      n.type === "button" &&
+      n.props.children === "Use checked state and resume",
+  )[0].props.onClick();
+  assert.equal(adopts, 1);
+});
+function articleModerationController(options = {}) {
+  const state = profileHookState(),
+    first = articleModerationSetup(),
+    props = articleModerationProps(first),
+    query = {
+      data: props.library,
+      isFetching: false,
+      isPending: false,
+      isError: false,
+      refetch: async () => ({ isError: false }),
+    };
+  const setup = articleModerationSetup({
+      hooks: state.hooks,
+      queries: { [`admin/articles/${adminActor.id}/admin`]: query },
+      ...options,
+    }),
+    Controller = setup.h.load(
+      new URL("../admin-articles/gui-admin-articles.tsx", import.meta.url),
+    ).GuiAdminArticles;
+  return {
+    ...setup,
+    query,
+    render() {
+      state.reset();
+      const tree = Controller();
+      return {
+        tree,
+        props: walk(tree, (n) => n.type?.name === "AdminArticlesView")[0]
+          ?.props,
+      };
+    },
+  };
+}
+test("article moderation controller hides fetching, failed and denied cached metadata", () => {
+  for (const kind of ["fetch", "error", "denied"]) {
+    const setup = articleModerationController();
+    if (kind === "fetch") setup.query.isFetching = true;
+    else setup.query.isError = true;
+    if (kind === "denied")
+      setup.query.error = new setup.client.AdminArticlesFailure(
+        "Denied",
+        false,
+        true,
+      );
+    const result = setup.render();
+    assert.equal(result.props?.library, undefined);
+    if (kind === "denied") {
+      assert.equal(result.props, undefined);
+      assert.equal(result.tree.props.user, undefined);
+    }
+  }
+});
+test("article moderation controller deduplicates checks and binds cache to fresh-mount actor", async () => {
+  let release,
+    calls = 0;
+  const setup = articleModerationController();
+  setup.query.refetch = async () => {
+    calls++;
+    await new Promise((resolve) => (release = resolve));
+    return { isError: false };
+  };
+  const { props } = setup.render();
+  props.onRefresh();
+  props.onRefresh();
+  assert.equal(calls, 1);
+  assert.equal(setup.h.queryCalls[0].refetchOnMount, "always");
+  assert.equal(setup.h.queryCalls[0].retry, false);
+  release();
+  await new Promise(setImmediate);
+  assert.equal(setup.render().props.busy, false);
+});
+test("article moderation controller session replacement between render and click starts no operation", () => {
+  let token = "moderation-session";
+  const setup = articleModerationController({ authToken: () => token }),
+    { props } = setup.render();
+  token = "other";
+  props.onInspect(props.library.articles[0]);
+  assert.equal(setup.render().props, undefined);
+});
+test("article moderation controller keeps failed recovery paused and never repeats the delete", async () => {
+  const { api, state } = articleModerationApi(),
+    setup = articleModerationController({ api }),
+    detail = articleModerationProps(setup).detail;
+  state.failure = new Error("Network");
+  let { props } = setup.render();
+  props.onDelete(detail, "Spam");
+  props.onDelete(detail, "Spam");
+  await new Promise(setImmediate);
+  props = setup.render().props;
+  assert.equal(props.paused, true);
+  assert.equal(state.calls.filter((c) => c[0] === "DELETE").length, 1);
+  state.readError = true;
+  props.onRecover();
+  await new Promise(setImmediate);
+  props = setup.render().props;
+  assert.equal(props.paused, true);
+  assert.equal(props.recovery, undefined);
+  state.readError = false;
+  props.onRecover();
+  await new Promise(setImmediate);
+  props = setup.render().props;
+  assert.equal(props.paused, true);
+  assert.ok(props.recovery);
+  props.onAdopt();
+  props = setup.render().props;
+  assert.equal(props.paused, false);
+  assert.equal(props.earlier, true);
+  assert.equal(state.calls.filter((c) => c[0] === "DELETE").length, 1);
+});
+test("article moderation server wrapper and classic handoff preserve admin shell and start no GUI query", () => {
+  const setup = articleModerationSetup({ mode: { ready: true, isCli: true } }),
+    Page = setup.h.load(
+      new URL("../admin-articles/gui-admin-articles.tsx", import.meta.url),
+    ).AdminArticlesPage,
+    tree = Page();
+  assert.match(setup.h.render(tree), /admin\/terminal\?view=articles/);
+  assert.equal(setup.h.queryCalls.length, 0);
+  walk(tree, (n) => n.type === "button")[0].props.onClick();
+  assert.deepEqual(JSON.parse(JSON.stringify(setup.h.calls)), [
+    ["mode", "gui", { navigate: false }],
+  ]);
+});
+
+// Checkpoint 29: contextual admin moderation, privacy binding and saved-state evidence.
+function discussionAuditFixture(options = {}) {
+  const viewer = options.viewer ?? { id: "admin", role: "admin" };
+  const state = {
+    actor: { ...viewer },
+    threads: structuredClone([
+      { ...discussionRaw, answers: [discussionAnswer] },
+    ]),
+    calls: [],
+    wrote: false,
+    apply: true,
+  };
+  const api = {
+    async get(path, config) {
+      state.calls.push(["GET", path, config]);
+      if (state.wrote && state.failRead)
+        throw new Error("Private backend detail");
+      if (path === "/users/me") return { data: { ...state.actor } };
+      if (path === "/roadmaps/r1") return { data: sample };
+      if (path.endsWith("qa-questions"))
+        return { data: structuredClone(state.threads) };
+      return { data: { ...sampleLesson, authorId: "author" } };
+    },
+    async patch(path, body) {
+      return write("PATCH", path, body);
+    },
+    async delete(path) {
+      return write("DELETE", path);
+    },
+    async post(path, body) {
+      return write("POST", path, body);
+    },
+  };
+  async function write(method, path, body) {
+    state.calls.push([method, path, body]);
+    state.wrote = true;
+    if (state.failure) throw state.failure;
+    let ack;
+    const q = state.threads[0],
+      a = q?.answers[0];
+    if (method === "DELETE") {
+      if (state.apply) {
+        if (path.startsWith("/qa-questions/")) state.threads = [];
+        else q.answers = [];
+      }
+      return { data: undefined };
+    }
+    if (path.endsWith("/verify") || path.endsWith("/unverify")) {
+      ack = { ...a, isVerified: path.endsWith("/verify") };
+      if (state.apply) a.isVerified = ack.isVerified;
+    } else if (path.startsWith("/answers/")) {
+      ack = { ...a, body: body.body };
+      if (state.apply) a.body = body.body;
+    } else if (method === "PATCH") {
+      ack = { ...q, body: body.body };
+      if (state.apply) q.body = body.body;
+    } else {
+      ack = {
+        ...discussionAnswer,
+        id: "new-answer",
+        questionId: q.id,
+        responderId: viewer.id,
+        body: body.body,
+        isVerified: viewer.role === "admin",
+      };
+      if (state.apply) q.answers.push(ack);
+    }
+    if (state.afterWrite) state.afterWrite();
+    return { data: ack };
+  }
+  const setup = discussionSetup({ api, authUser: viewer, ...options });
+  const snapshot = setup.dataModule.parseDiscussion(
+    { ...sampleLesson, authorId: "author" },
+    viewer,
+    state.threads,
+    "c2",
+  );
+  return {
+    ...setup,
+    state,
+    api,
+    snapshot,
+    action(kind, extra = {}) {
+      return {
+        kind,
+        questionId: state.threads[0]?.id ?? discussionRaw.id,
+        answerId: discussionAnswer.id,
+        fingerprint: setup.dataModule.threadFingerprint(snapshot.threads[0]),
+        ...extra,
+      };
+    },
+  };
+}
+test("discussion audit binds matching current account before and after reads and rejects malformed identities", async () => {
+  for (const patch of [
+    { id: "other" },
+    { role: "developer" },
+    { id: "../bad" },
+  ]) {
+    const f = discussionAuditFixture();
+    Object.assign(f.state.actor, patch);
+    await assert.rejects(
+      f.client.loadDiscussion("c2", undefined, f.snapshot.viewer),
+      (e) => e.unavailable === true,
+    );
+    assert.equal(f.state.calls.length, 1);
+  }
+  const f = discussionAuditFixture(),
+    get = f.api.get;
+  let checks = 0;
+  f.api.get = async (path, config) => {
+    const response = await get(path, config);
+    if (path === "/users/me" && ++checks === 2)
+      response.data.role = "developer";
+    return response;
+  };
+  await assert.rejects(
+    f.client.loadDiscussion("c2", undefined, f.snapshot.viewer),
+    (e) => e.unavailable === true,
+  );
+});
+test("discussion audit refuses absent or changed original sessions without any write", async () => {
+  let token = "discussion-session";
+  const f = discussionAuditFixture({ authToken: () => token });
+  token = "changed";
+  await assert.rejects(
+    f.client.submitDiscussionAction(
+      sample,
+      "git",
+      f.entry,
+      f.lesson,
+      f.snapshot,
+      f.action("delete-question"),
+      "discussion-session",
+    ),
+  );
+  assert.equal(f.state.calls.length, 0);
+  const blank = discussionAuditFixture({ authToken: null });
+  await assert.rejects(blank.client.loadDiscussion("c2"));
+  assert.equal(blank.state.calls.length, 0);
+});
+test("discussion audit discards reads when a session changes while a response is in flight", async () => {
+  let token = "discussion-session";
+  const f = discussionAuditFixture({ authToken: () => token }),
+    get = f.api.get;
+  f.api.get = async (path, config) => {
+    const response = await get(path, config);
+    if (path.startsWith("/concepts/c2") && !path.endsWith("qa-questions"))
+      token = "changed";
+    return response;
+  };
+  await assert.rejects(
+    f.client.loadDiscussion(
+      "c2",
+      undefined,
+      f.snapshot.viewer,
+      "discussion-session",
+    ),
+    (e) => e.unavailable === true,
+  );
+  assert.equal(
+    f.state.calls.some((c) => c[1].endsWith("qa-questions")),
+    false,
+  );
+});
+test("discussion audit checks void-delete outcomes through saved absence and returns checked threads", async () => {
+  for (const kind of ["delete-question", "delete-answer"]) {
+    const f = discussionAuditFixture();
+    const result = await f.client.submitDiscussionAction(
+      sample,
+      "git",
+      f.entry,
+      f.lesson,
+      f.snapshot,
+      f.action(kind),
+    );
+    assert.ok(result.checked);
+    assert.equal(f.state.calls.filter((c) => c[0] === "DELETE").length, 1);
+    assert.equal(
+      kind === "delete-question"
+        ? result.checked.threads.length
+        : result.checked.threads[0].answers.length,
+      0,
+    );
+  }
+});
+test("discussion audit rejects surviving deletes and unsaved verification despite a successful ACK", async () => {
+  for (const kind of ["delete-question", "delete-answer", "verify"]) {
+    const f = discussionAuditFixture();
+    f.state.apply = false;
+    await assert.rejects(
+      f.client.submitDiscussionAction(
+        sample,
+        "git",
+        f.entry,
+        f.lesson,
+        f.snapshot,
+        f.action(kind),
+      ),
+      (e) => e.uncertain === true,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] !== "GET").length, 1);
+  }
+});
+test("discussion audit validates saved body and original answer ownership after an edit", async () => {
+  for (const mode of ["body", "owner"]) {
+    const f = discussionAuditFixture();
+    if (mode === "body") f.state.apply = false;
+    else
+      f.state.afterWrite = () => {
+        f.state.threads[0].answers[0].responderId = "different-author";
+      };
+    await assert.rejects(
+      f.client.submitDiscussionAction(
+        sample,
+        "git",
+        f.entry,
+        f.lesson,
+        f.snapshot,
+        f.action("edit-answer", { body: "Reviewed edit" }),
+      ),
+      (e) => e.uncertain === true,
+    );
+  }
+});
+test("discussion audit preserves admin private-thread inspection and AI-reply editing without another provider request", async () => {
+  const f = discussionAuditFixture();
+  f.state.threads[0].target = "ai";
+  Object.assign(f.state.threads[0].answers[0], {
+    isAiAnswer: true,
+    responderId: null,
+    responderName: "AI Assistant",
+  });
+  f.snapshot = f.dataModule.parseDiscussion(
+    { ...sampleLesson, authorId: "author" },
+    f.state.actor,
+    f.state.threads,
+    "c2",
+  );
+  const action = {
+    kind: "edit-answer",
+    questionId: discussionRaw.id,
+    answerId: discussionAnswer.id,
+    body: "Corrected saved AI explanation",
+    fingerprint: f.dataModule.threadFingerprint(f.snapshot.threads[0]),
+  };
+  const result = await f.client.submitDiscussionAction(
+    sample,
+    "git",
+    f.entry,
+    f.lesson,
+    f.snapshot,
+    action,
+  );
+  assert.equal(result.checked.threads[0].answers[0].body, action.body);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  assert.equal(f.state.calls.filter((c) => c[0] === "PATCH").length, 1);
+  for (const kind of ["reply", "verify"]) {
+    const next = discussionAuditFixture();
+    next.state.threads = structuredClone(f.state.threads);
+    const snap = next.dataModule.parseDiscussion(
+      sampleLesson,
+      next.state.actor,
+      next.state.threads,
+      "c2",
+    );
+    await assert.rejects(
+      next.client.submitDiscussionAction(
+        sample,
+        "git",
+        next.entry,
+        next.lesson,
+        snap,
+        {
+          ...action,
+          kind,
+          fingerprint: next.dataModule.threadFingerprint(snap.threads[0]),
+        },
+      ),
+    );
+    assert.equal(next.state.calls.filter((c) => c[0] !== "GET").length, 0);
+  }
+});
+test("discussion audit sent 4xx, transport and readback failures stay uncertain with one request", async () => {
+  for (const config of [
+    { failure: { response: { status: 400 } } },
+    { failure: { response: { status: 403 } } },
+    { failure: { response: { status: 408 } } },
+    { failure: new Error("Private detail") },
+    { failRead: true },
+  ]) {
+    const f = discussionAuditFixture();
+    Object.assign(f.state, config);
+    await assert.rejects(
+      f.client.submitDiscussionAction(
+        sample,
+        "git",
+        f.entry,
+        f.lesson,
+        f.snapshot,
+        f.action("verify"),
+      ),
+      (e) => e.uncertain === true && !e.message.includes("Private"),
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "PATCH").length, 1);
+  }
+});
+test("discussion audit fingerprints detect asker, responder and AI identity drift before a write", async () => {
+  for (const mode of ["asker", "responder", "ai"]) {
+    const f = discussionAuditFixture();
+    if (mode === "asker") f.state.threads[0].askerId = "different";
+    if (mode === "responder")
+      f.state.threads[0].answers[0].responderId = "different";
+    if (mode === "ai") {
+      f.state.threads[0].target = "ai";
+      f.state.threads[0].answers[0].isAiAnswer = true;
+      f.state.threads[0].answers[0].responderId = null;
+    }
+    await assert.rejects(
+      f.client.submitDiscussionAction(
+        sample,
+        "git",
+        f.entry,
+        f.lesson,
+        f.snapshot,
+        f.action("delete-answer"),
+      ),
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] !== "GET").length, 0);
+  }
+});
+function discussionAuditController(options = {}) {
+  const f = discussionAuditFixture(options),
+    hooks = profileHookState(),
+    viewer = f.snapshot.viewer,
+    query = {
+      data: f.snapshot,
+      isPending: false,
+      isFetching: false,
+      isError: false,
+      isFetchedAfterMount: true,
+      refetch: async () => ({ data: f.snapshot, isError: false }),
+    },
+    h = roadmapHarness({
+      authUser: viewer,
+      authToken: "discussion-session",
+      hooks: hooks.hooks,
+      api: f.api,
+      queries: {
+        [`concepts/c2/discussion/${viewer.id}/${viewer.role}`]: query,
+      },
+      ...options,
+    }),
+    Controller = h.load(
+      new URL("./gui-discussion.tsx", import.meta.url),
+    ).GuiDiscussion;
+  return {
+    ...f,
+    h,
+    query,
+    render() {
+      hooks.reset();
+      const tree = Controller({ ...f.props, name: "git" });
+      return {
+        tree,
+        view: walk(tree, (n) => n.type?.name === "DiscussionView")[0],
+      };
+    },
+  };
+}
+test("discussion audit cache is actor scoped, freshly checked on mount and never reveals an old private cache first", () => {
+  const f = discussionAuditController();
+  f.query.isFetchedAfterMount = false;
+  f.query.isFetching = true;
+  const r = f.render();
+  assert.equal(r.view, undefined);
+  assert.doesNotMatch(f.h.render(r.tree), /How does a branch/);
+  const q = f.h.queryCalls[0];
+  assert.deepEqual(JSON.parse(JSON.stringify(q.queryKey)), [
+    "concepts",
+    "c2",
+    "discussion",
+    "admin",
+    "admin",
+  ]);
+  assert.equal(q.refetchOnMount, "always");
+  assert.equal(q.refetchOnReconnect, false);
+  assert.equal(q.retry, false);
+});
+test("discussion audit action checks the session again between render and click", () => {
+  let token = "discussion-session";
+  const f = discussionAuditController({ authToken: () => token }),
+    p = f.render().view.props;
+  token = "changed";
+  p.onAction(f.action("verify"));
+  assert.equal(f.h.calls.filter((c) => c[0] === "mutation").length, 0);
+  assert.equal(f.render().view, undefined);
+});
+test("discussion audit refresh synchronously blocks overlapping reads and writes", async () => {
+  let release,
+    calls = 0;
+  const f = discussionAuditController();
+  f.query.refetch = async () => {
+    calls++;
+    await new Promise((resolve) => (release = resolve));
+    return { data: f.snapshot, isError: false };
+  };
+  const p = f.render().view.props;
+  p.onRefresh();
+  p.onRefresh();
+  p.onAction(f.action("verify"));
+  assert.equal(calls, 1);
+  assert.equal(f.h.calls.filter((c) => c[0] === "mutation").length, 0);
+  release();
+  await new Promise(setImmediate);
+  assert.equal(f.render().view.props.refreshing, false);
+});
+test("discussion audit checked recovery stays read only until explicit adoption", () => {
+  const f = discussionAuditFixture(),
+    html = f.h.render(
+      createElement(
+        f.h.load(new URL("./discussion-view.tsx", import.meta.url))
+          .DiscussionView,
+        {
+          ...f.props,
+          data: f.snapshot,
+          checked: true,
+          uncertain: true,
+          canWrite: false,
+          onAdopt() {},
+          onAction() {
+            assert.fail("No render writes");
+          },
+        },
+      ),
+    );
+  assert.match(html, /Checked threads ready/);
+  assert.match(html, /Use checked threads and resume/);
+  assert.match(html, /cannot cancel an earlier request/);
+});
+test("discussion audit admin editing an answered question explains the retained replies", () => {
+  const state = profileHookState(),
+    f = discussionAuditFixture({ hooks: state.hooks }),
+    View = f.h.load(
+      new URL("./discussion-view.tsx", import.meta.url),
+    ).DiscussionView,
+    p = { ...f.props, data: f.snapshot };
+  const render = () => {
+    state.reset();
+    return View(p);
+  };
+  let tree = render();
+  walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Edit question",
+  )[0].props.onClick({ currentTarget: {} });
+  tree = render();
+  assert.match(
+    f.h.render(tree),
+    /Editing an answered question changes the prompt/,
+  );
+  assert.match(f.h.render(tree), /Edit saved message/);
+  assert.equal(f.state.calls.length, 0);
+});
+test("discussion audit content review links preserve actual roadmap/module/concept context", () => {
+  const f = moderationSetup(),
+    fixture = moderationApi(),
+    library = modLibrary(f, fixture.state),
+    html = f.h.render(
+      createElement(f.view.ContentReviewView, modProps(library)),
+    );
+  const row = library.lessons[0],
+    p = row.placements[0],
+    href = `/developer/roadmaps/${p.roadmapId}/modules/${p.moduleId}/lessons/${row.id}/discussion`;
+  assert.ok(html.includes(`href="${href}"`));
+  assert.match(html, /Open lesson discussion/);
+  const { h, entry, lesson } = discussionSetup();
+  const url = `${h.data.lessonRoute({ ...lesson.location, roadmap: sample.id, module: entry.module.id, concept: lesson.placement.conceptId })}/discussion`;
+  assert.match(url, /roadmaps\/r1\/modules\/m1\/lessons\/c2\/discussion/);
+  assert.equal(
+    h.data.findModule(sample, "git", entry.module.id).module.id,
+    entry.module.id,
+  );
+  assert.equal(
+    h.data.findLesson(entry, lesson.placement.conceptId).placement.conceptId,
+    "c2",
+  );
+});
+test("discussion audit Analytics GUI navigation targets the existing dashboard section and preserves developer shell", () => {
+  const { h, data, view } = adminSetup(),
+    admin = h.render(
+      createElement(
+        h.shell.GuiWorkspaceShell,
+        { shell: "admin", user: adminActor },
+        "Sample",
+      ),
+    ),
+    dashboard = h.render(
+      createElement(view.AdminDashboardView, adminViewProps(data)),
+    ),
+    developer = h.render(
+      createElement(h.shell.GuiWorkspaceShell, { user: adminActor }, "Sample"),
+    );
+  assert.match(admin, /href="\/admin\/dashboard#admin-analytics"/);
+  const analyticsLink = admin.match(
+    /<a[^>]*href="\/admin\/dashboard#admin-analytics"[^>]*>[\s\S]*?<\/a>/,
+  )?.[0];
+  assert.ok(analyticsLink);
+  assert.doesNotMatch(analyticsLink, /CLI/);
+  assert.match(dashboard, /id="admin-analytics"/);
+  assert.doesNotMatch(developer, /Admin navigation|#admin-analytics/);
+});
+
+test("discussion audit distinguishes a failed first cache refresh from failure after a verified read", () => {
+  const first = discussionAuditController();
+  first.query.isError = true;
+  first.query.error = new Error("Network");
+  const hidden = first.render();
+  assert.equal(hidden.view, undefined);
+  assert.doesNotMatch(first.h.render(hidden.tree), /How does a branch move/);
+  const f = discussionAuditController();
+  // Execute only the fresh-read effect; auth listeners remain outside this local harness.
+  const hooks = profileHookState();
+  hooks.hooks.useEffect = (effect, deps) => {
+    if (deps?.length === 1 && deps[0] === true) effect();
+  };
+  const h = roadmapHarness({
+      authUser: f.snapshot.viewer,
+      authToken: "discussion-session",
+      hooks: hooks.hooks,
+      queries: { "concepts/c2/discussion/admin/admin": f.query },
+    }),
+    Controller = h.load(
+      new URL("./gui-discussion.tsx", import.meta.url),
+    ).GuiDiscussion;
+  const render = () => {
+    hooks.reset();
+    return walk(
+      Controller({ ...f.props, name: "git" }),
+      (n) => n.type?.name === "DiscussionView",
+    )[0];
+  };
+  assert.ok(render());
+  f.query.isError = true;
+  f.query.error = new Error("Temporary refresh failure");
+  const retained = render();
+  assert.ok(retained);
+  assert.equal(retained.props.canWrite, false);
+});
+
+// Checkpoint 30: read-only evaluation and question-quality inspection.
+const evalRunId = "10000000-0000-4000-8000-000000000001";
+const evalQuestionId = "10000000-0000-4000-8000-000000000002";
+const evalOptionId = (i) =>
+  `10000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+function evaluationSamples() {
+  const anchors = Object.fromEntries(
+    ["accuracy", "clarity", "pedagogy", "difficultyCalibration"].map((d) => [
+      d,
+      Array.from({ length: 5 }, (_, i) => `${d} anchor ${i + 1}`),
+    ]),
+  );
+  const rubric = { version: "1.0.0", anchors };
+  const goldens = Array.from({ length: 8 }, (_, i) => ({
+    id: `case-${i + 1}`,
+    task: i === 0 ? "concept_research" : "concept_draft",
+    ...(i === 0 ? { registryTask: "concept_content" } : {}),
+    format: "prose",
+    input: { title: "Local closure" },
+    expected: "Expected local explanation",
+    provenance: "Synthetic local reference",
+    claims: [{ label: "Closure", alternatives: ["environment"] }],
+    forbidden: ["wrong"],
+    privateToken: "discard-me",
+  }));
+  const run = {
+    id: evalRunId,
+    task: "concept_draft",
+    mode: "shadow",
+    status: "completed",
+    createdAt: "2026-10-30T06:00:00Z",
+    promptVersion: "1.1.0",
+    promptHash: "prompt-hash",
+    artifactHash: "artifact-hash",
+    generatorModel: "generator-model",
+    judgeModel: "judge-model",
+    judgePromptVersion: "1.0.0",
+    judgePromptHash: "judge-hash",
+    rubricVersion: "1.0.0",
+    seed: 0,
+    judgeSeed: 0,
+    goldenId: "case-1",
+    goldenSetHash: "golden-hash",
+    deterministicResult: {
+      passed: false,
+      checks: [{ code: "SECTIONS", passed: false, detail: "Missing practice" }],
+    },
+    judgeResult: {
+      rubricVersion: "1.0.0",
+      dimensions: Object.fromEntries(
+        Object.keys(anchors).map((d) => [
+          d,
+          {
+            score: 3,
+            evidence: ["A local closure captures its environment."],
+            failureExplanation: "Practice is absent",
+            suggestedRevision: "Add practice",
+            confidence: "low",
+          },
+        ]),
+      ),
+    },
+    goldenDiff: { passed: true, differences: [] },
+    warnings: ["LOCAL_SAMPLE_WARNING"],
+    artifact: {
+      kind: "prose",
+      content:
+        "A local closure captures its environment. <script>bad()</script>",
+    },
+    context: { concepts: [], terms: [], placements: [], edges: [], links: {} },
+    source: { goldenId: "case-1", rawOutput: "Local evidence" },
+    judgeRaw: "discard duplicated raw judge",
+    createdBy: { email: "discard-private@example.test" },
+    createdById: "discard-id",
+  };
+  const positions = [
+    {
+      optionId: evalOptionId(11),
+      position: 1,
+      isKey: true,
+      selected: 0,
+      rate: null,
+    },
+    {
+      optionId: evalOptionId(12),
+      position: 2,
+      isKey: false,
+      selected: 0,
+      rate: null,
+    },
+  ];
+  const metrics = {
+    questionId: evalQuestionId,
+    n: 0,
+    minimumN: 20,
+    correlationN: 0,
+    insufficient_data: true,
+    difficultyIndex: null,
+    pointBiserial: null,
+    discriminationIndex: null,
+    groups: { fraction: 0.27, lowerN: 0, upperN: 0, tiesIncluded: true },
+    answerPositionDistribution: positions,
+    distractorSelectionRates: [positions[1]],
+    correctPositions: [1],
+    flags: [],
+    reasons: [
+      "INSUFFICIENT_LEARNERS",
+      "INSUFFICIENT_REST_ITEMS",
+      "INSUFFICIENT_COMPLETE_COHORT",
+    ],
+    weakItem: false,
+    versionNumber: 2,
+    predecessorId: evalOptionId(3),
+    cohortQuestionIds: [evalQuestionId],
+    methodVersion: "first-attempt-item-rest-v1",
+    note: "Descriptive first-attempt statistics; flags are heuristics.",
+    studentId: "discard-learner",
+  };
+  return { rubric, goldens, run, metrics };
+}
+function evaluationSetup(options = {}) {
+  const h = roadmapHarness({
+    authUser: adminActor,
+    authToken: "evaluation-session",
+    ...options,
+  });
+  const data = h.load(
+    new URL("../evaluation/evaluation-data.ts", import.meta.url),
+  );
+  const client = h.load(
+    new URL("../evaluation/evaluation-client.ts", import.meta.url),
+  );
+  const view = h.load(
+    new URL("../evaluation/evaluation-view.tsx", import.meta.url),
+  );
+  return { h, data, client, view, ...evaluationSamples() };
+}
+function evaluationApi(options = {}) {
+  const f = evaluationSamples(),
+    calls = [];
+  let accountReads = 0;
+  const api = {
+    get: async (path, opts) => {
+      calls.push(["GET", path, opts]);
+      if (options.wait) await options.wait(path);
+      if (options.fail?.(path)) throw options.fail(path);
+      return {
+        data:
+          path === "/users/me"
+            ? accountReads++ && options.after
+              ? options.after
+              : adminActor
+            : path.endsWith("rubric")
+              ? f.rubric
+              : path.endsWith("goldens")
+                ? f.goldens
+                : path.endsWith("psychometrics")
+                  ? f.metrics
+                  : f.run,
+      };
+    },
+    post: () => assert.fail("evaluation inspection must never POST"),
+    patch: () => assert.fail("evaluation inspection must never PATCH"),
+    delete: () => assert.fail("evaluation inspection must never DELETE"),
+  };
+  return { api, calls, f };
+}
+function evaluationLibrary(f) {
+  return {
+    user: adminActor,
+    rubric: f.data.parseRubric(f.rubric),
+    goldens: f.data.parseGoldens(f.goldens),
+    checkedAt: "2026-10-30T06:00:00Z",
+  };
+}
+function evaluationController(options = {}) {
+  const hooks = profileHookState(),
+    { api, calls } = evaluationApi(options),
+    queries = {};
+  const f = evaluationSetup({ api, hooks: hooks.hooks, queries, ...options }),
+    library = evaluationLibrary(f);
+  const query = {
+    data: library,
+    isFetchedAfterMount: true,
+    isPending: false,
+    isFetching: false,
+    isError: false,
+    refetch: async () => ({ data: library }),
+  };
+  queries[`admin/evaluation/${adminActor.id}/${adminActor.role}`] = query;
+  const C = f.h.load(
+    new URL("../evaluation/gui-evaluation.tsx", import.meta.url),
+  ).GuiEvaluation;
+  return {
+    ...f,
+    calls,
+    query,
+    hooks,
+    render() {
+      hooks.reset();
+      const tree = C();
+      return {
+        tree,
+        view: walk(tree, (n) => n.type?.name === "EvaluationView")[0],
+      };
+    },
+  };
+}
+function evaluationInteractive() {
+  const hooks = profileHookState(),
+    f = evaluationSetup({ hooks: hooks.hooks });
+  const props = {
+    library: evaluationLibrary(f),
+    pending: false,
+    busy: false,
+    onRefresh() {},
+    onInspect() {},
+  };
+  return {
+    ...f,
+    hooks,
+    props,
+    tree() {
+      hooks.reset();
+      return f.view.EvaluationView(props);
+    },
+    html() {
+      return f.h.render(this.tree());
+    },
+    section(name) {
+      const tree = this.tree();
+      walk(
+        tree,
+        (n) => n.type === "button" && n.props.children === name,
+      )[0].props.onClick();
+    },
+  };
+}
+test("evaluation rubric/golden parsers retain exact anchors and registry aliases, reject malformed or duplicate references", () => {
+  const f = evaluationSetup();
+  assert.equal(f.data.parseRubric(f.rubric).anchors.accuracy.length, 5);
+  const rows = f.data.parseGoldens(f.goldens);
+  assert.equal(rows[0].task, "concept_research");
+  assert.equal(rows[0].registryTask, "concept_content");
+  assert.equal(rows[0].privateToken, undefined);
+  for (const value of [
+    { ...f.rubric, anchors: {} },
+    { ...f.rubric, version: null },
+    { ...f.rubric, anchors: { ...f.rubric.anchors, accuracy: ["one"] } },
+  ])
+    assert.throws(() => f.data.parseRubric(value));
+  for (const value of [
+    [f.goldens[0], f.goldens[0]],
+    [{ ...f.goldens[0], input: null }],
+    [{ ...f.goldens[0], expected: undefined }],
+    [{ ...f.goldens[0], task: "unknown" }],
+    Array(51).fill(f.goldens[0]),
+  ])
+    assert.throws(() => f.data.parseGoldens(value));
+});
+test("evaluation saved run separates observations and projects account/raw judge fields out", () => {
+  const f = evaluationSetup(),
+    run = f.data.parseRun(f.run, evalRunId);
+  assert.equal(run.status, "completed");
+  assert.equal(run.deterministicResult.passed, false);
+  assert.equal(run.goldenDiff.passed, true);
+  assert.equal(run.judgeResult.dimensions.accuracy.score, 3);
+  assert.equal(run.seed, 0);
+  const text = JSON.stringify(run);
+  assert.doesNotMatch(text, /discard-private|discard-id|discard duplicated/);
+  for (const patch of [
+    { id: evalQuestionId },
+    { status: "approved" },
+    { mode: "production" },
+    { createdAt: "invalid" },
+    { judgeResult: undefined },
+    { deterministicResult: { passed: "true", checks: [] } },
+  ])
+    assert.throws(() => f.data.parseRun({ ...f.run, ...patch }, evalRunId));
+});
+test("evaluation judge parser rejects missing evidence, invalid scores and mismatched recorded rubric", () => {
+  const f = evaluationSetup();
+  for (const change of [
+    { score: 6 },
+    { score: 1.2 },
+    { evidence: [] },
+    { confidence: "certain" },
+    { failureExplanation: "" },
+    { suggestedRevision: "" },
+  ]) {
+    const raw = structuredClone(f.run);
+    Object.assign(raw.judgeResult.dimensions.accuracy, change);
+    assert.throws(() => f.data.parseRun(raw, evalRunId));
+  }
+  const raw = structuredClone(f.run);
+  raw.judgeResult.rubricVersion = "other";
+  assert.throws(() => f.data.parseRun(raw, evalRunId));
+});
+test("evaluation metrics preserve missing versus zero and reject inconsistent samples/positions", () => {
+  const f = evaluationSetup(),
+    m = f.data.parseMetrics(f.metrics, evalQuestionId);
+  assert.equal(m.n, 0);
+  assert.equal(m.difficultyIndex, null);
+  assert.equal(f.data.metric(null, true), "Not available");
+  assert.equal(f.data.metric(0, true), "0.0%");
+  assert.equal(m.studentId, undefined);
+  for (const patch of [
+    { questionId: evalRunId },
+    { minimumN: 19 },
+    { n: -1 },
+    { correlationN: 1 },
+    { pointBiserial: 0.1 },
+    { insufficient_data: false },
+    { weakItem: true },
+    { versionNumber: 0 },
+    { correctPositions: [2] },
+    { answerPositionDistribution: [] },
+  ])
+    assert.throws(() =>
+      f.data.parseMetrics({ ...f.metrics, ...patch }, evalQuestionId),
+    );
+  const raw = structuredClone(f.metrics);
+  raw.n = 20;
+  raw.correlationN = 20;
+  raw.insufficient_data = false;
+  raw.pointBiserial = 0;
+  raw.discriminationIndex = 0;
+  raw.difficultyIndex = 0;
+  raw.answerPositionDistribution[0].rate = 0;
+  raw.answerPositionDistribution[1].selected = 20;
+  raw.answerPositionDistribution[1].rate = 1;
+  assert.equal(f.data.parseMetrics(raw, evalQuestionId).difficultyIndex, 0);
+});
+test("evaluation reference reads are fresh timed abortable GETs with matching admin checks and no writes", async () => {
+  const a = evaluationApi(),
+    f = evaluationSetup(a),
+    signal = new AbortController().signal;
+  const library = await f.client.loadEvaluation(adminActor, signal);
+  assert.equal(library.goldens.length, 8);
+  assert.equal(a.calls.length, 4);
+  assert.equal(a.calls[0][1], "/users/me");
+  assert.equal(a.calls.at(-1)[1], "/users/me");
+  for (const [, path, options] of a.calls) {
+    assert.equal(options.signal, signal);
+    assert.equal(options.timeout, 12000);
+    assert.ok(!/shadow|regression|comparisons|candidates/.test(path));
+  }
+});
+test("evaluation reference sections fail independently with fixed copy rather than false zero", async () => {
+  for (const failed of ["rubric", "goldens"]) {
+    const a = evaluationApi({
+        fail: (p) =>
+          p.endsWith(failed)
+            ? {
+                response: { status: 502, data: { message: "internal-secret" } },
+              }
+            : null,
+      }),
+      f = evaluationSetup(a),
+      library = await f.client.loadEvaluation(adminActor);
+    assert.equal(library[failed], undefined);
+    assert.ok(library[`${failed}Error`]);
+    assert.ok(library[failed === "rubric" ? "goldens" : "rubric"]);
+    assert.doesNotMatch(JSON.stringify(library), /internal-secret/);
+  }
+});
+test("evaluation denies account/role drift and forbidden reference reads without exposing other sections", async () => {
+  for (const options of [
+    { after: { ...adminActor, id: "different" } },
+    { after: { ...adminActor, role: "developer" } },
+    {
+      fail: (p) =>
+        p.endsWith("rubric") ? { response: { status: 403 } } : null,
+    },
+  ]) {
+    const a = evaluationApi(options),
+      f = evaluationSetup(a);
+    await assert.rejects(
+      f.client.loadEvaluation(adminActor),
+      (e) => e.unavailable,
+    );
+  }
+});
+test("evaluation rejects original-session changes before and during reads", async () => {
+  let token = null;
+  const a = evaluationApi(),
+    f = evaluationSetup({ ...a, authToken: () => token });
+  await assert.rejects(
+    f.client.loadEvaluation(adminActor),
+    (e) => e.unavailable,
+  );
+  assert.equal(a.calls.length, 0);
+  token = "evaluation-session";
+  a.api.get = async () => {
+    token = "changed";
+    return { data: adminActor };
+  };
+  await assert.rejects(
+    f.client.loadEvaluation(adminActor, undefined, "evaluation-session"),
+    (e) => e.unavailable,
+  );
+});
+test("evaluation run and question lookup use only exact known-ID GETs and fresh account checks", async () => {
+  for (const [kind, id] of [
+    ["run", evalRunId],
+    ["question", evalQuestionId],
+  ]) {
+    const a = evaluationApi(),
+      f = evaluationSetup(a),
+      value = await f.client.inspectEvaluation(kind, id, adminActor);
+    assert.equal(value.kind, kind);
+    assert.equal(a.calls.length, 3);
+    assert.equal(a.calls[0][1], "/users/me");
+    assert.equal(a.calls.at(-1)[1], "/users/me");
+    assert.equal(
+      a.calls[1][1],
+      kind === "run"
+        ? `/admin/eval/runs/${id}`
+        : `/eval/questions/${id}/psychometrics`,
+    );
+  }
+});
+test("evaluation malformed IDs make no requests and missing/network records expose only fixed retry copy", async () => {
+  const a = evaluationApi(),
+    f = evaluationSetup(a);
+  for (const id of [
+    "",
+    "partial",
+    "../../shadow",
+    "10000000-0000-4000-8000-00000000000x",
+  ])
+    await assert.rejects(f.client.inspectEvaluation("run", id, adminActor));
+  assert.equal(a.calls.length, 0);
+  for (const error of [
+    { response: { status: 404, data: "internal" } },
+    new Error("private transport detail"),
+  ]) {
+    const b = evaluationApi({
+        fail: (p) => (p.includes("/runs/") ? error : null),
+      }),
+      g = evaluationSetup(b);
+    await assert.rejects(
+      g.client.inspectEvaluation("run", evalRunId, adminActor),
+      (e) => !e.unavailable && !/internal|private transport/.test(e.message),
+    );
+  }
+});
+test("evaluation controller scopes its fresh-mount query and hides all old records while references are unchecked", () => {
+  const f = evaluationController();
+  f.query.isFetchedAfterMount = false;
+  let r = f.render();
+  assert.equal(r.view.props.library, undefined);
+  assert.equal(r.view.props.pending, true);
+  const q = f.h.queryCalls[0];
+  assert.deepEqual(Array.from(q.queryKey), [
+    "admin",
+    "evaluation",
+    adminActor.id,
+    "admin",
+  ]);
+  assert.equal(q.refetchOnMount, "always");
+  assert.equal(q.retry, false);
+  assert.equal(q.refetchOnWindowFocus, false);
+  assert.equal(q.refetchOnReconnect, false);
+  f.query.isFetchedAfterMount = true;
+  f.query.isError = true;
+  r = f.render();
+  assert.equal(r.view.props.library, undefined);
+  assert.ok(r.view.props.error);
+});
+test("evaluation controller deduplicates lookup/refresh and discards responses after session replacement", async () => {
+  let release,
+    token = "evaluation-session",
+    entered = false;
+  const f = evaluationController({
+    authToken: () => token,
+    wait: async (p) => {
+      if (p.includes("/runs/")) {
+        entered = true;
+        await new Promise((r) => (release = r));
+      }
+    },
+  });
+  const p = f.render().view.props;
+  p.onInspect("run", evalRunId);
+  p.onInspect("question", evalQuestionId);
+  p.onRefresh();
+  await new Promise(setImmediate);
+  assert.equal(entered, true);
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.render().view.props.busy, true);
+  token = "other-session";
+  release();
+  await new Promise(setImmediate);
+  const r = f.render();
+  assert.equal(r.view, undefined);
+  assert.equal(r.tree.props.user, undefined);
+  assert.doesNotMatch(f.h.render(r.tree), /A local closure/);
+});
+test("evaluation controller hides previous lookup on error, retains retry capability and recovers by GET", async () => {
+  const f = evaluationController(),
+    p = f.render().view.props;
+  p.onInspect("run", evalRunId);
+  await new Promise(setImmediate);
+  assert.equal(f.render().view.props.inspection.kind, "run");
+  f.query.refetch = async () => {
+    throw new Error("network");
+  };
+  f.render().view.props.onRefresh();
+  await new Promise(setImmediate);
+  const r = f.render();
+  assert.equal(r.view.props.inspection, undefined);
+  assert.ok(r.view.props.lookupError);
+  r.view.props.onInspect("question", evalQuestionId);
+  await new Promise(setImmediate);
+  assert.equal(f.render().view.props.inspection.kind, "question");
+  assert.ok(f.calls.every((c) => c[0] === "GET"));
+});
+test("evaluation view shows four rubric anchors without invented grades or mutation controls", () => {
+  const f = evaluationInteractive(),
+    html = f.html();
+  assert.match(html, /Four dimensions/);
+  assert.match(html, /Accuracy/);
+  assert.match(html, /Difficulty calibration/);
+  assert.match(html, /Inspection is read-only/);
+  assert.doesNotMatch(
+    html,
+    /Start shadow|Promote prompt|Replace question|href=.*eval\/runs/,
+  );
+});
+test("evaluation golden filters/paging and literal evidence preserve aliases and never execute HTML", () => {
+  const f = evaluationInteractive();
+  f.section("Golden cases");
+  let tree = f.tree();
+  walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Next cases",
+  )[0].props.onClick();
+  assert.match(f.html(), /7–8 of 8/);
+  tree = f.tree();
+  walk(
+    tree,
+    (n) => n.type === "input" && n.props.type === "search",
+  )[0].props.onChange({ target: { value: "case-1" } });
+  const html = f.html();
+  assert.match(html, /1–1 of 1/);
+  assert.match(html, /Registry task:.*concept_content/);
+  assert.match(html, /Synthetic reference inputs/);
+  tree = f.tree();
+  walk(
+    tree,
+    (n) => n.type === "input" && n.props.type === "search",
+  )[0].props.onChange({ target: { value: "no match" } });
+  assert.match(f.html(), /No cases match/);
+});
+test("evaluation lookup has labelled UUID validation, retained per-view drafts and disabled busy controls", () => {
+  const f = evaluationInteractive();
+  let sent = 0;
+  f.props.onInspect = () => sent++;
+  f.section("Inspect a run");
+  let tree = f.tree();
+  walk(tree, (n) => n.type === "form")[0].props.onSubmit({
+    preventDefault() {},
+  });
+  assert.equal(sent, 0);
+  assert.match(f.html(), /aria-invalid="true"/);
+  tree = f.tree();
+  walk(
+    tree,
+    (n) => n.type === "input" && n.props.id === "evaluation-lookup",
+  )[0].props.onChange({ target: { value: evalRunId } });
+  f.section("Question quality");
+  f.section("Inspect a run");
+  assert.match(f.html(), new RegExp(`value="${evalRunId}"`));
+  f.props.busy = true;
+  assert.match(f.html(), /disabled=""[^>]*>.*Checking…/s);
+});
+test("evaluation saved evidence is literal, records failed checks despite completed status and warns on rubric mismatch", () => {
+  const f = evaluationInteractive();
+  f.section("Inspect a run");
+  f.props.inspection = {
+    kind: "run",
+    value: f.data.parseRun(f.run, evalRunId),
+    checkedAt: "2026-10-30T06:00:00Z",
+  };
+  let html = f.html();
+  assert.match(html, /completed · shadow/);
+  assert.match(html, /Deterministic checks · not passed/);
+  assert.match(html, /Recorded comparison passed/);
+  assert.match(html, /&lt;script&gt;bad\(\)&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<script>|discard-private/);
+  f.props.library.rubric.version = "2.0.0";
+  html = f.html();
+  assert.match(html, /must not be substituted/);
+});
+test("evaluation limited question statistics never turn missing values into zero or absent flags into certification", () => {
+  const f = evaluationInteractive();
+  f.section("Question quality");
+  f.props.inspection = {
+    kind: "question",
+    value: f.data.parseMetrics(f.metrics, evalQuestionId),
+    checkedAt: "2026-10-30T06:00:00Z",
+  };
+  const html = f.html();
+  assert.match(html, /Limited data/);
+  assert.match(html, /Not available/);
+  assert.match(html, /limited data does not establish item quality/);
+  assert.match(html, /Position 1.*answer key/);
+  assert.doesNotMatch(html, /discard-learner|0\.0%/);
+});
+test("evaluation loading/empty/partial failures stay distinct, and CLI mode starts no evaluation query", () => {
+  const f = evaluationInteractive();
+  f.props.pending = true;
+  assert.match(f.html(), /Checking evaluation references/);
+  f.props.pending = false;
+  f.props.error = "read failed";
+  assert.match(f.html(), /Evaluation couldn’t load/);
+  f.props.error = undefined;
+  f.props.library.rubric = undefined;
+  f.props.library.rubricError = "Try again";
+  assert.match(f.html(), /Rubric unavailable/);
+  f.section("Golden cases");
+  f.props.library.goldens = [];
+  assert.match(f.html(), /checked golden corpus is empty/);
+  const g = evaluationSetup({
+    mode: { ready: true, isCli: true, location: { kind: "root" } },
+  });
+  const Page = g.h.load(
+    new URL("../evaluation/gui-evaluation.tsx", import.meta.url),
+  ).EvaluationPage;
+  const tree = Page();
+  assert.equal(g.h.queryCalls.length, 0);
+  walk(tree, (n) => n.type === "button")[0].props.onClick();
+  assert.deepEqual(JSON.parse(JSON.stringify(g.h.calls)), [
+    ["mode", "gui", { navigate: false }],
+  ]);
+  assert.match(g.h.render(tree), /terminal has no evaluation commands/);
+});
+test("evaluation server wrapper/admin navigation use GUI route while preserving developer workspace", () => {
+  const f = evaluationSetup();
+  assert.match(
+    readFileSync(
+      new URL("../../app/admin/evaluation/page.tsx", import.meta.url),
+      "utf8",
+    ),
+    /EvaluationPage/,
+  );
+  const html = f.h.render(
+    createElement(
+      f.h.shell.GuiWorkspaceShell,
+      { shell: "admin", user: adminActor },
+      "Sample",
+    ),
+  );
+  assert.match(html, /href="\/admin\/evaluation"/);
+  const dev = f.h.render(
+    createElement(f.h.shell.GuiWorkspaceShell, { user: adminActor }, "Sample"),
+  );
+  assert.doesNotMatch(dev, /href="\/admin\/evaluation"/);
+});
+
+// Checkpoint 31: explicit persisted/paid execution, never run against live providers.
+function executionFixture(options = {}) {
+  const samples = evaluationSamples(),
+    state = {
+      calls: [],
+      runs: new Map(),
+      reads: 0,
+      fail: undefined,
+      alter: undefined,
+    };
+  function row(task, version, mode, goldenId, index) {
+    return {
+      ...structuredClone(samples.run),
+      id: evalOptionId(index),
+      task,
+      promptVersion: version,
+      promptHash: `hash-${task}-${version}`,
+      mode,
+      goldenId,
+      goldenSetHash: "set-hash",
+      createdById: adminActor.id,
+      source: { goldenId, rawOutput: "Local evidence" },
+    };
+  }
+  function cohort(task, version, mode, start = 100) {
+    return samples.goldens
+      .filter((g) => (g.registryTask ?? g.task) === task)
+      .map((g, i) => row(task, version, mode, g.id, start + i));
+  }
+  const mean = (rows) => ({
+    n: rows.length,
+    layer1PassRate: 0,
+    goldenPassRate: 1,
+    checks: { SECTIONS: 0 },
+    judgeScores: Object.fromEntries(
+      ["accuracy", "clarity", "pedagogy", "difficultyCalibration"].map((d) => [
+        d,
+        3,
+      ]),
+    ),
+  });
+  const api = {
+    get: async (path, opts) => {
+      state.calls.push(["GET", path, opts]);
+      if (options.waitGet) await options.waitGet(path);
+      if (state.fail?.(path)) throw state.fail(path);
+      let data;
+      if (path === "/users/me") {
+        state.reads++;
+        data = options.account?.(state.reads) ?? adminActor;
+      } else if (path.endsWith("rubric")) data = samples.rubric;
+      else if (path.endsWith("goldens")) data = samples.goldens;
+      else {
+        const id = path.split("/").at(-1);
+        data = state.runs.get(id);
+        if (!data) throw { response: { status: 404 } };
+      }
+      data = structuredClone(data);
+      if (state.alter) data = state.alter(path, data);
+      if (options.afterGet) options.afterGet(path);
+      return { data };
+    },
+    post: async (path, payload, opts) => {
+      state.calls.push(["POST", path, structuredClone(payload), opts]);
+      if (options.waitPost) await options.waitPost();
+      if (options.postError) throw options.postError;
+      let raw,
+        rows = [];
+      if (path.endsWith("candidates"))
+        raw = {
+          id: evalOptionId(500),
+          ...payload,
+          status: "draft",
+          privateToken: "discard-ack-secret",
+        };
+      else if (path.endsWith("shadow")) {
+        rows = cohort(payload.task, payload.version, "shadow");
+        raw = rows;
+      } else if (path.endsWith("comparisons")) {
+        const a = cohort(
+            payload.task,
+            payload.baselineVersion,
+            "baseline",
+            200,
+          ),
+          b = cohort(payload.task, payload.candidateVersion, "candidate", 300);
+        rows = [...a, ...b];
+        raw = {
+          id: evalOptionId(600),
+          task: payload.task,
+          baselinePromptId: evalOptionId(601),
+          candidatePromptId: evalOptionId(602),
+          goldenSetHash: "set-hash",
+          baselineRunIds: a.map((r) => r.id),
+          candidateRunIds: b.map((r) => r.id),
+          result: {
+            passed: true,
+            failures: [],
+            baseline: mean(a),
+            candidate: mean(b),
+            delta: {
+              layer1PassRate: 0,
+              goldenPassRate: 0,
+              judgeScores: Object.fromEntries(
+                Object.keys(mean(a).judgeScores).map((d) => [d, 0]),
+              ),
+            },
+          },
+        };
+      } else if (path.endsWith("regression")) {
+        const tasks = [
+          "roadmap_modules",
+          "module_concepts",
+          "concept_content",
+          "concept_mcqs",
+          "qa_answer",
+          "concept_outline",
+          "concept_draft",
+          "concept_factcheck",
+          "concept_critique",
+          "concept_revise",
+          "concept_misconceptions",
+          "concept_mcq_draft",
+          "concept_mcq_verify",
+          "eval_judge",
+        ];
+        raw = {
+          passed: false,
+          tasks: tasks.map((task, i) => {
+            if (!["concept_content", "concept_draft"].includes(task))
+              return {
+                task,
+                passed: false,
+                differences: ["No production prompt version"],
+              };
+            const rs = cohort(task, "1.0.0", "baseline", 1000 + i * 100);
+            rows.push(...rs);
+            return {
+              task,
+              version: "1.0.0",
+              passed: false,
+              runs: rs.map((r) => ({
+                id: r.id,
+                goldenId: r.goldenId,
+                status: r.status,
+                checks: r.deterministicResult.checks,
+                differences: r.goldenDiff.differences,
+                judge: r.judgeResult,
+                warnings: r.warnings,
+              })),
+            };
+          }),
+        };
+      } else {
+        const r = row("concept_draft", "1.0.0", "saved_artifact", null, 700);
+        r.source = {
+          compilationId: path.split("/").at(-1),
+          conceptId: evalQuestionId,
+        };
+        r.goldenDiff = null;
+        r.goldenSetHash = null;
+        if (!payload.judge) {
+          r.judgeResult = null;
+          r.judgeModel = null;
+          r.judgePromptVersion = null;
+          r.judgePromptHash = null;
+          r.judgeSeed = null;
+        }
+        rows = [r];
+        raw = r;
+      }
+      for (const r of rows) state.runs.set(r.id, structuredClone(r));
+      if (options.afterPost) options.afterPost(state, raw);
+      return { data: options.ack ? options.ack(structuredClone(raw)) : raw };
+    },
+    patch: () => assert.fail("no release/decision PATCH"),
+    delete: () => assert.fail("no delete"),
+  };
+  const f = evaluationSetup({ api, ...options }),
+    data = f.h.load(
+      new URL("../evaluation/execution-data.ts", import.meta.url),
+    ),
+    client = f.h.load(
+      new URL("../evaluation/execution-client.ts", import.meta.url),
+    ),
+    panel = f.h.load(
+      new URL("../evaluation/execution-panel.tsx", import.meta.url),
+    );
+  const library = evaluationLibrary(f),
+    action = (kind, patch = {}) =>
+      data.executionAction({
+        ...data.EMPTY_EXECUTION_DRAFT,
+        kind,
+        task: "concept_content",
+        version: kind === "candidate" ? "1.2.0" : "1.0.0",
+        systemTemplate: "Exact local system template\nKeep whitespace.",
+        changelog: "Local change explanation",
+        baselineVersion: "1.0.0",
+        candidateVersion: "1.1.0",
+        compilationId: evalQuestionId,
+        ...patch,
+      });
+  return { ...f, data, client, panel, api, state, library, action, cohort };
+}
+function executionController(options = {}) {
+  const hooks = profileHookState(),
+    f = executionFixture({ hooks: hooks.hooks, ...options }),
+    query = {
+      data: f.library,
+      isFetchedAfterMount: true,
+      isPending: false,
+      isFetching: false,
+      isError: false,
+      refetch: async () => ({ data: f.library }),
+    },
+    queries = {};
+  queries[`admin/evaluation/${adminActor.id}/${adminActor.role}`] = query;
+  const h = roadmapHarness({
+      api: f.api,
+      hooks: hooks.hooks,
+      authUser: adminActor,
+      authToken: "evaluation-session",
+      queries,
+      ...options,
+    }),
+    C = h.load(
+      new URL("../evaluation/gui-evaluation.tsx", import.meta.url),
+    ).GuiEvaluation;
+  return {
+    ...f,
+    h,
+    query,
+    render() {
+      hooks.reset();
+      const tree = C(),
+        view = walk(tree, (n) => n.type?.name === "EvaluationView")[0];
+      return { tree, view, execution: view?.props.execution };
+    },
+  };
+}
+function executionInteractive(options = {}) {
+  const hooks = profileHookState(),
+    f = executionFixture({ hooks: hooks.hooks, ...options }),
+    props = {
+      library: f.library,
+      busy: false,
+      paused: false,
+      earlier: false,
+      knownRunIds: [],
+      onExecute: async () => {},
+      onRecover() {},
+      onResume() {},
+    };
+  return {
+    ...f,
+    props,
+    hooks,
+    tree() {
+      hooks.reset();
+      return f.panel.ExecutionPanel(props);
+    },
+    html() {
+      return f.h.render(this.tree());
+    },
+    change(id, value) {
+      walk(
+        this.tree(),
+        (n) => n.props?.id === `execution-${id}`,
+      )[0].props.onChange({ target: { value, checked: value } });
+    },
+    review() {
+      walk(this.tree(), (n) => n.type === "form")[0].props.onSubmit({
+        preventDefault() {},
+      });
+    },
+  };
+}
+test("execution validates exact candidate bounds, distinct comparison versions and complete compilation IDs", () => {
+  const f = executionFixture(),
+    d = {
+      ...f.data.EMPTY_EXECUTION_DRAFT,
+      version: "1.2.0",
+      systemTemplate: "exact\ntext ",
+      changelog: " why ",
+    };
+  assert.deepEqual(Object.keys(f.data.executionValidation(d)), []);
+  assert.equal(f.data.executionAction(d).systemTemplate, "exact\ntext ");
+  for (const patch of [
+    { version: "bad" },
+    { version: "1.2.0+build" },
+    { systemTemplate: " " },
+    { systemTemplate: "x".repeat(30001) },
+    { changelog: "" },
+    { changelog: "x".repeat(2001) },
+    { task: "concept_research" },
+  ])
+    assert.ok(
+      Object.keys(f.data.executionValidation({ ...d, ...patch })).length,
+    );
+  assert.equal(
+    f.action("shadow", { version: "legacy-static" }).version,
+    "legacy-static",
+  );
+  assert.throws(() => f.action("comparison", { candidateVersion: "1.0.0" }));
+  assert.throws(() => f.action("compilation", { compilationId: "partial" }));
+});
+test("execution scope uses registry aliases, full regression corpus and distinguishes paid compilation judging", () => {
+  const f = executionFixture();
+  assert.equal(f.data.executionCases(f.library, f.action("shadow")).length, 1);
+  assert.equal(
+    f.data.executionCases(f.library, f.action("regression")).length,
+    8,
+  );
+  assert.equal(f.data.paidExecution(f.action("candidate")), false);
+  assert.equal(f.data.paidExecution(f.action("compilation")), false);
+  assert.equal(
+    f.data.paidExecution(f.action("compilation", { judge: true })),
+    true,
+  );
+  assert.throws(() =>
+    f.data.executionReference(
+      { ...f.library, goldens: [] },
+      f.action("shadow"),
+    ),
+  );
+  assert.doesNotThrow(() =>
+    f.data.executionReference(
+      { ...f.library, goldens: undefined },
+      f.action("candidate"),
+    ),
+  );
+});
+test("execution creates one immutable candidate with an exact bounded acknowledgement and no invented GET", async () => {
+  const f = executionFixture(),
+    a = f.action("candidate"),
+    out = await f.client.executeEvaluation(f.library, a);
+  assert.equal(out.proof, "ack");
+  assert.equal(out.runs.length, 0);
+  assert.equal(out.payload.systemTemplate, a.systemTemplate);
+  assert.doesNotMatch(JSON.stringify(out), /discard-ack-secret/);
+  const posts = f.state.calls.filter((c) => c[0] === "POST");
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0][1], "/admin/eval/candidates");
+  assert.equal(posts[0][3].timeout, 12000);
+  assert.equal(
+    f.state.calls.filter((c) => c[0] === "GET" && c[1].includes("candidates"))
+      .length,
+    0,
+  );
+});
+test("execution shadow rechecks the exact persisted cohort and retains failed quality checks", async () => {
+  const f = executionFixture(),
+    out = await f.client.executeEvaluation(f.library, f.action("shadow"));
+  assert.equal(out.proof, "runs");
+  assert.equal(out.runs.length, 1);
+  assert.equal(out.runs[0].deterministicResult.passed, false);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  assert.equal(f.state.calls.find((c) => c[0] === "POST")[3].timeout, 300000);
+  assert.equal(
+    f.state.calls.filter((c) => c[0] === "GET" && c[1].includes("/runs/"))
+      .length,
+    1,
+  );
+});
+test("execution comparison reads both cohorts without a comparison GET or release operation", async () => {
+  const f = executionFixture(),
+    out = await f.client.executeEvaluation(f.library, f.action("comparison"));
+  assert.equal(out.runs.length, 2);
+  assert.equal(out.payload.result.passed, true);
+  assert.equal(out.payload.baselineRunIds.length, 1);
+  assert.ok(
+    f.state.calls.every(
+      (c) => !c[1].includes("promote") && !c[1].includes("rollback"),
+    ),
+  );
+  assert.equal(
+    f.state.calls.filter((c) => c[0] === "GET" && c[1].includes("comparisons"))
+      .length,
+    0,
+  );
+});
+test("execution regression validates all task reports and reads only returned IDs, preserving missing production versions", async () => {
+  const f = executionFixture(),
+    out = await f.client.executeEvaluation(f.library, f.action("regression"));
+  assert.equal(out.runs.length, 8);
+  assert.equal(out.payload.passed, false);
+  assert.equal(out.payload.tasks.length, 14);
+  assert.ok(
+    out.payload.tasks.some((t) => t.version === null && t.differences.length),
+  );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  assert.equal(
+    f.state.calls.filter((c) => c[0] === "GET" && c[1].includes("/runs/"))
+      .length,
+    8,
+  );
+});
+test("execution compilation persists a checked run with judge false by default, and allows an explicitly paid judge", async () => {
+  for (const judge of [false, true]) {
+    const f = executionFixture(),
+      a = f.action("compilation", { judge }),
+      out = await f.client.executeEvaluation(f.library, a);
+    assert.equal(out.runs[0].mode, "saved_artifact");
+    assert.equal(out.runs[0].source.compilationId, evalQuestionId);
+    const write = f.state.calls.find((c) => c[0] === "POST");
+    assert.deepEqual(JSON.parse(JSON.stringify(write[2])), { judge });
+    assert.equal(write[3].timeout, judge ? 300000 : 12000);
+  }
+});
+test("execution failed-output acknowledgements may omit a nullable judge seed without inventing a score", async () => {
+  const f = executionFixture({
+      ack: (raw) => {
+        raw[0].judgeSeed = undefined;
+        raw[0].judgeResult = null;
+        raw[0].judgeModel = null;
+        raw[0].status = "failed";
+        return raw;
+      },
+      afterPost: (state, raw) => {
+        raw[0].judgeSeed = null;
+        raw[0].judgeResult = null;
+        raw[0].judgeModel = null;
+        raw[0].status = "failed";
+        state.runs.set(raw[0].id, structuredClone(raw[0]));
+      },
+    }),
+    out = await f.client.executeEvaluation(f.library, f.action("shadow"));
+  assert.equal(out.runs[0].judgeSeed, null);
+  assert.equal(out.runs[0].judgeResult, null);
+});
+test("execution stale references and wrong accounts stop before any POST", async () => {
+  for (const options of [
+    { account: () => ({ ...adminActor, role: "developer" }) },
+    { account: () => ({ ...adminActor, id: "different" }) },
+    { afterGet: () => {} },
+  ]) {
+    const f = executionFixture(options);
+    if (options.afterGet) f.goldens[0].expected = "changed reference";
+    if (options.afterGet) {
+      f.state.alter = (p, data) =>
+        p.endsWith("goldens")
+          ? data.map((g, i) =>
+              i === 0 ? { ...g, expected: "freshly changed" } : g,
+            )
+          : data;
+    }
+    await assert.rejects(
+      f.client.executeEvaluation(f.library, f.action("shadow")),
+      (e) => !e.uncertain,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  }
+});
+test("execution checks the original token before and after preflight and discards post-write session changes", async () => {
+  let token = null;
+  let f = executionFixture({ authToken: () => token });
+  await assert.rejects(
+    f.client.executeEvaluation(f.library, f.action("candidate")),
+    (e) => e.unavailable && !e.uncertain,
+  );
+  assert.equal(f.state.calls.length, 0);
+  token = "evaluation-session";
+  f = executionFixture({
+    authToken: () => token,
+    afterGet: (p) => {
+      if (p.endsWith("goldens")) token = "other";
+    },
+  });
+  await assert.rejects(
+    f.client.executeEvaluation(
+      f.library,
+      f.action("shadow"),
+      "evaluation-session",
+    ),
+    (e) => e.unavailable && !e.uncertain,
+  );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  token = "evaluation-session";
+  f = executionFixture({
+    authToken: () => token,
+    afterPost: () => (token = "other"),
+  });
+  await assert.rejects(
+    f.client.executeEvaluation(
+      f.library,
+      f.action("candidate"),
+      "evaluation-session",
+    ),
+    (e) => e.uncertain && e.unavailable,
+  );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("execution every sent 4xx, network and provider failure pauses without replay or internal error leakage", async () => {
+  for (const error of [
+    { response: { status: 400, data: "private" } },
+    { response: { status: 409 } },
+    { response: { status: 429 } },
+    { response: { status: 500 } },
+    new Error("operator-key-secret"),
+  ]) {
+    const f = executionFixture({ postError: error });
+    await assert.rejects(
+      f.client.executeEvaluation(f.library, f.action("shadow")),
+      (e) => e.uncertain && !/operator-key-secret|private/.test(e.message),
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("execution malformed or mismatched candidate acknowledgements are uncertain with one write only", async () => {
+  for (const patch of [
+    { id: "bad" },
+    { status: "production" },
+    { task: "qa_answer" },
+    { version: "9.0.0" },
+    { systemTemplate: "changed" },
+    { changelog: "changed" },
+  ]) {
+    const f = executionFixture({ ack: (r) => ({ ...r, ...patch }) });
+    await assert.rejects(
+      f.client.executeEvaluation(f.library, f.action("candidate")),
+      (e) => e.uncertain,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("execution rejects wrong run owner, task, mode, cohort or returned comparison IDs", async () => {
+  for (const ack of [
+    (r) => {
+      r[0].createdById = "other";
+      return r;
+    },
+    (r) => {
+      r[0].task = "qa_answer";
+      return r;
+    },
+    (r) => {
+      r[0].mode = "baseline";
+      return r;
+    },
+    (r) => {
+      r[0].goldenId = "not-expected";
+      return r;
+    },
+    (r) => [...r, ...r],
+  ]) {
+    const f = executionFixture({ ack });
+    await assert.rejects(
+      f.client.executeEvaluation(f.library, f.action("shadow")),
+      (e) => e.uncertain,
+    );
+  }
+  const f = executionFixture({
+    ack: (r) => ({ ...r, candidateRunIds: r.baselineRunIds }),
+  });
+  await assert.rejects(
+    f.client.executeEvaluation(f.library, f.action("comparison")),
+    (e) => e.uncertain,
+  );
+});
+test("execution saved readback failures and changed artifacts retain known IDs and pause instead of reporting success", async () => {
+  for (const kind of ["network", "artifact", "owner"]) {
+    const f = executionFixture();
+    f.state.fail = (p) =>
+      kind === "network" && p.includes("/runs/") ? new Error("network") : null;
+    f.state.alter = (p, r) =>
+      p.includes("/runs/")
+        ? kind === "artifact"
+          ? { ...r, artifact: { kind: "prose", content: "changed" } }
+          : kind === "owner"
+            ? { ...r, createdById: "other" }
+            : r
+        : r;
+    await assert.rejects(
+      f.client.executeEvaluation(f.library, f.action("shadow")),
+      (e) => e.uncertain && e.knownRunIds.length === 1,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("execution comparison/regression reject incomplete or changed result evidence after the single POST", async () => {
+  for (const kind of ["comparison", "regression"]) {
+    const f = executionFixture();
+    f.state.alter = (p, r) =>
+      p.includes("/runs/") ? { ...r, promptVersion: "changed-version" } : r;
+    await assert.rejects(
+      f.client.executeEvaluation(f.library, f.action(kind)),
+      (e) => e.uncertain && e.knownRunIds.length > 0,
+    );
+  }
+  const f = executionFixture({
+    ack: (r) => ({ ...r, tasks: r.tasks.slice(1) }),
+  });
+  await assert.rejects(
+    f.client.executeEvaluation(f.library, f.action("regression")),
+    (e) => e.uncertain,
+  );
+});
+test("execution GET-only recovery checks known IDs and cannot claim unknown partial writes were absent", async () => {
+  const f = executionFixture(),
+    out = await f.client.executeEvaluation(f.library, f.action("shadow")),
+    before = f.state.calls.length,
+    checked = await f.client.recoverExecution(
+      f.library,
+      out.runs.map((r) => r.id),
+    );
+  assert.equal(checked.runs.length, 1);
+  assert.ok(f.state.calls.slice(before).every((c) => c[0] === "GET"));
+  const unknown = await f.client.recoverExecution(f.library, []);
+  assert.equal(unknown.runs.length, 0);
+  f.state.fail = (p) =>
+    p.includes("/runs/") ? { response: { status: 404 } } : null;
+  await assert.rejects(
+    f.client.recoverExecution(
+      f.library,
+      out.runs.map((r) => r.id),
+    ),
+    (e) => !e.uncertain,
+  );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("execution controller shares the synchronous lookup/refresh/write lock and never writes on entry", async () => {
+  let release;
+  const f = executionController({
+    waitPost: () => new Promise((r) => (release = r)),
+  });
+  let r = f.render();
+  assert.equal(f.state.calls.length, 0);
+  const props = r.execution.props,
+    task = props.onExecute(f.action("candidate"));
+  r.view.props.onInspect("run", evalRunId);
+  r.view.props.onRefresh();
+  props.onExecute(f.action("shadow"));
+  await new Promise(setImmediate);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  assert.equal(f.render().execution.props.busy, true);
+  release();
+  await task;
+  assert.equal(f.render().execution.props.outcome.kind, "candidate");
+});
+test("execution controller pauses sent failures, keeps failed checks paused and requires explicit adoption", async () => {
+  const f = executionController({ postError: { response: { status: 409 } } });
+  await f.render().execution.props.onExecute(f.action("candidate"));
+  let p = f.render().execution.props;
+  assert.equal(p.paused, true);
+  assert.equal(p.earlier, true);
+  await p.onExecute(f.action("candidate"));
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  f.state.fail = (p) => (p.endsWith("rubric") ? new Error("temporary") : null);
+  p.onRecover();
+  await new Promise(setImmediate);
+  assert.equal(f.render().execution.props.paused, true);
+  assert.equal(f.render().execution.props.recovery, undefined);
+  f.state.fail = undefined;
+  f.render().execution.props.onRecover();
+  await new Promise(setImmediate);
+  p = f.render().execution.props;
+  assert.ok(p.recovery);
+  assert.equal(p.paused, true);
+  p.onResume();
+  p = f.render().execution.props;
+  assert.equal(p.paused, false);
+  assert.equal(p.earlier, true);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("execution controller action-time token replacement hides all execution outcomes and sends nothing", async () => {
+  let token = "evaluation-session";
+  const f = executionController({ authToken: () => token }),
+    p = f.render().execution.props;
+  token = "replaced";
+  await p.onExecute(f.action("candidate"));
+  const r = f.render();
+  assert.equal(r.view, undefined);
+  assert.equal(f.state.calls.length, 0);
+  assert.equal(r.tree.props.user, undefined);
+});
+test("execution UI validates and retains independent action drafts without sending on review or Keep", () => {
+  const f = executionInteractive();
+  let writes = 0;
+  f.props.onExecute = async () => writes++;
+  f.review();
+  assert.match(f.html(), /Check the action fields/);
+  f.change("version", "1.2.0");
+  f.change("systemTemplate", "Retained exact draft");
+  f.change("changelog", "Explanation");
+  f.review();
+  let tree = f.tree();
+  assert.match(f.html(), /Confirm this exact action/);
+  assert.equal(writes, 0);
+  walk(
+    tree,
+    (n) => n.type === "button" && n.props.children === "Keep editing",
+  )[0].props.onClick();
+  assert.match(f.html(), /Retained exact draft/);
+  f.change("kind", "shadow");
+  f.change("version", "old-known-version");
+  f.change("kind", "candidate");
+  assert.match(f.html(), /value="1.2.0"/);
+  assert.equal(writes, 0);
+});
+test("execution UI requires fresh consent, freezes the reviewed payload and blocks pending Escape/double submit", async () => {
+  const f = executionInteractive();
+  f.change("kind", "shadow");
+  f.change("version", "1.0.0");
+  f.review();
+  let tree = f.tree(),
+    sent = [],
+    release;
+  f.props.onExecute = async (a) => {
+    sent.push(a);
+    await new Promise((r) => (release = r));
+  };
+  const confirm = () =>
+    walk(
+      f.tree(),
+      (n) =>
+        n.type === "button" &&
+        n.props.children === "Start this paid evaluation",
+    )[0];
+  assert.equal(confirm().props.disabled, true);
+  const checks = walk(
+    tree,
+    (n) => n.type === "input" && n.props.type === "checkbox",
+  );
+  checks.at(-1).props.onChange({ target: { checked: true } });
+  const submit = confirm().props.onClick;
+  const write = submit();
+  submit();
+  await new Promise(setImmediate);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].version, "1.0.0");
+  tree = f.tree();
+  let prevented = false;
+  walk(tree, (n) => n.type === "dialog")[0].props.onCancel({
+    preventDefault() {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, true);
+  assert.match(f.html(), /Waiting for confirmation/);
+  release();
+  await write;
+  await new Promise(setImmediate);
+  assert.doesNotMatch(f.html(), /Confirm this exact action/);
+});
+test("execution UI states distinguish ACK-only, checked runs, uncertain absence and explicit recovery consent", () => {
+  const f = executionInteractive();
+  f.props.outcome = {
+    kind: "candidate",
+    title: "Draft response checked",
+    proof: "ack",
+    payload: { id: evalOptionId(500), status: "draft" },
+    runs: [],
+    checkedAt: "2026-10-30T06:00:00Z",
+  };
+  assert.match(f.html(), /acknowledgement is not a saved-state lookup/);
+  f.props.outcome = undefined;
+  f.props.paused = true;
+  f.props.earlier = true;
+  f.props.error = "Uncertain request";
+  assert.match(f.html(), /Unknown earlier writes cannot be ruled out/);
+  assert.match(f.html(), /Earlier request may still finish/);
+  const recovery = walk(f.tree(), (n) => n.type?.name === "WriteRecovery")[0];
+  assert.equal(recovery.props.paused, true);
+  assert.equal(recovery.props.onRecover, f.props.onRecover);
+});
+test("execution panel remains mounted but hidden across inspection views and reference errors", () => {
+  const f = evaluationInteractive();
+  f.props.execution = createElement(
+    "section",
+    { "data-sample": "execution" },
+    "Retained execution form",
+  );
+  let html = f.html();
+  assert.match(html, /<div hidden=""><section data-sample="execution"/);
+  f.section("Run evaluations");
+  html = f.html();
+  assert.match(html, /<div><section data-sample="execution"/);
+  f.props.pending = true;
+  assert.match(f.html(), /Retained execution form/);
+  f.props.pending = false;
+  f.props.error = "references failed";
+  assert.match(f.html(), /Retained execution form/);
+});
+
+test("execution saved readback ignores JSON object-key order but still detects value drift", async () => {
+  const f = executionFixture();
+  f.state.alter = (p, r) =>
+    p.includes("/runs/")
+      ? {
+          ...r,
+          artifact: Object.fromEntries(Object.entries(r.artifact).reverse()),
+          context: Object.fromEntries(Object.entries(r.context).reverse()),
+          judgeResult: {
+            dimensions: r.judgeResult.dimensions,
+            rubricVersion: r.judgeResult.rubricVersion,
+          },
+        }
+      : r;
+  const out = await f.client.executeEvaluation(f.library, f.action("shadow"));
+  assert.equal(out.proof, "runs");
+  assert.equal(out.runs.length, 1);
+});
+
+// Checkpoint 32: expert decisions. Mock-only; never uses real content/accounts.
+function decisionFixture(options = {}) {
+  const samples = evaluationSamples(),
+    conceptId = evalOptionId(800),
+    nextId = evalOptionId(802),
+    stamp = "2026-10-30T06:00:00.000Z";
+  const question = {
+    id: evalQuestionId,
+    conceptId,
+    questionText: "Original local question <script>bad()</script>",
+    orderIndex: 2,
+    createdAt: stamp,
+    updatedAt: stamp,
+    options: [
+      {
+        id: evalOptionId(11),
+        questionId: evalQuestionId,
+        optionText: "Original key",
+        orderIndex: 0,
+        isCorrect: true,
+      },
+      {
+        id: evalOptionId(12),
+        questionId: evalQuestionId,
+        optionText: "Original distractor",
+        orderIndex: 1,
+        isCorrect: false,
+        misconception: "Local misconception",
+      },
+    ],
+  };
+  const state = {
+    calls: [],
+    questions: [question],
+    metrics: new Map([[evalQuestionId, samples.metrics]]),
+    concept: {
+      id: conceptId,
+      title: "Local closure concept",
+      reviewStatus: "approved",
+      updatedAt: stamp,
+      appearsIn: [
+        {
+          moduleConceptId: evalOptionId(801),
+          roadmapTitle: "Local roadmap",
+          moduleTitle: "Local module",
+        },
+      ],
+    },
+    fail: undefined,
+    alter: undefined,
+    account: adminActor,
+  };
+  const api = {
+    get: async (path, opts) => {
+      state.calls.push(["GET", path, opts]);
+      if (state.fail?.(path)) throw state.fail(path);
+      let raw =
+        path === "/users/me"
+          ? state.account
+          : path.endsWith("/rubric")
+            ? samples.rubric
+            : path.endsWith("/goldens")
+              ? samples.goldens
+              : path.includes("/runs/")
+                ? samples.run
+                : path.endsWith("/questions")
+                  ? state.questions
+                  : path.endsWith("/psychometrics")
+                    ? state.metrics.get(path.split("/").at(-2))
+                    : state.concept;
+      if (!raw) throw { response: { status: 404 } };
+      raw = structuredClone(raw);
+      return { data: state.alter ? state.alter(path, raw) : raw };
+    },
+    post: async (path, payload, opts) => {
+      state.calls.push(["POST", path, structuredClone(payload), opts]);
+      if (options.waitPost) await options.waitPost();
+      if (options.postError) throw options.postError;
+      let raw;
+      if (path.endsWith("expert-reviews"))
+        raw = {
+          id: evalOptionId(810),
+          evalRunId: evalRunId,
+          expertId: adminActor.id,
+          rubricVersion: "1.0.0",
+          createdAt: stamp,
+          updatedAt: stamp,
+          ...payload,
+          proposedRevision: payload.proposedRevision ?? null,
+          expert: { email: "discard-private" },
+        };
+      else {
+        raw = {
+          ...payload,
+          id: nextId,
+          conceptId,
+          predecessorId: evalQuestionId,
+          versionNumber: 3,
+          createdById: adminActor.id,
+          createdAt: stamp,
+          updatedAt: stamp,
+          retiredAt: null,
+          lintResult: null,
+          verificationResult: null,
+          generationProvenance: {
+            kind: "expert_replacement",
+            predecessorId: evalQuestionId,
+            reason: payload.reason,
+          },
+          bloomLevel: payload.bloomLevel ?? null,
+          intendedDifficulty: payload.intendedDifficulty ?? null,
+          correctRationale: payload.correctRationale ?? null,
+          options: payload.options.map((o, i) => ({
+            ...o,
+            id: evalOptionId(820 + i),
+            questionId: nextId,
+            misconception: o.misconception ?? null,
+            distractorRationale: o.distractorRationale ?? null,
+          })),
+        };
+        state.questions = [raw];
+        state.concept.reviewStatus = "pending";
+        const positions = raw.options.map((o, i) => ({
+          optionId: o.id,
+          position: i + 1,
+          isKey: o.isCorrect,
+          selected: 0,
+          rate: null,
+        }));
+        state.metrics.set(nextId, {
+          ...samples.metrics,
+          questionId: nextId,
+          versionNumber: 3,
+          predecessorId: evalQuestionId,
+          cohortQuestionIds: [nextId],
+          answerPositionDistribution: positions,
+          distractorSelectionRates: positions.filter((o) => !o.isKey),
+          correctPositions: positions
+            .filter((o) => o.isKey)
+            .map((o) => o.position),
+        });
+      }
+      return { data: options.ack ? options.ack(raw) : raw };
+    },
+  };
+  const f = evaluationSetup({ api, ...options }),
+    data = f.h.load(new URL("../evaluation/decision-data.ts", import.meta.url)),
+    client = f.h.load(
+      new URL("../evaluation/decision-client.ts", import.meta.url),
+    );
+  const review = {
+    decision: "edit",
+    scores: { accuracy: 3, clarity: 4, pedagogy: 2, difficultyCalibration: 3 },
+    reasonCodes: ["pedagogy"],
+    reason: " Reason with exact whitespace ",
+    proposedRevision: "Literal proposed text <script>inert()</script>",
+  };
+  const replacement = {
+    questionText: "A complete new local question",
+    reason: " Explain replacement ",
+    orderIndex: 2,
+    options: [
+      { optionText: "New answer", isCorrect: true, orderIndex: 0 },
+      {
+        optionText: "New distractor",
+        isCorrect: false,
+        orderIndex: 1,
+        misconception: "Confuses binding with value",
+        distractorRationale: "Plausible local mistake",
+      },
+    ],
+    bloomLevel: "Apply",
+    intendedDifficulty: "medium",
+    correctRationale: "Because the environment is captured.",
+  };
+  return {
+    ...f,
+    data,
+    client,
+    state,
+    api,
+    conceptId,
+    nextId,
+    question,
+    review,
+    replacement,
+    library: evaluationLibrary(f),
+    async record(kind = "review") {
+      return client.inspectDecision(
+        kind,
+        kind === "review" ? evalRunId : evalQuestionId,
+        conceptId,
+        adminActor,
+      );
+    },
+    async action(kind = "review") {
+      return {
+        kind,
+        record: await this.record(kind),
+        payload: kind === "review" ? review : replacement,
+      };
+    },
+  };
+}
+test("decision validates explicit independent scores, codes, reasons and edit revisions", () => {
+  const f = decisionFixture();
+  assert.equal(f.data.reviewPayload(f.review).reason, f.review.reason);
+  for (const patch of [
+    { scores: {} },
+    { scores: { ...f.review.scores, accuracy: 0 } },
+    { scores: { ...f.review.scores, accuracy: 2.5 } },
+    { reasonCodes: [] },
+    { reasonCodes: ["unknown"] },
+    { reason: " " },
+    { reason: "x".repeat(2001) },
+    { proposedRevision: " " },
+    { proposedRevision: "x".repeat(60001) },
+  ])
+    assert.throws(() => f.data.reviewPayload({ ...f.review, ...patch }));
+  assert.doesNotThrow(() =>
+    f.data.reviewPayload({
+      ...f.review,
+      decision: "approve",
+      reasonCodes: [],
+      proposedRevision: undefined,
+    }),
+  );
+});
+test("decision replacement validates two to twelve nonblank options, one key and fresh metadata", () => {
+  const f = decisionFixture();
+  for (const patch of [
+    { options: [] },
+    {
+      options: Array.from({ length: 13 }, (_, i) => ({
+        optionText: "x",
+        isCorrect: i === 0,
+        orderIndex: i,
+      })),
+    },
+    { options: f.replacement.options.map((o) => ({ ...o, isCorrect: false })) },
+    { options: f.replacement.options.map((o) => ({ ...o, isCorrect: true })) },
+    {
+      options: [
+        { ...f.replacement.options[0], optionText: " " },
+        f.replacement.options[1],
+      ],
+    },
+    { reason: "x".repeat(1001) },
+    { bloomLevel: "Invented" },
+    { intendedDifficulty: "unknown" },
+  ])
+    assert.throws(() =>
+      f.data.replacementPayload({ ...f.replacement, ...patch }),
+    );
+  assert.doesNotThrow(() => f.data.replacementPayload(f.replacement));
+});
+test("decision original evidence is GET-only, projected and requires matching run rubric", async () => {
+  const f = decisionFixture();
+  const r = await f.record();
+  assert.equal(r.rubric.version, r.run.rubricVersion);
+  assert.doesNotMatch(JSON.stringify(r), /discard-private|discard-id/);
+  assert.ok(
+    f.state.calls.every((c) => c[0] === "GET" && c[2].timeout === 12000),
+  );
+  f.state.alter = (path, raw) =>
+    path.includes("/runs/")
+      ? { ...raw, rubricVersion: "old-version", judgeResult: null }
+      : raw;
+  await assert.rejects(f.record(), /couldn’t be checked/);
+});
+test("decision replacement original requires current membership, key/metrics consistency and exact concept", async () => {
+  const f = decisionFixture();
+  const r = await f.record("replacement");
+  assert.equal(r.metrics.versionNumber, 2);
+  assert.equal(r.concept.placements.length, 1);
+  f.state.questions = [];
+  await assert.rejects(f.record("replacement"));
+  f.state.questions = [f.question];
+  f.state.alter = (path, raw) =>
+    path.endsWith("/questions")
+      ? raw.map((q) => ({ ...q, conceptId: evalOptionId(900) }))
+      : raw;
+  await assert.rejects(f.record("replacement"));
+  f.state.alter = (path, raw) =>
+    path.endsWith("/psychometrics")
+      ? {
+          ...raw,
+          answerPositionDistribution: [
+            ...raw.answerPositionDistribution,
+          ].reverse(),
+        }
+      : raw;
+  await assert.rejects(f.record("replacement"));
+});
+test("decision expert review sends once, checks exact ACK and never invents a saved review GET", async () => {
+  const f = decisionFixture(),
+    a = await f.action(),
+    out = await f.client.submitDecision(a, adminActor);
+  assert.match(out.message, /No independent review lookup/);
+  assert.equal(out.acknowledgement.proposedRevision, f.review.proposedRevision);
+  assert.doesNotMatch(JSON.stringify(out), /discard-private/);
+  const posts = f.state.calls.filter((c) => c[0] === "POST");
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0][1], `/admin/eval/runs/${evalRunId}/expert-reviews`);
+  assert.equal(posts[0][2].reason, f.review.reason);
+  assert.equal(posts[0][3].timeout, 12000);
+  assert.ok(
+    f.state.calls
+      .filter((c) => c[0] === "GET")
+      .every((c) => !c[1].includes("expert-reviews")),
+  );
+});
+test("decision replacement reads successor, predecessor version, old-list absence and pending shared concept", async () => {
+  const f = decisionFixture(),
+    a = await f.action("replacement"),
+    out = await f.client.submitDecision(a, adminActor);
+  assert.equal(out.id, f.nextId);
+  assert.equal(out.acknowledgement.versionNumber, 3);
+  assert.equal(out.acknowledgement.conceptReviewStatus, "pending");
+  assert.equal(out.acknowledgement.predecessorId, evalQuestionId);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  assert.ok(
+    f.state.calls.some(
+      (c) => c[1] === `/eval/questions/${f.nextId}/psychometrics`,
+    ),
+  );
+  assert.match(out.message, /separate reads/i);
+});
+test("decision evidence drift, retired original, changed admin and invalid direct payload block before POST", async () => {
+  for (const change of [
+    (f) => {
+      f.state.questions = [];
+    },
+    (f) => {
+      f.state.concept.updatedAt = "2026-10-30T07:00:00Z";
+    },
+    (f) => {
+      f.question.questionText = "Another editor changed it";
+    },
+    (f) => {
+      f.state.account = { ...adminActor, role: "developer" };
+    },
+    (f) => {
+      f.replacement.options[0].isCorrect = false;
+    },
+  ]) {
+    const f = decisionFixture(),
+      a = await f.action("replacement");
+    change(f);
+    await assert.rejects(
+      f.client.submitDecision(a, adminActor),
+      (e) => e.uncertain === false,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  }
+});
+test("decision run artifact and anchored rubric drift block before expert review POST", async () => {
+  for (const mode of ["run", "anchor"]) {
+    const f = decisionFixture(),
+      a = await f.action();
+    f.state.alter = (path, raw) =>
+      mode === "run" && path.includes("/runs/")
+        ? { ...raw, artifact: { kind: "prose", content: "Changed evidence" } }
+        : mode === "anchor" && path.endsWith("/rubric")
+          ? {
+              ...raw,
+              anchors: {
+                ...raw.anchors,
+                accuracy: ["changed", ...raw.anchors.accuracy.slice(1)],
+              },
+            }
+          : raw;
+    await assert.rejects(
+      f.client.submitDecision(a, adminActor),
+      (e) => !e.uncertain,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  }
+});
+test("decision sent HTTP failures and mismatching ACKs are uncertain without automatic retry", async () => {
+  for (const option of [
+    { postError: { response: { status: 400 } } },
+    { postError: new Error("timeout") },
+    { ack: (r) => ({ ...r, expertId: evalOptionId(900) }) },
+    { ack: (r) => ({ ...r, scores: { ...r.scores, accuracy: 1 } }) },
+  ]) {
+    const f = decisionFixture(option),
+      a = await f.action();
+    await assert.rejects(
+      f.client.submitDecision(a, adminActor),
+      (e) => e.uncertain === true,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("decision replacement ACK cannot claim inherited verification, wrong predecessor, actor or payload", async () => {
+  for (const patch of [
+    { predecessorId: evalOptionId(999) },
+    { verificationResult: { passed: true } },
+    { createdById: evalOptionId(999) },
+    { questionText: "Wrong question" },
+    { versionNumber: 4 },
+  ]) {
+    const f = decisionFixture({ ack: (r) => ({ ...r, ...patch }) }),
+      a = await f.action("replacement");
+    await assert.rejects(
+      f.client.submitDecision(a, adminActor),
+      (e) => e.uncertain,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("decision successor read failure retains known ID and GET-only recovery without replay", async () => {
+  const f = decisionFixture(),
+    a = await f.action("replacement");
+  f.state.fail = (p) =>
+    p.includes(f.nextId) ? new Error("offline") : undefined;
+  await assert.rejects(
+    f.client.submitDecision(a, adminActor),
+    (e) => e.uncertain && e.successorId === f.nextId,
+  );
+  f.state.fail = undefined;
+  const before = f.state.calls.filter((c) => c[0] === "POST").length,
+    recovered = await f.client.recoverDecision(a.record, adminActor, f.nextId);
+  assert.match(recovered.decisionState, /Known successor/);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, before);
+});
+test("decision unknown outcome recovery describes current membership without claiming failure or saved review", async () => {
+  const f = decisionFixture(),
+    review = await f.record(),
+    replacement = await f.record("replacement");
+  assert.match(
+    (await f.client.recoverDecision(review, adminActor)).decisionState,
+    /remains unknown/,
+  );
+  assert.match(
+    (await f.client.recoverDecision(replacement, adminActor)).decisionState,
+    /does not prove.*failed/,
+  );
+  f.state.questions = [];
+  assert.match(
+    (await f.client.recoverDecision(replacement, adminActor)).decisionState,
+    /No successor ID was confirmed/,
+  );
+  assert.ok(f.state.calls.every((c) => c[0] === "GET"));
+});
+test("decision original-session change hides access and prevents late response use", async () => {
+  let token = "evaluation-session";
+  const f = decisionFixture({ authToken: () => token }),
+    a = await f.action();
+  token = "another-session";
+  await assert.rejects(
+    f.client.submitDecision(a, adminActor, "evaluation-session"),
+    (e) => e.unavailable && !e.uncertain,
+  );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+});
+function decisionInteractive(kind = "review") {
+  const hooks = profileHookState(),
+    f = decisionFixture({ hooks: hooks.hooks }),
+    panel = f.h.load(
+      new URL("../evaluation/decision-panel.tsx", import.meta.url),
+    ),
+    record =
+      kind === "review"
+        ? {
+            kind,
+            run: f.h
+              .load(
+                new URL("../evaluation/evaluation-data.ts", import.meta.url),
+              )
+              .parseRun(f.run, evalRunId),
+            rubric: f.library.rubric,
+          }
+        : {
+            kind,
+            question: f.data.parseCurrentQuestions(
+              [f.question],
+              f.conceptId,
+            )[0],
+            concept: f.data.parseDecisionConcept(f.state.concept, f.conceptId),
+            metrics: f.h
+              .load(
+                new URL("../evaluation/evaluation-data.ts", import.meta.url),
+              )
+              .parseMetrics(f.metrics, evalQuestionId),
+          };
+  const props = {
+    library: f.library,
+    busy: false,
+    paused: false,
+    earlier: false,
+    record,
+    onInspect: async () => {},
+    onSubmit: async () => {},
+    onRecover() {},
+    onResume() {},
+  };
+  const v = {
+    ...f,
+    hooks,
+    props,
+    tree() {
+      hooks.reset();
+      return panel.DecisionPanel(props);
+    },
+    html() {
+      return f.h.render(this.tree());
+    },
+    change(id, value) {
+      walk(
+        this.tree(),
+        (n) => n.props?.id === `decision-${id}`,
+      )[0].props.onChange({ target: { value, checked: value } });
+    },
+    button(label) {
+      return walk(
+        this.tree(),
+        (n) =>
+          n.type === "button" &&
+          (Array.isArray(n.props.children)
+            ? n.props.children.join("")
+            : n.props.children) === label,
+      )[0];
+    },
+    review() {
+      walk(this.tree(), (n) => n.type === "form")
+        .at(-1)
+        .props.onSubmit({ preventDefault() {} });
+    },
+  };
+  if (kind === "replacement") v.button("Replace a question").props.onClick();
+  v.change(
+    kind === "review" ? "runId" : "conceptId",
+    kind === "review" ? evalRunId : f.conceptId,
+  );
+  if (kind === "replacement") v.change("questionId", evalQuestionId);
+  return v;
+}
+test("decision UI starts with explicit empty scores and linked validation without sending", () => {
+  const f = decisionInteractive();
+  assert.equal(
+    walk(
+      f.tree(),
+      (n) => n.type === "input" && n.props.type === "radio" && n.props.checked,
+    ).length,
+    0,
+  );
+  f.review();
+  const html = f.html();
+  assert.match(html, /Check the decision fields/);
+  assert.match(html, /href="#decision-accuracy"/);
+  assert.match(html, /aria-invalid="true"/);
+  assert.equal(
+    walk(f.tree(), (n) => n.type === "dialog")[0].props.children,
+    undefined,
+  );
+});
+test("decision replacement UI preserves independent drafts, bounds options and requires a correct key", () => {
+  const f = decisionInteractive("replacement");
+  f.change("questionText", "Retained replacement draft");
+  f.change("replacementReason", "Reason");
+  f.review();
+  assert.match(f.html(), /Select exactly one correct answer/);
+  f.button("Expert review").props.onClick();
+  f.button("Replace a question").props.onClick();
+  assert.match(f.html(), /Retained replacement draft/);
+  assert.equal(f.button("Remove option 1").props.disabled, true);
+  f.button("Add option").props.onClick();
+  assert.equal(
+    walk(
+      f.tree(),
+      (n) =>
+        n.type === "textarea" && n.props.id?.startsWith("decision-option-"),
+    ).length,
+    3,
+  );
+});
+test("decision native confirmation freezes exact payload, starts without consent and Keep retains fields", () => {
+  const f = decisionInteractive();
+  f.change("decision", "approve");
+  f.change("reason", "Exact reason");
+  for (const d of [
+    "accuracy",
+    "clarity",
+    "pedagogy",
+    "difficultyCalibration",
+  ]) {
+    walk(
+      f.tree(),
+      (n) => n.type === "input" && n.props.name === `score-${d}`,
+    )[2].props.onChange();
+  }
+  f.review();
+  let html = f.html();
+  assert.match(html, /Record this expert review/);
+  assert.match(html, /Exact decision payload/);
+  assert.equal(f.button("Confirm decision").props.disabled, true);
+  f.change("reason", "New draft after snapshot");
+  html = f.html();
+  assert.match(html, /Exact reason/);
+  f.button("Keep editing").props.onClick();
+  assert.match(f.html(), /New draft after snapshot/);
+});
+test("decision panel remains mounted across view and reference failures; stale IDs disable review", () => {
+  const f = evaluationInteractive();
+  f.props.decisions = createElement(
+    "section",
+    { "data-sample": "decisions" },
+    "Retained decision form",
+  );
+  assert.match(f.html(), /<div hidden=""><section data-sample="decisions"/);
+  f.section("Expert decisions");
+  f.props.error = "references failed";
+  assert.match(f.html(), /Retained decision form/);
+  const d = decisionInteractive();
+  d.change("runId", evalOptionId(999));
+  assert.match(d.html(), /IDs changed/);
+  assert.equal(d.button("Review exact decision"), undefined);
+});
+test("shared write recovery requires separate consent and shows decision readback limits", () => {
+  const hooks = profileHookState(),
+    f = decisionFixture({ hooks: hooks.hooks }),
+    C = f.h.load(
+      new URL("../evaluation/write-recovery.tsx", import.meta.url),
+    ).WriteRecovery;
+  let resumes = 0;
+  const props = {
+      paused: true,
+      busy: false,
+      recovery: {
+        library: f.library,
+        runs: [],
+        decisionState: "Review saved status remains unknown",
+        checkedAt: "now",
+      },
+      onRecover() {},
+      onResume() {
+        resumes++;
+      },
+    },
+    tree = () => {
+      hooks.reset();
+      return C(props);
+    };
+  let t = tree(),
+    button = () =>
+      walk(
+        tree(),
+        (n) =>
+          n.type === "button" &&
+          n.props.children === "Use checked references and resume",
+      )[0];
+  assert.match(f.h.render(t), /remains unknown/);
+  assert.equal(button().props.disabled, true);
+  button().props.onClick();
+  assert.equal(resumes, 0);
+  walk(t, (n) => n.type === "input")[0].props.onChange({
+    target: { checked: true },
+  });
+  assert.equal(button().props.disabled, false);
+  button().props.onClick();
+  assert.equal(resumes, 1);
+});
+function decisionController(options = {}) {
+  const hooks = profileHookState(),
+    f = decisionFixture(options),
+    query = {
+      data: f.library,
+      isFetchedAfterMount: true,
+      isPending: false,
+      isFetching: false,
+      isError: false,
+      refetch: async () => ({ data: f.library }),
+    },
+    queries = {};
+  queries[`admin/evaluation/${adminActor.id}/${adminActor.role}`] = query;
+  const h = roadmapHarness({
+      api: f.api,
+      hooks: hooks.hooks,
+      authUser: adminActor,
+      authToken: "evaluation-session",
+      queries,
+      ...options,
+    }),
+    C = h.load(
+      new URL("../evaluation/gui-evaluation.tsx", import.meta.url),
+    ).GuiEvaluation;
+  return {
+    ...f,
+    h,
+    query,
+    render() {
+      hooks.reset();
+      const tree = C(),
+        view = walk(tree, (n) => n.type?.name === "EvaluationView")[0];
+      return {
+        tree,
+        view,
+        decisions: view?.props.decisions,
+        execution: view?.props.execution,
+      };
+    },
+  };
+}
+test("decision controller shares synchronous lock and pauses execution after an uncertain decision", async () => {
+  let release;
+  const waiting = new Promise((r) => (release = r)),
+    f = decisionController({
+      postError: new Error("timeout"),
+      waitPost: () => waiting,
+    });
+  await f.render().decisions.props.onInspect("review", evalRunId, "");
+  const a = await f.action();
+  const first = f.render().decisions.props.onSubmit(a);
+  await new Promise(setImmediate);
+  await f.render().decisions.props.onSubmit(a);
+  release();
+  await first;
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  const p = f.render();
+  assert.equal(p.decisions.props.paused, true);
+  assert.equal(p.execution.props.paused, true);
+  const before = f.state.calls.length;
+  await p.execution.props.onExecute({
+    kind: "candidate",
+    task: "concept_draft",
+    version: "1.2.0",
+    systemTemplate: "template",
+    changelog: "why",
+  });
+  assert.equal(f.state.calls.length, before);
+});
+test("decision controller clears private evidence after success and blocks obsolete confirmation records", async () => {
+  const f = decisionController();
+  await f.render().decisions.props.onInspect("review", evalRunId, "");
+  const a = await f.action();
+  await f.render().decisions.props.onSubmit({
+    ...a,
+    record: {
+      ...a.record,
+      run: {
+        ...a.record.run,
+        artifact: { kind: "prose", content: "wrong target" },
+      },
+    },
+  });
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  await f.render().decisions.props.onSubmit(a);
+  assert.equal(f.render().decisions.props.record, undefined);
+  assert.equal(f.render().decisions.props.outcome.kind, "review");
+});
+test("decision changed descriptive observations require rechecking before replacement", async () => {
+  const f = decisionFixture(),
+    a = await f.action("replacement");
+  f.state.alter = (p, r) =>
+    p.endsWith("/psychometrics")
+      ? { ...r, reasons: [...r.reasons, "CHANGED_LOCAL_OBSERVATION"] }
+      : r;
+  await assert.rejects(
+    f.client.submitDecision(a, adminActor),
+    (e) => !e.uncertain,
+  );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+});
+test("decision late response after session replacement is hidden and marked uncertain", async () => {
+  let token = "evaluation-session",
+    release;
+  const waiting = new Promise((r) => (release = r)),
+    f = decisionFixture({ authToken: () => token, waitPost: () => waiting }),
+    a = await f.action();
+  const pending = f.client.submitDecision(a, adminActor, "evaluation-session");
+  await new Promise(setImmediate);
+  token = "another-session";
+  release();
+  await assert.rejects(pending, (e) => e.uncertain && e.unavailable);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("decision failed saved-state checks retain the shared pause until a separate adoption", async () => {
+  const f = decisionController({ postError: new Error("timeout") });
+  await f.render().decisions.props.onInspect("review", evalRunId, "");
+  await f.render().decisions.props.onSubmit(await f.action());
+  f.state.fail = (p) =>
+    p.endsWith("/rubric") ? new Error("offline") : undefined;
+  await f.render().decisions.props.onRecover();
+  await new Promise(setImmediate);
+  assert.equal(f.render().decisions.props.paused, true);
+  assert.equal(f.render().decisions.props.recovery, undefined);
+  f.render().decisions.props.onResume();
+  assert.equal(f.render().execution.props.paused, true);
+  f.state.fail = undefined;
+  await f.render().decisions.props.onRecover();
+  await new Promise(setImmediate);
+  assert.ok(f.render().decisions.props.recovery);
+  assert.equal(f.render().execution.props.paused, true);
+  f.render().decisions.props.onResume();
+  assert.equal(f.render().execution.props.paused, false);
+  assert.equal(f.render().decisions.props.earlier, true);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+
+// Checkpoint 33: release responses and guards, entirely mocked.
+async function releaseFixture(options = {}) {
+  const f = executionFixture({
+      authToken: options.authToken ?? "evaluation-session",
+      hooks: options.hooks,
+    }),
+    action = f.action("comparison"),
+    outcome = await f.client.executeEvaluation(
+      f.library,
+      action,
+      "evaluation-session",
+    ),
+    source = { action, outcome, library: f.library };
+  const releaseData = f.h.load(
+      new URL("../evaluation/release-data.ts", import.meta.url),
+    ),
+    releaseClient = f.h.load(
+      new URL("../evaluation/release-client.ts", import.meta.url),
+    ),
+    releasePanel = f.h.load(
+      new URL("../evaluation/release-panel.tsx", import.meta.url),
+    ),
+    evidence = releaseData.approvalEvidence(source);
+  const oldPost = f.api.post;
+  f.api.post = async (path, payload, opts) => {
+    if (!path.endsWith("/promote") && !path.endsWith("/rollback"))
+      return oldPost(path, payload, opts);
+    f.state.calls.push(["POST", path, structuredClone(payload), opts]);
+    if (options.waitRelease) await options.waitRelease();
+    if (options.releaseError) throw options.releaseError;
+    const raw = path.endsWith("/promote")
+      ? {
+          id: evalOptionId(950),
+          task: evidence.task,
+          comparisonId: evidence.comparisonId,
+          baselinePromptId: evidence.baselinePromptId,
+          candidatePromptId: evidence.candidatePromptId,
+          baselineHash: evidence.baselineHash,
+          candidateHash: evidence.candidateHash,
+          goldenSetHash: evidence.goldenSetHash,
+          status: "approved",
+          approvedById: adminActor.id,
+          createdAt: "2026-10-30T06:00:00Z",
+          updatedAt: "2026-10-30T06:00:00Z",
+          approvedBy: { email: "discard-private-release" },
+        }
+      : { task: path.split("/").at(-2), baselineRestored: true };
+    if (options.afterRelease) options.afterRelease();
+    return { data: options.releaseAck ? options.releaseAck(raw) : raw };
+  };
+  f.state.calls.length = 0;
+  return {
+    ...f,
+    releaseData,
+    releaseClient,
+    releasePanel,
+    source,
+    evidence,
+    approve: { kind: "approve", evidence },
+    rollback: { kind: "rollback", task: source.action.task },
+  };
+}
+test("release source checks full cohort and protected summary without inventing active serving", async () => {
+  const f = await releaseFixture();
+  assert.equal(f.evidence.report.passed, true);
+  assert.equal(f.evidence.report.baseline.layer1PassRate, 0);
+  assert.equal(f.evidence.report.candidate.layer1PassRate, 0);
+  assert.equal(f.evidence.comparisonId, evalOptionId(600));
+  assert.equal(
+    f.evidence.baselineHash,
+    f.source.outcome.runs.find((r) => r.mode === "baseline").promptHash,
+  );
+  assert.throws(() =>
+    f.releaseData.approvalEvidence({
+      ...f.source,
+      outcome: { ...f.source.outcome, proof: "ack" },
+    }),
+  );
+  assert.throws(() =>
+    f.releaseData.approvalEvidence({
+      ...f.source,
+      outcome: { ...f.source.outcome, runs: f.source.outcome.runs.slice(1) },
+    }),
+  );
+});
+test("release observed gate detects protected rates, checks, dimensions and differing conditions", async () => {
+  const f = await releaseFixture(),
+    a = f.source.outcome.runs.filter((r) => r.mode === "baseline"),
+    b = f.source.outcome.runs.filter((r) => r.mode === "candidate"),
+    ids = f.library.goldens
+      .filter((g) => g.registryTask === f.source.action.task)
+      .map((g) => g.id),
+    hash = f.evidence.goldenSetHash;
+  const good = structuredClone(a);
+  good[0].deterministicResult.passed = true;
+  good[0].deterministicResult.checks[0].passed = true;
+  good[0].judgeResult.dimensions.accuracy.score = 5;
+  const report = f.releaseData.observedGate(
+    good,
+    b,
+    ids,
+    hash,
+    f.library.rubric.version,
+  );
+  assert.equal(report.passed, false);
+  assert.ok(report.failures.some((x) => x.includes("Layer 1")));
+  assert.ok(report.failures.some((x) => x.includes("Protected check")));
+  assert.ok(report.failures.some((x) => x.includes("accuracy")));
+  const other = structuredClone(b);
+  other[0].judgeSeed = 7;
+  assert.match(
+    f.releaseData
+      .observedGate(a, other, ids, hash, f.library.rubric.version)
+      .failures.join(" "),
+    /conditions differ/,
+  );
+});
+test("release cannot use a forged comparison summary or failed observed gate for approval", async () => {
+  const f = await releaseFixture(),
+    payload = structuredClone(f.source.outcome.payload);
+  payload.result.delta.goldenPassRate = 0.5;
+  assert.throws(() =>
+    f.releaseData.approvalEvidence({
+      ...f.source,
+      outcome: { ...f.source.outcome, payload },
+    }),
+  );
+  const source = structuredClone(f.source),
+    a = source.outcome.runs.filter((r) => r.mode === "baseline"),
+    b = source.outcome.runs.filter((r) => r.mode === "candidate");
+  a[0].deterministicResult.passed = true;
+  source.outcome.payload.result = f.releaseData.observedGate(
+    a,
+    b,
+    f.library.goldens
+      .filter((g) => g.registryTask === source.action.task)
+      .map((g) => g.id),
+    f.evidence.goldenSetHash,
+    f.library.rubric.version,
+  );
+  const evidence = f.releaseData.approvalEvidence(source);
+  assert.equal(evidence.report.passed, false);
+  assert.throws(() =>
+    f.releaseData.releaseAction({ kind: "approve", evidence }),
+  );
+});
+test("release inspection is GET-only and rechecks every run and references without a comparison/release GET", async () => {
+  const f = await releaseFixture(),
+    e = await f.releaseClient.inspectApproval(f.source);
+  assert.equal(e.comparisonId, f.evidence.comparisonId);
+  assert.ok(
+    f.state.calls.every((c) => c[0] === "GET" && c[2].timeout === 12000),
+  );
+  const paths = f.state.calls.map((c) => c[1]);
+  assert.ok(
+    !paths.some((p) => /comparisons|releases|rollback|promote/.test(p)),
+  );
+  for (const r of f.source.outcome.runs)
+    assert.ok(paths.includes(`/admin/eval/runs/${r.id}`));
+});
+test("release changed corpus, run evidence, ownership or missing record blocks before approval POST", async () => {
+  for (const mode of ["corpus", "run", "actor", "missing"]) {
+    const f = await releaseFixture();
+    f.state.alter = (p, r) =>
+      mode === "corpus" && p.endsWith("goldens")
+        ? r.map((g, i) => (i === 0 ? { ...g, expected: "Changed corpus" } : g))
+        : p.includes("/runs/")
+          ? mode === "run"
+            ? {
+                ...r,
+                artifact: { kind: "prose", content: "Changed saved artifact" },
+              }
+            : mode === "actor"
+              ? { ...r, createdById: evalOptionId(999) }
+              : r
+          : r;
+    if (mode === "missing")
+      f.state.fail = (p) =>
+        p.includes("/runs/") ? { response: { status: 404 } } : undefined;
+    await assert.rejects(
+      f.releaseClient.submitRelease(f.library, f.approve, "evaluation-session"),
+      (e) => !e.uncertain,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  }
+});
+test("release approval sends one empty-body scoped POST and validates response without active-serving claim", async () => {
+  const f = await releaseFixture(),
+    out = await f.releaseClient.submitRelease(f.library, f.approve);
+  assert.equal(out.kind, "approve");
+  assert.equal(out.id, evalOptionId(950));
+  assert.match(out.message, /active serving cannot be verified/i);
+  assert.doesNotMatch(JSON.stringify(out), /discard-private-release/);
+  const posts = f.state.calls.filter((c) => c[0] === "POST");
+  assert.equal(posts.length, 1);
+  assert.equal(
+    posts[0][1],
+    `/admin/eval/comparisons/${f.evidence.comparisonId}/promote`,
+  );
+  assert.equal(JSON.stringify(posts[0][2]), "{}");
+  assert.equal(posts[0][3].timeout, 12000);
+});
+test("release rollback is deliberate task-wide empty-body POST and honest baselineRestored ACK", async () => {
+  const f = await releaseFixture();
+  for (const task of ["unknown", "", "concept_research"])
+    await assert.rejects(
+      f.releaseClient.submitRelease(f.library, { kind: "rollback", task }),
+      (e) => !e.uncertain,
+    );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  const out = await f.releaseClient.submitRelease(f.library, f.rollback);
+  assert.equal(out.acknowledgement.baselineRestored, true);
+  assert.match(out.message, /how many approvals/);
+  assert.match(out.message, /configuration are unchanged/);
+  assert.ok(!f.state.calls.some((c) => c[1].includes("/runs/")));
+  assert.equal(
+    f.state.calls.filter((c) => c[0] === "POST")[0][1],
+    `/admin/eval/tasks/${f.rollback.task}/rollback`,
+  );
+});
+test("release sent conflict, timeout and mismatched ACK pause without automatic retry", async () => {
+  for (const options of [
+    { releaseError: { response: { status: 409 } } },
+    { releaseError: new Error("timeout") },
+    { releaseAck: (r) => ({ ...r, comparisonId: evalOptionId(999) }) },
+    { releaseAck: (r) => ({ ...r, status: "revoked" }) },
+    { releaseAck: (r) => ({ ...r, approvedById: evalOptionId(999) }) },
+    { releaseAck: (r) => ({ ...r, candidateHash: "wrong" }) },
+  ]) {
+    const f = await releaseFixture(options);
+    await assert.rejects(
+      f.releaseClient.submitRelease(f.library, f.approve),
+      (e) => e.uncertain,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("release rollback mismatched task/false ACK remain uncertain after a sent write", async () => {
+  for (const patch of [{ task: "qa_answer" }, { baselineRestored: false }]) {
+    const f = await releaseFixture({ releaseAck: (r) => ({ ...r, ...patch }) });
+    await assert.rejects(
+      f.releaseClient.submitRelease(f.library, f.rollback),
+      (e) => e.uncertain,
+    );
+    assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  }
+});
+test("release original and late session replacement hide access before/after sending", async () => {
+  let token = "evaluation-session";
+  const f = await releaseFixture({ authToken: () => token });
+  token = "changed";
+  await assert.rejects(
+    f.releaseClient.submitRelease(f.library, f.rollback, "evaluation-session"),
+    (e) => !e.uncertain && e.unavailable,
+  );
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 0);
+  token = "evaluation-session";
+  const g = await releaseFixture({
+    authToken: () => token,
+    afterRelease: () => {
+      token = "changed";
+    },
+  });
+  await assert.rejects(
+    g.releaseClient.submitRelease(g.library, g.rollback, "evaluation-session"),
+    (e) => e.uncertain && e.unavailable,
+  );
+  assert.equal(g.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("release GET-only recovery checks known runs but never claims approval or active serving", async () => {
+  const f = await releaseFixture(),
+    r = await f.releaseClient.recoverRelease(f.library, f.approve);
+  assert.equal(r.runs.length, f.source.outcome.runs.length);
+  assert.match(r.releaseState, /remain unknown/);
+  assert.ok(f.state.calls.every((c) => c[0] === "GET"));
+  f.state.calls.length = 0;
+  await f.releaseClient.recoverRelease(f.library, f.rollback);
+  assert.ok(!f.state.calls.some((c) => c[1].includes("/runs/")));
+  f.state.fail = (p) =>
+    p.endsWith("rubric") ? new Error("offline") : undefined;
+  await assert.rejects(
+    f.releaseClient.recoverRelease(f.library, f.rollback),
+    /remain paused/,
+  );
+  assert.ok(f.state.calls.every((c) => c[0] === "GET"));
+});
+async function releaseInteractive(options = {}) {
+  const hooks = profileHookState(),
+    f = await releaseFixture({ hooks: hooks.hooks, ...options }),
+    props = {
+      library: f.library,
+      source: f.source,
+      evidence: f.evidence,
+      busy: false,
+      paused: false,
+      earlier: false,
+      onCheck: async () => {},
+      onSubmit: async () => {},
+      onRecover() {},
+      onResume() {},
+    };
+  return {
+    ...f,
+    props,
+    hooks,
+    tree() {
+      hooks.reset();
+      return f.releasePanel.ReleasePanel(props);
+    },
+    html() {
+      return f.h.render(this.tree());
+    },
+    button(label) {
+      return walk(
+        this.tree(),
+        (n) => n.type === "button" && n.props.children === label,
+      )[0];
+    },
+    change(id, value) {
+      walk(
+        this.tree(),
+        (n) => n.props?.id === `release-${id}`,
+      )[0].props.onChange({ target: { value } });
+    },
+  };
+}
+test("release UI distinguishes no retained source from checked protected metrics and unknown serving", async () => {
+  const f = await releaseInteractive();
+  assert.match(f.html(), /Observed protected metrics/);
+  assert.match(
+    f.html(),
+    /Non-regression can pass when both versions have the same failures/,
+  );
+  assert.match(f.html(), /no release, comparison or active-serving lookup API/);
+  f.props.source = undefined;
+  f.props.evidence = undefined;
+  assert.match(f.html(), /No comparison response retained/);
+  assert.equal(f.button("Review release scope").props.disabled, true);
+  assert.ok(!walk(f.tree(), (n) => n.type === "input").length);
+});
+test("release approval confirmation freezes scope and starts without consent; Keep retains checked evidence", async () => {
+  const f = await releaseInteractive();
+  f.button("Review release scope").props.onClick();
+  assert.match(f.html(), /Approve this prompt release/);
+  assert.match(f.html(), /Exact request scope/);
+  assert.equal(f.button("Confirm release action").props.disabled, true);
+  f.button("Keep reviewing").props.onClick();
+  assert.equal(f.button("Review release scope").props.disabled, false);
+});
+test("release rollback keeps independent task draft and requires an explicit scope choice", async () => {
+  const f = await releaseInteractive();
+  f.button("Roll back a task").props.onClick();
+  f.button("Review release scope").props.onClick();
+  assert.match(f.html(), /Choose the task whose approvals/);
+  f.change("task", "qa_answer");
+  f.button("Approve a comparison").props.onClick();
+  f.button("Roll back a task").props.onClick();
+  assert.equal(
+    walk(f.tree(), (n) => n.props?.id === "release-task")[0].props.value,
+    "qa_answer",
+  );
+  f.button("Review release scope").props.onClick();
+  assert.match(f.html(), /All approved releases for this task are revoked/);
+  assert.match(f.html(), /including approvals created since this review began/);
+  assert.equal(f.button("Confirm release action").props.disabled, true);
+});
+test("release source drift and shared pause disable approval without changing the rollback draft", async () => {
+  const f = await releaseInteractive();
+  f.props.source = {
+    ...f.source,
+    outcome: { ...f.source.outcome, checkedAt: "another-snapshot" },
+  };
+  assert.equal(f.button("Review release scope").props.disabled, true);
+  f.props.source = f.source;
+  f.props.paused = true;
+  assert.equal(f.button("Review release scope").props.disabled, true);
+  f.button("Roll back a task").props.onClick();
+  assert.equal(f.button("Review release scope").props.disabled, true);
+});
+test("release view stays mounted across inspection and reference failures", () => {
+  const f = evaluationInteractive();
+  f.props.releases = createElement(
+    "section",
+    { "data-sample": "release" },
+    "Retained release scope",
+  );
+  assert.match(f.html(), /<div hidden=""><section data-sample="release"/);
+  f.section("Prompt releases");
+  f.props.error = "references failed";
+  assert.match(f.html(), /Retained release scope/);
+});
+async function releaseController(options = {}) {
+  const hooks = profileHookState(),
+    f = await releaseFixture(options),
+    query = {
+      data: f.library,
+      isFetchedAfterMount: true,
+      isPending: false,
+      isFetching: false,
+      isError: false,
+      refetch: async () => ({ data: f.library }),
+    },
+    queries = {};
+  queries[`admin/evaluation/${adminActor.id}/${adminActor.role}`] = query;
+  const h = roadmapHarness({
+      api: f.api,
+      hooks: hooks.hooks,
+      authUser: adminActor,
+      authToken: "evaluation-session",
+      queries,
+    }),
+    C = h.load(
+      new URL("../evaluation/gui-evaluation.tsx", import.meta.url),
+    ).GuiEvaluation;
+  return {
+    ...f,
+    h,
+    query,
+    render() {
+      hooks.reset();
+      const tree = C(),
+        view = walk(tree, (n) => n.type?.name === "EvaluationView")[0];
+      return {
+        tree,
+        view,
+        releases: view?.props.releases,
+        execution: view?.props.execution,
+        decisions: view?.props.decisions,
+      };
+    },
+  };
+}
+test("release controller retains comparison source across other execution and requires explicit GET check", async () => {
+  const f = await releaseController();
+  assert.equal(f.render().releases.props.source, undefined);
+  await f.render().execution.props.onExecute(f.action("comparison"));
+  assert.ok(f.render().releases.props.source);
+  assert.equal(f.render().releases.props.evidence, undefined);
+  await f.render().releases.props.onCheck();
+  assert.ok(f.render().releases.props.evidence);
+  await f.render().execution.props.onExecute(f.action("candidate"));
+  assert.equal(f.render().releases.props.source.outcome.kind, "comparison");
+  assert.ok(f.render().releases.props.evidence);
+});
+test("release controller synchronous lock deduplicates writes and shares uncertainty with execution/decisions", async () => {
+  let release;
+  const waiting = new Promise((r) => (release = r)),
+    f = await releaseController({
+      waitRelease: () => waiting,
+      releaseError: new Error("timeout"),
+    });
+  const first = f.render().releases.props.onSubmit(f.rollback);
+  await new Promise(setImmediate);
+  await f.render().releases.props.onSubmit(f.rollback);
+  release();
+  await first;
+  const p = f.render();
+  assert.equal(p.releases.props.paused, true);
+  assert.equal(p.execution.props.paused, true);
+  assert.equal(p.decisions.props.paused, true);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+  await p.execution.props.onExecute(f.action("candidate"));
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("release controller failed recovery cannot resume and successful checks need separate adoption", async () => {
+  const f = await releaseController({ releaseError: new Error("timeout") });
+  await f.render().releases.props.onSubmit(f.rollback);
+  f.state.fail = (p) =>
+    p.endsWith("rubric") ? new Error("offline") : undefined;
+  f.render().releases.props.onRecover();
+  await new Promise(setImmediate);
+  assert.equal(f.render().releases.props.recovery, undefined);
+  f.render().releases.props.onResume();
+  assert.equal(f.render().releases.props.paused, true);
+  f.state.fail = undefined;
+  f.render().releases.props.onRecover();
+  await new Promise(setImmediate);
+  assert.match(
+    f.render().releases.props.recovery.releaseState,
+    /remain unknown/,
+  );
+  assert.equal(f.render().releases.props.paused, true);
+  f.render().releases.props.onResume();
+  assert.equal(f.render().execution.props.paused, false);
+  assert.equal(f.render().releases.props.evidence, undefined);
+  assert.equal(f.render().releases.props.earlier, true);
+  assert.equal(f.state.calls.filter((c) => c[0] === "POST").length, 1);
+});
+test("release controller refuses approval confirmation after its checked source changes", async () => {
+  const f = await releaseController();
+  await f.render().execution.props.onExecute(f.action("comparison"));
+  await f.render().releases.props.onCheck();
+  const old = f.render().releases.props.evidence;
+  await f
+    .render()
+    .releases.props.onSubmit({
+      kind: "approve",
+      evidence: { ...old, comparisonId: evalOptionId(999) },
+    });
+  assert.equal(
+    f.state.calls.filter((c) => c[0] === "POST" && c[1].endsWith("promote"))
+      .length,
+    0,
+  );
+  assert.match(f.render().releases.props.error, /changed/);
 });

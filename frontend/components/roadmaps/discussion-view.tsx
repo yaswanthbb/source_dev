@@ -48,6 +48,8 @@ export function DiscussionView({
   error,
   uncertain = false,
   recovered = false,
+  checked = false,
+  onAdopt,
   outcome,
   onAction,
   onRefresh,
@@ -62,6 +64,8 @@ export function DiscussionView({
   error?: string;
   uncertain?: boolean;
   recovered?: boolean;
+  checked?: boolean;
+  onAdopt?: () => DiscussionSnapshot | undefined;
   outcome?: DiscussionOutcome;
   onAction: (action: DiscussionAction) => void;
   onRefresh: () => Promise<DiscussionSnapshot | undefined> | void;
@@ -80,7 +84,8 @@ export function DiscussionView({
   const message = useRef<HTMLDivElement>(null),
     question = useRef<HTMLTextAreaElement>(null),
     editorInput = useRef<HTMLTextAreaElement>(null);
-  const confirmationHeading = useRef<HTMLHeadingElement>(null);
+  const confirmationHeading = useRef<HTMLHeadingElement>(null),
+    confirmationKeep = useRef<HTMLButtonElement>(null);
   const editorTrigger = useRef<HTMLButtonElement | null>(null),
     confirmationTrigger = useRef<HTMLButtonElement | null>(null);
   const editorKey = editor
@@ -118,7 +123,7 @@ export function DiscussionView({
     if (editorKey) editorInput.current?.focus();
   }, [editorKey]);
   useEffect(() => {
-    if (confirmation) confirmationHeading.current?.focus();
+    if (confirmation) confirmationKeep.current?.focus();
   }, [confirmation]);
   const all = data.threads.filter((q) => q.target === target);
   const filtered = all.filter((q) =>
@@ -157,17 +162,23 @@ export function DiscussionView({
     setEditorInvalid(undefined);
     onAction(action);
   }
+  function rebaseEditor(fresh: DiscussionSnapshot) {
+    setConfirmation(null);
+    setEditor((old) => {
+      if (!old) return old;
+      const thread = fresh.threads.find((q) => q.id === old.thread.id);
+      return thread ? { ...old, thread } : old;
+    });
+  }
+  function adoptThreads() {
+    const fresh = onAdopt?.();
+    if (fresh) rebaseEditor(fresh);
+  }
   async function refreshThreads() {
     const fresh = await onRefresh();
-    if (fresh)
-      setEditor((old) => {
-        if (!old) return old;
-        const thread = fresh.threads.find((q) => q.id === old.thread.id);
-        // An explicit review of saved state rebases a retained draft. Background
-        // refreshes never overwrite its original fingerprint or its text.
-        return thread ? { ...old, thread } : old;
-      });
+    if (fresh) rebaseEditor(fresh);
   }
+
   return (
     <div className={styles.page}>
       <nav className={styles.breadcrumb} aria-label="Breadcrumb">
@@ -290,17 +301,36 @@ export function DiscussionView({
             outcome && (
               <GuiFeedback ref={message} kind="success" title={outcome.message}>
                 <p>
-                  The server confirmed this action. Reload the list if it hasn’t
-                  appeared yet.
+                  {outcome.checked
+                    ? "The saved thread state was read back and checked."
+                    : "The server confirmed this request. Check saved threads if it hasn’t appeared yet."}
                 </p>
               </GuiFeedback>
             )
           )}
-          {recovered && (
-            <GuiFeedback kind="info" title="Fresh threads checked">
+          {checked && (
+            <GuiFeedback kind="info" title="Checked threads ready">
               <p>
-                Look for your previous question or reply before posting again.
-                An unfinished AI request may still be running. A new request can
+                The displayed threads come from the saved-state check. Read them
+                before resuming. Using them keeps your writing and rebases any
+                retained editor to this checked version. A read cannot cancel an
+                earlier request.
+              </p>
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={pending || refreshing}
+                onClick={adoptThreads}
+              >
+                Use checked threads and resume
+              </button>
+            </GuiFeedback>
+          )}
+          {recovered && (
+            <GuiFeedback kind="info" title="Earlier request may still finish">
+              <p>
+                Look for saved changes before another action. An earlier save,
+                deletion or AI request may still finish. Another AI request can
                 duplicate it and incur another charge.
               </p>
             </GuiFeedback>
@@ -615,10 +645,28 @@ export function DiscussionView({
                         });
                       }}
                     >
+                      {data.viewer.role === "admin" &&
+                        editor.kind === "edit-question" &&
+                        thread.answers.length > 0 && (
+                          <p className={styles.adminNote}>
+                            Editing an answered question changes the prompt
+                            beneath existing replies. AI replies are not
+                            regenerated.
+                          </p>
+                        )}
+                      {data.viewer.role === "admin" &&
+                        editor.kind === "edit-answer" &&
+                        thread.answers.find((a) => a.id === editor.answerId)
+                          ?.isAiAnswer && (
+                          <p className={styles.adminNote}>
+                            Editing the saved AI reply changes its text only; it
+                            does not send another AI request.
+                          </p>
+                        )}
                       <label htmlFor={`reply-${thread.id}`}>
                         {editor.kind === "reply"
                           ? "Your public reply"
-                          : "Edit your message"}
+                          : "Edit saved message"}
                       </label>
                       <textarea
                         ref={editorInput}
@@ -698,6 +746,7 @@ export function DiscussionView({
                             Yes, delete
                           </button>
                           <button
+                            ref={confirmationKeep}
                             disabled={pending}
                             className={styles.secondary}
                             onClick={() => {

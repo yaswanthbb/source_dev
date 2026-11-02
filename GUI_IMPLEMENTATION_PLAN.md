@@ -50,9 +50,12 @@ with user approval. A completed visual redesign does not imply new backend work.
 | 25 | Users `/admin/users` | Implemented; ready for visual review |
 | 26 | Content review `/admin/content-review` | Implemented; ready for visual review |
 | 27 | Admin API-parity audit + AI jobs `/admin/jobs` | Implemented; ready for visual review |
-| 28 | Admin article moderation (existing public reader + reasoned admin deletion; audit admin edit parity) | Planned |
-| 29 | Contextual discussion moderation parity + remaining admin navigation audit | Planned; define scope after service/UI audit |
-| 30 | Evaluation / prompt release / question quality surfaces | Planned; audit service and paid/write boundaries before defining routes |
+| 28 | Admin articles `/admin/articles`: review, reasoned deletion and existing admin editor handoff | Implemented; ready for visual review |
+| 29 | Contextual discussion moderation parity + remaining admin navigation audit | Implemented; ready for visual review |
+| 30 | Evaluation inspection `/admin/evaluation`: rubric, goldens, known run and question metrics + write/serving audit | Implemented; ready for visual review |
+| 31 | Prompt candidates and explicit evaluation execution (shadow/regression/comparison/saved compilation) | Implemented; ready for visual review |
+| 32 | Expert review and question replacement decisions | Implemented; ready for visual review |
+| 33 | Prompt release approval and rollback | Implemented; ready for visual review |
 
 ## Per-page acceptance
 
@@ -1138,3 +1141,214 @@ The staged snapshot remains unchanged; this experiment is an unstaged working-co
   live admin permissions, cross-requester records, acknowledgements/banner sync/concurrency/late
   outcomes, destinations/preferences, screen readers and OS motion remain manual.
 - Notes: `design-system/source-dev/pages/admin-jobs.md`. Stop for visual review before checkpoint 28.
+
+
+## Admin article moderation checkpoint — 2026-10-30
+
+- Implemented `/admin/articles` in the approved workspace: checked public count/list, literal local
+  search, author filters, newest/title sorting, eight-item paging and explicit full saved-source review.
+  Optional existing safe Markdown preview, public-reader link and existing developer editor handoff.
+  Confirmed that the editor already handles another author/orphan as admin, publishes immediately and
+  preserves authorship; no duplicate editor or changed PATCH behavior.
+- Native exact-article/source/consequence confirmation defaults to Keep, validates/focuses a specific
+  trimmed reason, retains per-item drafts, restores focus after cancel and blocks pending close/actions.
+  Own/orphan/other-author notification copy follows the actual service. Linked curriculum remains.
+- Fresh matching admin before/after list/detail reads, session/auth/storage guards, actor/role cache,
+  strict minimal projections/fixed errors and synchronous deduplication. Complete target metadata/body
+  preflight, one admin DELETE with reason, strict ACK, detail 404 and checked-list absence. Public article
+  caches invalidated without auto-refetch. No atomic compare/delete guarantee; existing endpoint unchanged.
+- Notification attempt precedes removal and delivery is not checked; every sent-write failure, including
+  4xx, pauses deletions. GET-only recovery never repeats DELETE, failed checks stay paused, explicit
+  checked-state adoption and persistent late-request warning. Pause is local to this mounted page.
+- Server wrapper/client leaf, GUI sidebar destination and explicit admin CLI handoff/same-route GUI
+  return. Existing auth guards preserved. No backend/schema/dependency/migration/terminal/Git publishing.
+- 590 full frontend tests in 17 files (22 new), final 33 moderation/editor/navigation checks, touched
+  lint with no introduced diagnostics, diff checks and final fixture-free webpack build pass. Four
+  baseline lint warnings and the lockfile warning remain. Standalone TypeScript passes.
+- Labelled local actual-view/shell QA checked desktop/375/768/812 light/dark, filters/sort/paging/focus,
+  full source/preview, reason validation/retention, safe confirmation/Keep/Escape, local success/modal
+  closure, orphan/own copy, pending guard, uncertainty/check/adopt/earlier warning, read/empty/error and
+  mobile menu. Fixed normal cancel focus being stolen by old status feedback. No checked horizontal
+  overflow or browser warnings/errors. Images saved; sample/cache/tab/server removed, viewport reset,
+  light restored and port 3211 closed. No real API/content/account/deletion/notification/provider/progress/
+  billing operation; contracts mocked. Live permissions/public-list scale/races/late outcomes/database/
+  delivery/preferences/destinations, assistive tech and OS motion remain manual.
+- Notes: `design-system/source-dev/pages/admin-articles.md`. Stop for visual review before checkpoint 29.
+
+
+## Contextual discussion moderation and navigation checkpoint — 2026-10-30
+
+- Audited current Q&A service/entity/UI contracts. Existing contextual lesson discussion covers admin
+  question/answer edits, cascaded deletes and human-answer verification. Whole private Ask AI threads
+  remain asker/admin only; concept authors have no bypass, private threads accept no human replies,
+  and AI answers cannot be verified. No global queue/by-ID GET exists; no duplicate admin route added.
+- Admin answered-question and saved-AI editing notes explain unchanged replies and text-only editing.
+  Inline deletion starts on Keep it and returns trigger focus. Content-review placement links explicitly
+  open the developer discussion workspace; admin keeps its full developer shell/terminal there.
+  Analytics now opens the actual GUI dashboard anchor without a CLI badge.
+- Original-session/auth/storage guards, fresh matching account before/after reads, concept/actor/role
+  cache and fresh mount validation prevent cross-account/stale private display. Failed first refresh
+  hides cached data; later transient failures retain drafts after a verified read and block writing.
+- Fresh visible placement/concept/thread preflight, expanded ownership/AI/identity fingerprint, one
+  write and matching ACK plus saved readback for all non-ask actions. Void deletes verify absence.
+  Existing ask ACK flow retained. Every sent-write failure pauses actions; GET-only checks stage
+  read-only rows, explicit adoption keeps/rebases writing, late-request warning persists. No replay,
+  atomicity, cancellation, exactly-once/cross-tab/remount-lock promise. Backend direct mutation shared-
+  visibility predicate gap is recorded, not claimed solved; no backend/schema/dependency changes.
+- 607 frontend tests in 17 files (17 new), final 32 affected checks, standalone TypeScript, touched
+  lint/diff checks and fixture-free production webpack build pass. One baseline unused test variable
+  warning in this checkpoint touched set and existing multi-lockfile warning remain.
+- Labelled local actual-view/shell QA covered desktop/375/768/812 light/dark, admin answered/private-AI
+  edits, draft retention/uncertainty/check/adoption, local save, safe delete/Keep focus return, private
+  reply/verification limits, pending/empty states, contextual links and mobile navigation. No checked
+  horizontal overflow or browser warning/error. Screenshots saved; sample/cache/tab/server removed,
+  viewport reset, light restored, port 3211 closed. APIs mocked/local callbacks; real authorization,
+  persistence/cascades/races/late outcomes, destinations/preferences, assistive tech and OS motion remain
+  manual. No real moderation/account/provider/progress/billing or Git publishing operation.
+- Notes: `design-system/source-dev/pages/discussion-moderation.md`. Stop for visual review before
+  checkpoint 30 evaluation/prompt release/question quality, which remains unstarted.
+
+
+## Evaluation inspection checkpoint — 2026-10-30
+
+- Audited evaluation controller/DTO/service/entities, judge, rubric/goldens, question psychometrics and
+  prompt registry. No run list or prompt/comparison/release/review GET, and no terminal evaluation commands.
+  Defined this audit-dependent checkpoint as read-only inspection; paid execution, expert/replacement
+  decisions and serving-release controls remain separate checkpoints 31–33, not claimed implemented.
+- `/admin/evaluation` has four reference/inspection views in the approved admin workspace: current rubric,
+  full golden inputs/expected/claims/provenance with registry aliases, local search/task filter/six-item
+  paging, known saved run and known question-version metrics. Literal evidence never executes HTML or
+  loads media. Run completion/checks/golden differences/judge evidence remain separate. Recorded rubric
+  mismatch, unknown provenance, null versus zero, sample limits and heuristic flags are explicit.
+- Original-session/auth/storage guards, fresh matching admin before/after GETs, actor/role reference cache,
+  fresh-mount display gating, independent reference errors and fixed messages. Lookups remain local,
+  strict projected/schema/range/identity parsing, complete UUID validation, 12s timed/abortable GETs and
+  synchronous duplicate guard. No polling/retry/provider/write. Drafts retained; error/empty/loading/
+  pending distinct, input/result/error and paging focus checked, explicit read retry recovers.
+- Server wrapper/client leaf, existing admin layout guard and GUI navigation; CLI appearance honestly
+  offers GUI return/admin terminal, with no invented evaluation command or learner-location change.
+- 627 frontend tests in 17 files (20 new), focused 20, standalone TypeScript, touched lint/theme/diff checks
+  and fixture-free webpack build pass. Four existing lint and multi-lockfile warnings remain.
+- Labelled local actual-view QA: desktop/375/768/812 light/dark, actual rubric copy, filters/aliases/paging/
+  details, validation/drafts, failed lookup/retry/result focus, literal script evidence, limited/full
+  metrics, partial/loading/error/recovery/empty/pending/long reference states and mobile menu. No checked
+  horizontal overflow or browser warnings/errors. Sample/dev cache/tab/server removed, viewport reset,
+  light restored, port3211 closed. APIs mocked/local callbacks; live permissions/data/serving/preferences/
+  destinations/concurrency, screen readers and OS motion remain manual. No real provider/evaluation/
+  account/moderation/progress/billing or Git publishing action; backend/dependencies/terminal unchanged.
+- Notes and full endpoint/write/serving audit: `design-system/source-dev/pages/evaluation.md`.
+  Stop for visual review before checkpoint 31.
+
+
+## Evaluation execution checkpoint — 2026-10-30
+
+- Added explicit Run evaluations view to `/admin/evaluation`: immutable candidate drafts, shadow,
+  full regression, version comparison and saved-compilation evaluation (judge false by default).
+  Entry/inspection remain GET-only. No expert/replacement/release control; 32–33 remain unstarted.
+- Exact frozen payload/case-scope native confirmation, full literal template/changelog, fresh per-action
+  consent and honest unknown operator cost/model/call-count copy. Safe Keep/Escape/return; pending blocks
+  close/overlap and focuses visible waiting status. Centering and post-native-close result focus fixed.
+  Per-action drafts survive view changes and transient reference failure; outcome runs have paging and
+  existing explicit evidence inspection. Missing data/failed checks never become successful quality.
+- Original-session/account/role/cache guards, fresh admin/reference preflight, exact reviewed references,
+  one POST and strict ACK. Candidate/comparison metadata ACK-only; no invented read API/catalog. All
+  returned runs GET-checked in bounded batches; semantic fingerprints tolerate JSONB object key order,
+  retain array order and detect changed values. Comparison cohorts and all-task regression reports
+  checked; unknown historical/omitted nullable judge seed remains unknown. No fake release eligibility.
+- Every sent failure pauses writes; GET-only recovery checks known IDs/references, cannot discover unknown
+  partial writes/charges, keeps failed checks paused and requires explicit acknowledgement/adoption.
+  Earlier-request warning persists/focuses after resume. No retry/cancellation/exactly-once/atomicity/
+  cross-tab/remount lock promise. Paid POST timeout 300s may precede server completion; no provider calls
+  or real writes during verification. Unjudged compilation is still a persisted evaluation.
+- 651 full frontend tests in 17 files (24 new), focused 44, standalone TypeScript, touched lint/theme/diff
+  and fixture-free webpack build pass. One baseline unused test variable in touched set and existing
+  multi-lockfile warning remain. Backend/dependencies/terminal unchanged; prior dirty work preserved.
+- Labelled local browser QA: 1280/375/768/812 light/dark, validation/exact source/inert script, drafts,
+  all confirmation types/case counts/consent, Keep/Escape/focus, local outcomes and partial/read failure/
+  check/adopt/earlier warning, pending Escape/disable/focus and short-landscape controls. No checked
+  horizontal overflow or browser warning/error. APIs mocked/local callbacks; live permissions/operator
+  config/paid costs/persistence/latency/partial/concurrent outcomes/content/preferences/navigation,
+  assistive tech and OS motion remain manual. Images saved; sample/dev cache/tab/server removed,
+  viewport reset, light restored and port3211 closed. No real account/evaluation/provider/progress/
+  billing/content/release or Git publishing operation.
+- Notes: `design-system/source-dev/pages/evaluation-execution.md`. Stop for visual review before 32.
+
+
+## Expert review and question replacement checkpoint — 2026-10-30
+
+- Added **Expert decisions** within `/admin/evaluation`, using existing admin-only GUI guards and
+  server-wrapper/client-leaf boundary. No new backend endpoint, schema, dependency, terminal command
+  or release control. Graphify-first audit followed expert-review/quiz/psychometrics DTOs/services/entities.
+- Expert review checks a known run and matching current rubric, renders complete original evidence,
+  requires four explicit anchored integer scores, decision/reason/codes and proposed text for edits.
+  One POST, strict matching actor/run/rubric/payload ACK; no independent expert-review GET exists.
+  Proposed text is recorded only, with no content edit or prompt-release approval.
+- Replacement checks an explicit concept/current-question pair, original text/key/options, version,
+  predecessor, shared placements and full descriptive metrics. The list omits original Bloom/difficulty/
+  correct rationale; the UI labels fresh optional metadata and clears stale lint/verifier expectations.
+  Complete replacement with 2–12 options, exactly one key, optional distractor explanations and reason.
+- Frozen exact-payload native confirmation includes original/successor versions, all-placement pending
+  review/access consequence and original answer key. Fresh consent, Keep/Escape/trigger focus, pending
+  Escape/close/overlap lock and waiting-status focus. Independent drafts survive view/reference failure.
+  Browser-discovered retained modal scroll fixed for both decision and execution confirmations.
+- Original-session/fresh matching admin checks, full evidence/rubric/metrics/concept fingerprint preflight,
+  one POST and strict ACK. Replacement successor text/options/version/predecessor read back, original
+  absent from current list and shared concept pending checked separately. No concurrency isolation claim.
+- One synchronous lock and shared uncertain-write pause across execution and decisions. Every sent
+  failure, including 4xx/ACK/readback, pauses writes; GET-only recovery checks known state without replay.
+  Unknown review/unknown-successor outcomes remain unknown, failed checks stay paused, explicit consent
+  and reference adoption resume writing, earlier-request warning persists. Mount-only lock, no automatic
+  retries/polling/provider call, exactly-once/cancellation/atomicity promise or real content operation.
+- 674 full frontend tests across 17 files pass with clean exit (23 new), including terminal regressions.
+  Standalone TypeScript, touched ESLint, GUI token/diff checks and fixture-free production webpack build
+  pass. One existing unused test variable and existing multi-lockfile build warnings remain.
+- Labelled local actual-view/shell QA checked 1280/375/768/812 light/dark, validation, full anchors,
+  original/key/version/placements, exact confirmation/consent, draft retention, local success/read failure/
+  drift/timeout/failed recovery/check/adoption, pending disable/Escape/focus and short-landscape controls.
+  No checked horizontal overflow or browser warnings/errors. Screenshots saved; sample/dev cache/tab/
+  server removed, viewport reset, light restored and port3211 closed. Mock/local proof only; live access,
+  persistence/concurrency/visibility/scale/preferences/navigation, screen readers and OS motion remain
+  manual. No real account/content/review/provider/evaluation/progress/billing/release or Git publication.
+- Verification details and screenshots: `design-system/source-dev/pages/evaluation-decisions.md`.
+  Stop for visual review before checkpoint 33, prompt release approval and rollback.
+
+
+## Prompt release approval and rollback checkpoint — 2026-11-02
+
+- Added **Prompt releases** to `/admin/evaluation`, retaining guarded admin route, server/client boundary,
+  GUI tokens and CLI/developer/learner scope. Graphify-first current service/controller/entity/registry/gate
+  audit; no backend/schema/dependency/terminal changes and no live release/provider operation.
+- Approval uses the latest checked comparison response retained from Run evaluations in this mounted
+  workspace. It never starts or repeats a paid comparison. No comparison/release/serving GET exists;
+  arbitrary historical IDs cannot be safely previewed here. That limitation is explicit in the empty state.
+- Explicit GET check revalidates current rubric/goldens and every saved cohort run, in batches of four,
+  with original-session/matching fresh admin guards. Retained comparison metadata stays ACK evidence.
+  Recomputes observed cohort/condition/rate/check/dimension non-regression and requires exact agreement
+  with the retained summary; full run evidence/fingerprints and baseline/candidate/delta table available.
+  Non-regression can retain equal failures; it is never labelled absolute quality or final eligibility.
+- Exact frozen native confirmation reviews comparison/task/version scope or complete task-wide rollback,
+  fresh consent, safe Keep/Escape/trigger focus, pending disable/close/Escape/waiting focus. Reopening
+  starts at the full heading; selected rollback task remains across views/reference failures.
+- Approval replaces prior task approvals; serving additionally needs operator opt-in/per-task selection
+  and matching baseline/candidate/corpus hashes. Rollback revokes all currently approved task releases,
+  preserves baseline/configuration and does not cancel in-flight generation. No affected count or live
+  serving selector is invented. One empty-body POST, strict scoped ACK, fresh matching account afterward;
+  both feedback paths remain response-only evidence, not an independent active-prompt readback.
+- Shared synchronous lock/pause now covers execution, expert decisions, replacement and releases. Every
+  sent failure including conflict/timeout/ACK/post-write account error pauses writes. GET-only recovery
+  checks refs/known runs without replay or release-state inference. Failed checks stay paused; separate
+  uncertainty consent/reference adoption required, checked approval invalidated, earlier warning retained.
+  Pause is mount-local; no automatic retry/poll/cancellation/isolation/exactly-once guarantee.
+- 694 full frontend tests in 17 files pass with clean exit (20 new), including terminal regressions.
+  Standalone TypeScript, touched ESLint, token/diff checks and fixture-free webpack build pass. Existing
+  unused test variable and multiple-lockfile warnings remain; no introduced diagnostics.
+- Labelled local actual-view/shell QA checked 1280/375/768/812 light/dark, no-source and blocked-gate
+  states, full metrics/fingerprints/run source, task validation, scope/consent/Keep/Escape/focus, retained
+  task across views/reference failure, local success/read failure/drift/timeout/failed recovery/check/
+  adoption, earlier warning and pending disable/Escape/waiting focus. No checked horizontal overflow or
+  browser warning/error. Screenshots saved; sample/dev cache/owned preview tab/server removed, viewport
+  reset, light restored, port3211 closed. API contracts mocked/local callbacks; live authorization,
+  serving/config/DB transactions/concurrency/late outcomes/scale/preferences/navigation and assistive
+  technology remain manual. No real account/provider/content/progress/billing/release or Git publication.
+- Verification details and local sample screenshots: `design-system/source-dev/pages/evaluation-releases.md`.
+  Checkpoints 1–33 now have implementation entries. Stop for visual review; live acceptance remains.

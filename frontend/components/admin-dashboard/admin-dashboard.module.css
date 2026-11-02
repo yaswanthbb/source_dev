@@ -678,3 +678,7 @@
     animation: none;
   }
 }
+
+.analyticsAnchor {
+  scroll-margin-top: 100px;
+}

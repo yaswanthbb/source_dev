@@ -145,7 +145,13 @@ function LessonCard({
           <ul className={styles.placements} aria-label="Lesson placements">
             {l.placements.map((p) => (
               <li key={p.moduleId}>
-                {p.roadmapTitle} / {p.moduleTitle}
+                {p.roadmapTitle} / {p.moduleTitle}{" "}
+                <Link
+                  className={styles.discussionLink}
+                  href={`/developer/roadmaps/${encodeURIComponent(p.roadmapId)}/modules/${encodeURIComponent(p.moduleId)}/lessons/${encodeURIComponent(l.id)}/discussion`}
+                >
+                  Open lesson discussion · developer workspace
+                </Link>
               </li>
             ))}
           </ul>

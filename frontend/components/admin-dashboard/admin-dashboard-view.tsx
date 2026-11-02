@@ -345,7 +345,11 @@ export function AdminDashboardView(p: AdminDashboardViewProps) {
           )}
         </section>
       </div>
-      <section className={styles.card} aria-labelledby="admin-roadmaps-title">
+      <section
+        id="admin-analytics"
+        className={`${styles.card} ${styles.analyticsAnchor}`}
+        aria-labelledby="admin-roadmaps-title"
+      >
         <div className={styles.cardHeading}>
           <div>
             <h2 id="admin-roadmaps-title">Learning across roadmaps</h2>

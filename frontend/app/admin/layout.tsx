@@ -188,6 +188,8 @@ export default function AdminAppShellLayout({
     pathname?.startsWith("/admin/terminal") ||
     pathname === "/admin/dashboard" ||
     pathname === "/admin/jobs" ||
+    pathname === "/admin/articles" ||
+    pathname === "/admin/evaluation" ||
     ((pathname === "/admin/users" || pathname === "/admin/content-review") && !isCli)
   ) {
     return <>{children}</>;

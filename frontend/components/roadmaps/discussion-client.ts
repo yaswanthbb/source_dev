@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { getToken } from "@/lib/auth";
 import {
   findModule,
   findLesson,
@@ -36,29 +37,93 @@ export function discussionUnavailable(error: unknown) {
         (error as { response?: { status?: number } })?.response?.status ?? 0,
       );
 }
-export async function loadDiscussion(conceptId: string, signal?: AbortSignal) {
-  discussionId(conceptId);
-  const options = { signal, timeout: 12000 };
-  const [content, viewer] = await Promise.all([
-    apiClient.get(`/concepts/${encodeURIComponent(conceptId)}`, options),
-    apiClient.get("/users/me", options),
-  ]);
-  const questions = await apiClient.get(
-    `/concepts/${encodeURIComponent(conceptId)}/qa-questions`,
-    options,
-  );
-  try {
-    return parseDiscussion(
-      content.data,
-      viewer.data,
-      questions.data,
-      conceptId,
-    );
-  } catch (error) {
+function discussionGuard(session: string | null) {
+  const check = () => {
+    if (!session || getToken() !== session)
+      throw new DiscussionFailure(
+        "Your session changed. Cached discussion is hidden; reload or sign in again.",
+        false,
+        true,
+      );
+  };
+  check();
+  return check;
+}
+function checkedViewer(
+  raw: unknown,
+  expected?: DiscussionSnapshot["viewer"],
+): DiscussionSnapshot["viewer"] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
     throw new DiscussionFailure(
-      error instanceof Error ? error.message : "Discussion data is incomplete.",
+      "Your current discussion account couldn’t be confirmed.",
       false,
       true,
+    );
+  const value = raw as Record<string, unknown>;
+  if (value.role !== "admin" && value.role !== "developer")
+    throw new DiscussionFailure("Your discussion access changed.", false, true);
+  let id: string;
+  try {
+    id = discussionId(value.id);
+  } catch {
+    throw new DiscussionFailure(
+      "Your discussion account identity couldn’t be confirmed.",
+      false,
+      true,
+    );
+  }
+  const viewer: DiscussionSnapshot["viewer"] = { id, role: value.role };
+  if (expected && (viewer.id !== expected.id || viewer.role !== expected.role))
+    throw new DiscussionFailure(
+      "Your account or permissions changed. Cached discussion is hidden.",
+      false,
+      true,
+    );
+  return viewer;
+}
+export async function loadDiscussion(
+  conceptId: string,
+  signal?: AbortSignal,
+  expected?: DiscussionSnapshot["viewer"],
+  session = getToken(),
+) {
+  discussionId(conceptId);
+  const guard = discussionGuard(session),
+    options = { signal, timeout: 12000 };
+  try {
+    const account = await apiClient.get("/users/me", options);
+    guard();
+    const viewer = checkedViewer(account.data, expected);
+    const content = await apiClient.get(
+      `/concepts/${encodeURIComponent(conceptId)}`,
+      options,
+    );
+    guard();
+    const questions = await apiClient.get(
+      `/concepts/${encodeURIComponent(conceptId)}/qa-questions`,
+      options,
+    );
+    guard();
+    const fresh = await apiClient.get("/users/me", options);
+    guard();
+    checkedViewer(fresh.data, viewer);
+    try {
+      return parseDiscussion(content.data, viewer, questions.data, conceptId);
+    } catch (error) {
+      throw new DiscussionFailure(
+        error instanceof Error
+          ? error.message
+          : "The discussion privacy contract couldn’t be confirmed.",
+        false,
+        true,
+      );
+    }
+  } catch (error) {
+    if (error instanceof DiscussionFailure) throw error;
+    throw new DiscussionFailure(
+      "Current discussion access and saved threads couldn’t be checked.",
+      false,
+      discussionUnavailable(error),
     );
   }
 }
@@ -85,7 +150,9 @@ export async function submitDiscussionAction(
   lesson: CurriculumLesson,
   snapshot: DiscussionSnapshot,
   action: DiscussionAction,
+  session = getToken(),
 ) {
+  const guard = discussionGuard(session);
   if ("body" in action) {
     const invalid = questionValidation(action.body);
     if (invalid) throw new DiscussionFailure(invalid);
@@ -103,7 +170,12 @@ export async function submitDiscussionAction(
         `/roadmaps/${encodeURIComponent(roadmap.id)}`,
         { timeout: 12000 },
       ),
-      loadDiscussion(lesson.placement.conceptId),
+      loadDiscussion(
+        lesson.placement.conceptId,
+        undefined,
+        snapshot.viewer,
+        session,
+      ),
     ]);
     const currentModule = findModule(parent.data, name, entry.module.id);
     const placement =
@@ -118,6 +190,7 @@ export async function submitDiscussionAction(
         false,
         true,
       );
+    guard();
     current = fresh;
   } catch (error) {
     if (error instanceof DiscussionFailure) throw error;
@@ -184,6 +257,7 @@ export async function submitDiscussionAction(
   try {
     const options = { timeout: ai ? 180000 : 12000 };
     // A single write only. Reads/recovery never retry a paid or uncertain action.
+    guard();
     raw = (
       method === "delete"
         ? await apiClient.delete(path, options)
@@ -191,24 +265,31 @@ export async function submitDiscussionAction(
           ? await apiClient.post(path, payload, options)
           : await apiClient.patch(path, payload, options)
     ).data;
+    guard();
   } catch (error) {
     const status = (error as { response?: { status?: number } })?.response
       ?.status;
-    const uncertain = ai || !status || status >= 500;
+    const uncertain = true;
     const message =
       status === 429
-        ? "The applicable AI allowance is exhausted. Check saved threads; your private question may have been saved."
+        ? ai
+          ? "The applicable AI allowance is exhausted. Check saved threads; your private question may have been saved."
+          : "The server limited this request. Check saved threads before another action."
         : status === 403
-          ? "Access, edit permissions or AI configuration changed. Check saved threads and your provider keys."
+          ? ai
+            ? "Access, edit permissions or AI configuration changed. Check saved threads and your provider keys."
+            : "Your moderation permissions or access changed. Check saved threads before another action."
           : status === 404
             ? "This thread or answer is no longer available. Reload the discussion."
             : status === 400
-              ? "The server couldn’t accept this message. Check the text and reload."
+              ? "The server reported a message error. Check the text and saved threads before another action."
               : "The save couldn’t be confirmed. It may already have completed; check saved threads before taking another action.";
     throw new DiscussionFailure(
       message,
       uncertain,
-      status === 401 || (!ai && (status === 403 || status === 404)),
+      discussionUnavailable(error) ||
+        status === 401 ||
+        (!ai && (status === 403 || status === 404)),
     );
   }
   if (method !== "delete") {
@@ -272,8 +353,83 @@ export async function submitDiscussionAction(
       );
     }
   }
+  let checked: DiscussionSnapshot | undefined;
+  if (action.kind !== "ask") {
+    try {
+      checked = await loadDiscussion(
+        current.content.id,
+        undefined,
+        current.viewer,
+        session,
+      );
+      guard();
+      if (checked.content.authorId !== current.content.authorId)
+        throw new Error();
+      const before = current.threads.find((q) => q.id === action.questionId)!,
+        saved = checked.threads.find((q) => q.id === action.questionId);
+      if (action.kind === "delete-question") {
+        if (saved) throw new Error();
+      } else {
+        if (
+          !saved ||
+          saved.askerId !== before.askerId ||
+          saved.target !== before.target ||
+          saved.createdAt !== before.createdAt ||
+          saved.body !==
+            (action.kind === "edit-question" ? action.body.trim() : before.body)
+        )
+          throw new Error();
+        if (action.kind === "delete-answer") {
+          if (saved.answers.some((a) => a.id === action.answerId))
+            throw new Error();
+        } else if (action.kind !== "edit-question") {
+          const id =
+            action.kind === "reply"
+              ? discussionId((raw as Record<string, unknown>).id)
+              : action.answerId;
+          const answer = saved.answers.find((a) => a.id === id),
+            prior = before.answers.find((a) => a.id === action.answerId);
+          if (!answer) throw new Error();
+          if (action.kind === "reply") {
+            if (
+              answer.body !== action.body.trim() ||
+              answer.responderId !== current.viewer.id ||
+              answer.isAiAnswer ||
+              answer.isVerified !==
+                (current.viewer.role === "admin" ||
+                  current.content.authorId === current.viewer.id)
+            )
+              throw new Error();
+          } else {
+            if (
+              !prior ||
+              answer.responderId !== prior.responderId ||
+              answer.isAiAnswer !== prior.isAiAnswer ||
+              answer.createdAt !== prior.createdAt ||
+              answer.body !==
+                (action.kind === "edit-answer"
+                  ? action.body.trim()
+                  : prior.body) ||
+              answer.isVerified !==
+                (action.kind === "edit-answer"
+                  ? prior.isVerified
+                  : action.kind === "verify")
+            )
+              throw new Error();
+          }
+        }
+      }
+    } catch (error) {
+      throw new DiscussionFailure(
+        "The saved result couldn’t be confirmed. Check saved threads before another action; an earlier request may still finish.",
+        true,
+        discussionUnavailable(error),
+      );
+    }
+  }
   return {
     action,
+    checked,
     message: ai
       ? "AI reply saved"
       : action.kind === "ask"

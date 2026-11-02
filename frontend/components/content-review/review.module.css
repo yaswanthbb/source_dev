@@ -969,3 +969,17 @@
     scroll-behavior: auto;
   }
 }
+
+.discussionLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  color: var(--gui-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.discussionLink:focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}

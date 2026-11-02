@@ -1,0 +1,57 @@
+.page fieldset {
+  min-width: 0;
+  border: 1px solid var(--gui-border);
+  border-radius: 14px;
+  padding: 18px;
+}
+.page legend {
+  font-size: 12px;
+  padding: 0 8px;
+  font-weight: 650;
+}
+.page fieldset:disabled {
+  opacity: 0.65;
+}
+.anchors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  min-width: 0;
+}
+.codes,
+.switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.switcher button[aria-pressed="true"] {
+  border-color: var(--gui-accent);
+  background: var(--gui-accent-soft);
+}
+.option {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--gui-border);
+  padding: 22px 0;
+}
+.page fieldset:focus-within {
+  border-color: var(--gui-accent);
+}
+.page ol,
+.page ul {
+  padding-left: 22px;
+}
+.page :is(fieldset, textarea):focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+@media (max-width: 900px) {
+  .anchors {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 650px) {
+  .page fieldset {
+    padding: 12px;
+  }
+}
