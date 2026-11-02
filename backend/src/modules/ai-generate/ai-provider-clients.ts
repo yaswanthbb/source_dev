@@ -1,6 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiProvider } from '../../common/enums/ai-provider.enum';
+import { lintLeakage } from './compiler-stages';
 
 export interface CompletionOptions {
   /** Eval-only reproducibility hint; omitted by every existing generation call. */
@@ -297,71 +298,171 @@ export class AiProviderClients {
     }
     if (options?.seed !== undefined) body.seed = options.seed;
 
-    let response: globalThis.Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const cause = (err as { cause?: { code?: string } })?.cause?.code;
-      this.logger.error(
-        `Failed to reach NVIDIA NIM API: ${msg}${cause ? ` (cause: ${cause})` : ''}`,
-      );
-      throw providerFailure(AiProvider.NVIDIA, msg);
-    }
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      this.logger.error(
-        `NVIDIA NIM API error HTTP ${response.status}: ${errorBody}`,
-      );
-      if (isAuthFailure(response.status)) {
-        throw invalidKeyError(AiProvider.NVIDIA);
-      }
-      if (response.status === 429) {
-        throw providerFailure(AiProvider.NVIDIA, 'rate limited', 429);
-      }
-      if (response.status === 404 || response.status === 410) {
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.BAD_GATEWAY,
-            message: `Model "${model}" is not available on NVIDIA NIM (HTTP ${response.status} — likely retired). Pick another model from the live model list.`,
-            error: 'Bad Gateway',
-            code: 'MODEL_RETIRED',
+    // Removing response_format is the only retry here: same model, key,
+    // prompts, token budget and signal. Once removed, neither path can retry.
+    for (;;) {
+      let response: globalThis.Response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
           },
-          HttpStatus.BAD_GATEWAY,
+          body: JSON.stringify(body),
+          signal,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const cause = (err as { cause?: { code?: string } })?.cause?.code;
+        this.logger.error(
+          `Failed to reach NVIDIA NIM API (model="${model}"): ${msg}${cause ? ` (cause: ${cause})` : ''}`,
+        );
+        throw providerFailure(AiProvider.NVIDIA, msg);
+      }
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        // Do not retry auth, rate limits, retired models, transport failures
+        // or unrelated validation errors as response-format incompatibility.
+        if (
+          body.response_format &&
+          (response.status === 400 || response.status === 422) &&
+          /response[_\s-]?format|json_object/i.test(errorBody)
+        ) {
+          this.logger.warn(
+            `NVIDIA NIM model="${model}" rejected response_format (HTTP ${response.status}); retrying once without response_format.`,
+          );
+          delete body.response_format;
+          continue;
+        }
+        this.logger.error(
+          `NVIDIA NIM API error (model="${model}") HTTP ${response.status}: ${errorBody}`,
+        );
+        if (isAuthFailure(response.status)) {
+          throw invalidKeyError(AiProvider.NVIDIA);
+        }
+        if (response.status === 429) {
+          throw providerFailure(AiProvider.NVIDIA, 'rate limited', 429);
+        }
+        if (response.status === 404 || response.status === 410) {
+          throw new HttpException(
+            {
+              statusCode: HttpStatus.BAD_GATEWAY,
+              message: `Model "${model}" is not available on NVIDIA NIM (HTTP ${response.status} — likely retired). Pick another model from the live model list.`,
+              error: 'Bad Gateway',
+              code: 'MODEL_RETIRED',
+            },
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+        throw providerFailure(
+          AiProvider.NVIDIA,
+          `HTTP ${response.status}`,
+          response.status >= 500 ? HttpStatus.BAD_GATEWAY : response.status,
         );
       }
-      throw providerFailure(
-        AiProvider.NVIDIA,
-        `HTTP ${response.status}`,
-        response.status >= 500 ? HttpStatus.BAD_GATEWAY : response.status,
-      );
-    }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-      usage?: {
-        prompt_tokens?: unknown;
-        completion_tokens?: unknown;
+      const data = (await response.json()) as {
+        choices?: Array<{
+          finish_reason?: unknown;
+          message?: { content?: unknown; reasoning_content?: unknown };
+        }>;
+        usage?: {
+          prompt_tokens?: unknown;
+          completion_tokens?: unknown;
+          completion_tokens_details?: { reasoning_tokens?: unknown };
+        };
       };
-    };
-    const text = data.choices?.[0]?.message?.content?.trim();
-    if (!text) {
-      throw providerFailure(AiProvider.NVIDIA, 'empty response');
+      const choice = data.choices?.[0];
+      const message = choice?.message;
+      let text =
+        typeof message?.content === 'string' ? message.content.trim() : '';
+      if (!text) {
+        // Shape-only diagnostics: never log prompts, generated reasoning or keys.
+        this.logger.warn(
+          `NVIDIA NIM empty content: ${JSON.stringify({
+            model,
+            response_format: body.response_format ?? null,
+            choiceKeys: Object.keys(choice ?? {}),
+            messageKeys: Object.keys(message ?? {}),
+            finish_reason: choice?.finish_reason ?? null,
+            reasoningChars:
+              typeof message?.reasoning_content === 'string'
+                ? message.reasoning_content.length
+                : 0,
+            completionTokens: numOrNull(data.usage?.completion_tokens),
+            reasoningTokens: numOrNull(
+              data.usage?.completion_tokens_details?.reasoning_tokens,
+            ),
+          })}`,
+        );
+        text = this.nvidiaReasoningText(
+          message?.reasoning_content,
+          options?.responseFormat?.type === 'json_object',
+          choice?.finish_reason,
+        );
+        if (text) {
+          this.logger.warn(
+            `NVIDIA NIM model="${model}" recovered final output from reasoning_content.`,
+          );
+        } else if (body.response_format) {
+          // Some compatible endpoints silently return 200 + empty content for
+          // unsupported JSON mode. Try once without it; callers still validate.
+          this.logger.warn(
+            `NVIDIA NIM model="${model}" returned no usable output; retrying once without response_format.`,
+          );
+          delete body.response_format;
+          continue;
+        } else {
+          throw providerFailure(
+            AiProvider.NVIDIA,
+            `empty response from model "${model}"${choice?.finish_reason === 'length' ? '; output token limit reached before a final answer' : ''}`,
+          );
+        }
+      }
+      return {
+        text,
+        tokensIn: numOrNull(data.usage?.prompt_tokens),
+        tokensOut: numOrNull(data.usage?.completion_tokens),
+      };
     }
-    return {
-      text,
-      tokensIn: numOrNull(data.usage?.prompt_tokens),
-      tokensOut: numOrNull(data.usage?.completion_tokens),
-    };
+  }
+
+  /**
+   * Compatibility recovery only, not a routing policy for thinking models.
+   * Never promote a truncated thought trace. JSON work needs a whole object;
+   * prose needs an explicit end-of-thinking boundary. Reuse the compiler's
+   * leakage lint before accepting either form, rather than new planning rules.
+   */
+  private nvidiaReasoningText(
+    raw: unknown,
+    jsonObject: boolean,
+    finishReason: unknown,
+  ): string {
+    if (typeof raw !== 'string' || finishReason === 'length') return '';
+    const hasAnswerBoundary = /<\/(?:think|thinking|analysis)\s*>/i.test(raw);
+    const text = raw
+      .replace(/<(think|thinking|analysis)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+      .replace(/^[\s\S]*<\/(?:think|thinking|analysis)\s*>/i, '')
+      .replace(/<(?:think|thinking|analysis)\b[^>]*>[\s\S]*$/gi, '')
+      .trim()
+      .replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1')
+      .trim();
+    if (!text || lintLeakage(text).leaked) return '';
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        (!jsonObject || !Array.isArray(parsed))
+      ) {
+        return text;
+      }
+    } catch {
+      // Free text is accepted only after an explicit final-answer boundary.
+    }
+    return !jsonObject && hasAnswerBoundary ? text : '';
   }
 
   private async geminiCompletion(

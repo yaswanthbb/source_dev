@@ -378,6 +378,55 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     expect(lastSave.status).toBe('succeeded_with_warnings');
   });
 
+  it('does not consume quota or publish when both NIM outline attempts exhaust tokens in reasoning', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: null,
+                  reasoning_content: 'I need to plan the outline.',
+                },
+                finish_reason: 'length',
+              },
+            ],
+            usage: {
+              completion_tokens: 800,
+              completion_tokens_details: { reasoning_tokens: 800 },
+            },
+          }),
+        ),
+      ),
+    );
+    const realClient = new AiProviderClients({
+      get: configGet,
+    } as unknown as ConfigService);
+    clients.complete.mockImplementation(
+      (...args: Parameters<AiProviderClients['complete']>) =>
+        realClient.complete(...args),
+    );
+    try {
+      await expect(
+        service.compileConcept(
+          baseInput as Parameters<AiGenerateService['compileConcept']>[0],
+        ),
+      ).rejects.toThrow('empty response');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(billableLogs()).toHaveLength(0);
+      expect(logRepo.save).not.toHaveBeenCalled();
+      expect(conceptsService.createConcept).not.toHaveBeenCalled();
+      expect(roadmapsService.attachConceptToModule).not.toHaveBeenCalled();
+      const saves = compilationRepo.save.mock.calls as Array<
+        [{ status: string }]
+      >;
+      expect(saves.at(-1)?.[0].status).toBe('failed');
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it('fails the concept when the outline references unknown builds_on ids', async () => {
     stagePayloads({
       outline: { ...OUTLINE, builds_on: ['ghost-id'] },
