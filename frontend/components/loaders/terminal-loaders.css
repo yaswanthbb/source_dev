@@ -3,6 +3,12 @@
    Extracted from the Stitch project's developer hero section design
    ========================================================================== */
 
+/* A legacy bridge must never cover a page after switching to GUI appearance. */
+html[data-ui-mode="gui"] #sd-minimal-terminal-overlay,
+html[data-ui-mode="gui"] #sd-centered-terminal-overlay {
+  display: none !important;
+}
+
 /* Terminal Grid Backgrounds */
 .terminal-loader-grid-dark {
   background-color: #0c0e10;

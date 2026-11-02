@@ -1,0 +1,65 @@
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  list-style: decimal;
+  padding-left: 20px;
+}
+.steps strong {
+  font-size: 13px;
+}
+.steps p {
+  margin: 10px 0 0;
+}
+.switcher {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 22px 0;
+}
+.switcher button[aria-pressed="true"] {
+  border-color: var(--gui-accent);
+  background: var(--gui-accent-soft);
+}
+.tableScroll {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--gui-border);
+  border-radius: 12px;
+}
+.tableScroll:focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+.tableScroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.tableScroll caption {
+  text-align: left;
+  padding: 16px;
+  color: var(--gui-muted);
+}
+.tableScroll :is(th, td) {
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--gui-border);
+  overflow-wrap: normal;
+}
+.tableScroll thead {
+  background: var(--gui-soft);
+}
+@media (max-width: 900px) {
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 650px) {
+  .tableScroll :is(th, td) {
+    padding: 10px 7px;
+    font-size: 10px;
+  }
+}

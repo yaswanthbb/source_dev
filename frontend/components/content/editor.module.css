@@ -1,0 +1,573 @@
+.page {
+  display: grid;
+  gap: 24px;
+  max-width: 1260px;
+  margin: 0 auto;
+}
+.page :is(h1, h2, h3, h4, p) {
+  margin: 0;
+}
+.page :is(button, a, input, summary) {
+  -webkit-tap-highlight-color: transparent;
+}
+.page :is(button, input, summary, a):focus-visible,
+.confirm:focus {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+.page :is(button, a) {
+  transition:
+    background 180ms,
+    border-color 180ms,
+    color 180ms;
+}
+.page button {
+  cursor: pointer;
+}
+.page button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.page p {
+  line-height: 1.65;
+}
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: var(--gui-muted);
+  font-size: 13px;
+}
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--gui-accent);
+}
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 40px;
+  padding: 10px 0 8px;
+  align-items: center;
+  animation: enter 500ms var(--gui-ease) both;
+}
+.eyebrow {
+  color: var(--gui-accent);
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.hero h1 {
+  font-size: clamp(30px, 3.4vw, 44px);
+  line-height: 1.16;
+  letter-spacing: -0.04em;
+  margin: 12px 0 16px;
+  overflow-wrap: anywhere;
+}
+.hero p:not(.eyebrow) {
+  max-width: 65ch;
+  color: var(--gui-muted);
+  font-size: 15px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+.primary,
+.secondary,
+.detach {
+  min-height: 44px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-radius: 24px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+.primary {
+  color: var(--gui-on-primary);
+  background: var(--gui-primary);
+}
+.primary:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+.secondary {
+  color: var(--gui-ink);
+  background: var(--gui-surface);
+  border-color: var(--gui-border);
+}
+.secondary:hover:not(:disabled),
+.detach:hover:not(:disabled) {
+  background: var(--gui-accent-soft);
+  border-color: var(--gui-accent);
+}
+.detach {
+  color: var(--gui-muted);
+  background: transparent;
+  padding: 10px;
+  font-size: 12px;
+}
+.motif {
+  width: 100%;
+  color: var(--gui-accent);
+}
+.motif rect {
+  fill: var(--gui-accent-soft);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.draw {
+  stroke-dasharray: 560;
+  stroke-dashoffset: 560;
+  animation: draw 900ms var(--gui-ease) 160ms forwards;
+}
+.checkbar {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  border-block: 1px solid var(--gui-border);
+  padding: 14px 0;
+  font-size: 12px;
+  color: var(--gui-muted);
+}
+.checkbar button {
+  flex-shrink: 0;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 28px;
+}
+.outline {
+  min-width: 0;
+}
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.sectionHeading h2,
+.newModule h2,
+.review h2 {
+  font-size: 21px;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  margin-top: 8px;
+}
+.sectionHeading > span {
+  color: var(--gui-muted);
+  font-size: 12px;
+}
+.modules {
+  display: grid;
+  gap: 18px;
+}
+.module {
+  background: var(--gui-surface);
+  border: 1px solid var(--gui-border);
+  border-radius: var(--gui-radius);
+  min-width: 0;
+}
+.moduleHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border-bottom: 1px solid var(--gui-border);
+}
+.moduleHead > div {
+  flex: 1;
+  min-width: 0;
+}
+.moduleHead h3 {
+  font-size: 17px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.moduleHead p {
+  font-size: 12px;
+  color: var(--gui-muted);
+  margin-top: 3px;
+}
+.number {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--gui-accent-soft);
+  color: var(--gui-accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+.lessons {
+  list-style: none;
+  padding: 0 20px;
+  margin: 0;
+}
+.lessons li {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--gui-border);
+}
+.lessons li:first-child {
+  border-top: 0;
+}
+.lessons li > svg {
+  flex-shrink: 0;
+  color: var(--gui-accent);
+  margin-top: 13px;
+}
+.lessonInfo {
+  flex: 1;
+  min-width: 0;
+}
+.lessonInfo > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--gui-ink);
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.lessonInfo > a > svg {
+  flex-shrink: 0;
+  color: var(--gui-muted);
+}
+.lessonInfo > a:hover {
+  color: var(--gui-accent);
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--gui-muted);
+}
+.lessonInfo details {
+  font-size: 12px;
+  color: var(--gui-muted);
+  margin-top: 8px;
+}
+.lessonInfo summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.lessonInfo details p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.moduleEmpty {
+  padding: 20px;
+  font-size: 13px;
+  color: var(--gui-muted);
+}
+.attach {
+  background: var(--gui-soft);
+  border-radius: 0 0 20px 20px;
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+}
+.attach h4 {
+  font-size: 15px;
+}
+.attach p {
+  color: var(--gui-muted);
+  font-size: 12px;
+}
+.page form {
+  display: grid;
+  gap: 10px;
+}
+.page label {
+  font-size: 13px;
+  font-weight: 650;
+}
+.page input {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid var(--gui-border);
+  border-radius: 12px;
+  background: var(--gui-surface);
+  color: var(--gui-ink);
+  padding: 12px;
+  font-size: 14px;
+}
+.page input::placeholder {
+  color: var(--gui-muted);
+}
+.page input[aria-invalid="true"] {
+  border-color: var(--gui-accent);
+}
+.inputRow {
+  display: flex;
+  gap: 10px;
+  align-items: start;
+}
+.inputRow button {
+  flex-shrink: 0;
+}
+.results {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.results li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--gui-border);
+  background: var(--gui-surface);
+}
+.results li > div {
+  min-width: 0;
+  flex: 1;
+}
+.results strong {
+  display: block;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.results span {
+  display: block;
+  font-size: 11px;
+  color: var(--gui-muted);
+  margin-top: 5px;
+}
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  color: var(--gui-accent);
+  font-size: 12px;
+}
+.newModule {
+  margin-top: 24px;
+  padding: 24px;
+  background: var(--gui-accent-soft);
+  border: 1px solid var(--gui-border);
+  border-radius: var(--gui-radius);
+}
+.newModule > p:not(.eyebrow) {
+  font-size: 13px;
+  color: var(--gui-muted);
+  margin: 12px 0 20px;
+}
+.hint {
+  color: var(--gui-muted);
+  font-size: 12px;
+}
+.fieldError {
+  color: var(--gui-accent);
+  font-size: 12px;
+}
+.review {
+  background: var(--gui-surface);
+  border: 1px solid var(--gui-border);
+  padding: 24px;
+  border-radius: var(--gui-radius);
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.review h2 {
+  margin-top: -8px;
+}
+.review h3 {
+  font-size: 14px;
+}
+.review p,
+.issues {
+  color: var(--gui-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.review .badge {
+  justify-self: start;
+  color: var(--gui-accent);
+  background: var(--gui-accent-soft);
+  border-radius: 20px;
+  padding: 7px 12px;
+  font-weight: 650;
+  font-size: 12px;
+}
+.reviewCounts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-block: 1px solid var(--gui-border);
+  padding: 16px 0;
+  gap: 16px;
+}
+.reviewCounts strong {
+  display: block;
+  font-size: 25px;
+  font-weight: 650;
+}
+.reviewCounts span {
+  color: var(--gui-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.issues {
+  padding-left: 18px;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  line-height: 1.55;
+}
+.review .ready {
+  color: var(--gui-accent);
+}
+.empty {
+  padding: 40px 24px;
+  border: 1px dashed var(--gui-border);
+  border-radius: var(--gui-radius);
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+}
+.empty > svg {
+  color: var(--gui-accent);
+}
+.empty h3 {
+  font-size: 19px;
+}
+.empty p {
+  color: var(--gui-muted);
+  font-size: 14px;
+  max-width: 50ch;
+}
+.confirm {
+  padding: 24px;
+  border: 1px solid var(--gui-accent);
+  background: var(--gui-accent-soft);
+  border-radius: var(--gui-radius);
+  scroll-margin-top: 24px;
+}
+.confirm h2 {
+  font-size: 19px;
+  margin-bottom: 10px;
+}
+.confirm p {
+  font-size: 14px;
+  max-width: 65ch;
+  overflow-wrap: anywhere;
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (max-width: 1150px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review {
+    max-width: none;
+  }
+}
+@media (max-width: 650px) {
+  .page {
+    gap: 20px;
+  }
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .motif {
+    width: 145px;
+    justify-self: end;
+    margin-top: -8px;
+  }
+  .checkbar {
+    align-items: start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .moduleHead {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    padding: 16px;
+  }
+  .moduleHead > button {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .lessons {
+    padding: 0 16px;
+  }
+  .lessons li {
+    flex-wrap: wrap;
+  }
+  .detach {
+    margin-left: 29px;
+  }
+  .newModule,
+  .review,
+  .attach {
+    padding: 20px;
+  }
+  .inputRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .inputRow button {
+    align-self: start;
+  }
+  .sectionHeading {
+    align-items: start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .page * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .draw {
+    stroke-dashoffset: 0;
+  }
+}

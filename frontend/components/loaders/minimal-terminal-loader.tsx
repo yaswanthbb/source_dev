@@ -372,6 +372,7 @@ function preserveMinimalLoader(
   isDark: boolean
 ) {
   if (typeof document === 'undefined') return;
+  if (document.documentElement.dataset.uiMode === 'gui') return;
   if (typeof window !== 'undefined') {
     try {
       const val = sessionStorage.getItem('sd_just_logged_in');
@@ -402,6 +403,10 @@ function preserveMinimalLoader(
   let lastSpinnerTime = Date.now();
 
   const tickBridge = () => {
+    if (!overlay.isConnected || document.documentElement.dataset.uiMode === 'gui') {
+      overlay.remove();
+      return;
+    }
     const elapsed = Date.now() - startTime;
     if (elapsed < targetMin) {
       const ratio = Math.min(1, elapsed / targetMin);

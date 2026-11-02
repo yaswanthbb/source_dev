@@ -1,0 +1,326 @@
+.page {
+  animation: arrive 350ms var(--gui-ease) both;
+}
+.header {
+  margin: 24px 0 32px;
+  max-width: 760px;
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font:
+    11px/1.5 var(--font-geist-mono),
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gui-muted);
+}
+.header h1 {
+  margin: 12px 0;
+  font-size: clamp(30px, 3vw, 44px);
+  line-height: 1.14;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.header > p:last-child {
+  color: var(--gui-muted);
+  line-height: 1.7;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 32px;
+  align-items: start;
+  max-width: 1100px;
+}
+.main {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+.question {
+  padding: 32px;
+  border: 1px solid var(--gui-border);
+  border-radius: 22px;
+  background: var(--gui-surface);
+}
+.question h2 {
+  font-size: clamp(21px, 2vw, 27px);
+  line-height: 1.45;
+  letter-spacing: -0.025em;
+  margin: 16px 0 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.hint {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--gui-muted);
+  margin: 12px 0 20px;
+}
+.question form {
+  display: grid;
+  gap: 16px;
+}
+.question form > button {
+  justify-self: start;
+}
+.question fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.options {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--gui-border);
+  border-radius: 14px;
+  min-height: 64px;
+  cursor: pointer;
+  transition:
+    background 180ms var(--gui-ease),
+    border-color 180ms var(--gui-ease);
+}
+.option:hover,
+.option[data-selected],
+.option[data-correct] {
+  background: var(--gui-accent-soft);
+  border-color: var(--gui-accent);
+}
+.option:focus-within {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 3px;
+}
+.option input {
+  accent-color: var(--gui-accent);
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+.option > span:last-child {
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.optionIndex {
+  font: 12px/1 monospace;
+  color: var(--gui-muted);
+}
+.option small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--gui-accent);
+  margin-top: 8px;
+}
+.question fieldset:disabled .option {
+  cursor: default;
+}
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.summary {
+  border-left: 1px solid var(--gui-border);
+  padding: 8px 0 8px 24px;
+  overflow-wrap: anywhere;
+}
+.summary h2 {
+  font-size: 44px;
+  letter-spacing: -0.05em;
+  margin: 14px 0 0;
+}
+.summary h2 span {
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--gui-muted);
+}
+.summary > p:nth-of-type(2) {
+  color: var(--gui-muted);
+  font-size: 12px;
+  margin: 4px 0 20px;
+}
+.summary progress {
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--gui-soft);
+  accent-color: var(--gui-accent);
+}
+.summary progress::-webkit-progress-bar {
+  background: var(--gui-soft);
+  border-radius: 4px;
+}
+.summary progress::-webkit-progress-value {
+  background: var(--gui-accent);
+  border-radius: 4px;
+}
+.summary progress::-moz-progress-bar {
+  background: var(--gui-accent);
+  border-radius: 4px;
+}
+.correctCount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 16px 0;
+}
+.questionList {
+  display: grid;
+  gap: 4px;
+  margin: 24px 0;
+}
+.questionList button {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 12px;
+  min-height: 56px;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.questionList button > span:nth-child(2) {
+  flex: 1;
+}
+.questionList button small {
+  display: block;
+  color: var(--gui-muted);
+  font-size: 10px;
+  margin-top: 4px;
+}
+.questionList button[aria-current],
+.questionList button:hover {
+  border-color: var(--gui-border);
+  background: var(--gui-surface);
+}
+.questionList button[aria-current] > span:first-child {
+  color: var(--gui-accent);
+}
+.refresh {
+  display: block;
+  min-height: 44px;
+  color: var(--gui-accent);
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.returnLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 12px;
+  color: var(--gui-ink);
+}
+.returnLink:hover {
+  color: var(--gui-accent);
+}
+.summary > a {
+  display: flex;
+  margin-top: 4px;
+}
+.empty {
+  padding: 48px 32px;
+  border: 1px solid var(--gui-border);
+  border-radius: 22px;
+  background: var(--gui-surface);
+}
+.empty h2 {
+  font-size: 26px;
+  margin: 20px 0 12px;
+}
+.empty p {
+  color: var(--gui-muted);
+  line-height: 1.8;
+  margin-bottom: 24px;
+}
+.emptyIcon {
+  display: inline-flex;
+  padding: 18px;
+  color: var(--gui-accent);
+  border-radius: 18px;
+  background: var(--gui-accent-soft);
+}
+.page button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 950px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .summary {
+    border-left: 0;
+    border-top: 1px solid var(--gui-border);
+    padding: 24px 0 0;
+  }
+  .questionList {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .question {
+    padding: 22px 16px;
+  }
+  .option {
+    gap: 10px;
+    padding: 16px 12px;
+  }
+  .header {
+    margin: 20px 0 24px;
+  }
+  .empty {
+    padding: 28px 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+  .option {
+    transition: none;
+  }
+}

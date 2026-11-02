@@ -78,7 +78,7 @@ interface UiModeContextValue {
   /** True until the stored preferences have been read, so a consumer can hold
    *  off on a one-time animation rather than play it against a default. */
   ready: boolean;
-  setMode: (mode: UiMode) => void;
+  setMode: (mode: UiMode, options?: { navigate?: boolean }) => void;
   toggleMode: () => void;
   /** Record a move. The CLI calls this on every `cd`; it is the only writer of
    *  the user's position. */
@@ -124,7 +124,10 @@ export function UiModeProvider({ children }: { children: React.ReactNode }) {
    *  update rather than a guess racing the fetch. */
   const synced = useRef(false);
 
-  const role = (getUser()?.role ?? "developer") as Role;
+  // The active shell, not the account role, selects the terminal registry.
+  const role: Role = pathname.startsWith("/developer/")
+    ? "developer"
+    : ((getUser()?.role ?? "developer") as Role);
 
   // ─── Local read, synchronous, first paint ────────────────────────────────
   useEffect(() => {
@@ -198,7 +201,11 @@ export function UiModeProvider({ children }: { children: React.ReactNode }) {
   // browser navigation authoritative over our own state.
   const paramPath = searchParams.get(PATH_PARAM);
   useEffect(() => {
-    if (mode !== "cli") return;
+    if (
+      mode !== "cli" ||
+      !["/developer/terminal", "/admin/terminal"].includes(pathname)
+    )
+      return;
     const fromUrl = fromCliParam(paramPath);
     if (fromUrl && !sameLocation(fromUrl, location)) {
       setLocationState(fromUrl);
@@ -207,7 +214,7 @@ export function UiModeProvider({ children }: { children: React.ReactNode }) {
     // `location` is deliberately not a dependency: this effect exists to let
     // the URL drive state, and including it would make the two fight.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, paramPath]);
+  }, [mode, paramPath, pathname]);
 
   const setLocation = useCallback(
     (next: Location) => {
@@ -234,10 +241,14 @@ export function UiModeProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setMode = useCallback(
-    (next: UiMode) => {
+    (next: UiMode, options?: { navigate?: boolean }) => {
       setModeState(next);
       writeLocal(MODE_KEY, next);
       pushRemote({ uiMode: next });
+
+      // Public appearance controls can persist a preference without sending
+      // guests into an authenticated workspace. Existing callers still navigate.
+      if (options?.navigate === false) return;
 
       if (next === "cli") {
         // Resume exactly where they were, including the deep locations GUI

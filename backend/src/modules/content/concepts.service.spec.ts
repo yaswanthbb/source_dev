@@ -1,10 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 
 import { ConceptsService } from './concepts.service';
 import { Concept } from './entities/concept.entity';
 import { ModuleConcept } from './entities/module-concept.entity';
+import { ConceptMedia } from '../ai-generate/entities/concept-media.entity';
 
 import { UserRole } from '../../common/enums/user-role.enum';
 import { ConceptReviewStatus } from '../../common/enums/concept-review-status.enum';
@@ -21,6 +26,7 @@ describe('ConceptsService', () => {
   let service: ConceptsService;
   let conceptRepo: MockRepository;
   let moduleConceptRepo: MockRepository;
+  let mediaRepo: MockRepository;
 
   const owner = makeUser({ id: 'author-1', role: UserRole.DEVELOPER });
   const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
@@ -41,12 +47,18 @@ describe('ConceptsService', () => {
           provide: getRepositoryToken(ModuleConcept),
           useValue: createMockRepository(),
         },
+        {
+          provide: getRepositoryToken(ConceptMedia),
+          useValue: createMockRepository(),
+        },
       ],
     }).compile();
 
     service = module.get(ConceptsService);
     conceptRepo = module.get(getRepositoryToken(Concept));
     moduleConceptRepo = module.get(getRepositoryToken(ModuleConcept));
+    mediaRepo = module.get(getRepositoryToken(ConceptMedia));
+    mediaRepo.find.mockResolvedValue([]);
     // Default: no published placements (not live). Draft/live tests override.
     moduleConceptRepo.createQueryBuilder.mockReturnValue(
       createMockQueryBuilder({ one: undefined }),
@@ -54,6 +66,46 @@ describe('ConceptsService', () => {
   });
 
   afterEach(() => jest.clearAllMocks());
+
+  describe('findConceptById — reader media', () => {
+    it('returns ordered media presentation fields for the visible concept only', async () => {
+      conceptRepo.findOne.mockResolvedValue(makeConcept());
+      moduleConceptRepo.find.mockResolvedValue([]);
+      mediaRepo.find.mockResolvedValue([
+        {
+          id: 'media-1',
+          conceptId: 'concept-1',
+          kind: 'diagram',
+          payload: { diagramId: 'branch', mermaid: 'flowchart LR\nA-->B' },
+          license: 'original-generated',
+          internalField: 'not returned',
+        },
+      ]);
+      const result = await service.findConceptById('concept-1', owner);
+      expect(mediaRepo.find).toHaveBeenCalledWith({
+        where: { conceptId: 'concept-1' },
+        order: { createdAt: 'ASC', id: 'ASC' },
+      });
+      expect(result.media).toEqual([
+        {
+          id: 'media-1',
+          kind: 'diagram',
+          payload: { diagramId: 'branch', mermaid: 'flowchart LR\nA-->B' },
+          license: 'original-generated',
+        },
+      ]);
+    });
+    it('does not query or expose media for a hidden concept', async () => {
+      conceptRepo.findOne.mockResolvedValue(
+        makeConcept({ reviewStatus: ConceptReviewStatus.PENDING }),
+      );
+      moduleConceptRepo.find.mockResolvedValue([]);
+      await expect(
+        service.findConceptById('concept-1', otherDeveloper),
+      ).rejects.toThrow(NotFoundException);
+      expect(mediaRepo.find).not.toHaveBeenCalled();
+    });
+  });
 
   const approvedConcept = (overrides = {}) =>
     makeConcept({
@@ -107,11 +159,9 @@ describe('ConceptsService', () => {
       );
 
       await expect(
-        service.updateConcept(
-          'concept-1',
-          otherDeveloper,
-          { content: 'x' } as any,
-        ),
+        service.updateConcept('concept-1', otherDeveloper, {
+          content: 'x',
+        } as any),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -299,12 +349,24 @@ describe('ConceptsService', () => {
     beforeEach(() => {
       conceptRepo.find
         .mockResolvedValueOnce([
-          makeConcept({ id: 'c-ai', authorId: 'someone-else', isAiGenerated: true, reviewStatus: ConceptReviewStatus.APPROVED }),
-          makeConcept({ id: 'c-hand', authorId: 'someone-else', isAiGenerated: false, reviewStatus: ConceptReviewStatus.APPROVED }),
+          makeConcept({
+            id: 'c-ai',
+            authorId: 'someone-else',
+            isAiGenerated: true,
+            reviewStatus: ConceptReviewStatus.APPROVED,
+          }),
+          makeConcept({
+            id: 'c-hand',
+            authorId: 'someone-else',
+            isAiGenerated: false,
+            reviewStatus: ConceptReviewStatus.APPROVED,
+          }),
         ])
         .mockResolvedValueOnce([]);
       moduleConceptRepo.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({ rawMany: [{ conceptId: 'c-ai' }, { conceptId: 'c-hand' }] }),
+        createMockQueryBuilder({
+          rawMany: [{ conceptId: 'c-ai' }, { conceptId: 'c-hand' }],
+        }),
       );
     });
 

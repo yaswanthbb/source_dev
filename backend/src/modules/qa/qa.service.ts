@@ -10,7 +10,7 @@ import { Answer } from './entities/answer.entity';
 import { Concept } from '../content/entities/concept.entity';
 import { ModuleConcept } from '../content/entities/module-concept.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { canSeeConcept } from '../content/utils/visibility.util';
+import { canSeeConcept, canSeeRoadmap } from '../content/utils/visibility.util';
 import { User } from '../users/entities/user.entity';
 import { AiGenerateService } from '../ai-generate/ai-generate.service';
 import { CreateQaQuestionDto } from './dto/create-qa-question.dto';
@@ -31,6 +31,28 @@ export class QaService {
     private readonly moduleConceptRepository: Repository<ModuleConcept>,
     private readonly aiGenerateService: AiGenerateService,
   ) {}
+
+  private canSeeQuestion(
+    question: Question,
+    user?: Omit<User, 'passwordHash'>,
+  ): boolean {
+    return (
+      question.target === 'discussion' ||
+      (question.target === 'ai' &&
+        !!user &&
+        (user.role === UserRole.ADMIN || question.askerId === user.id))
+    );
+  }
+
+  private checkQuestionVisible(
+    question: Question | null | undefined,
+    user: Omit<User, 'passwordHash'>,
+  ): asserts question is Question {
+    // The same 404 for missing, private and malformed records prevents ID probes.
+    if (!question || !this.canSeeQuestion(question, user)) {
+      throw new NotFoundException('Question not found');
+    }
+  }
 
   private checkOwnership(
     ownerId: string | null | undefined,
@@ -55,7 +77,7 @@ export class QaService {
    */
   private async checkConceptVisible(
     concept: Concept,
-    user: Omit<User, 'passwordHash'>,
+    user: Omit<User, 'passwordHash'> | undefined,
   ): Promise<void> {
     const placements = await this.moduleConceptRepository.find({
       where: { conceptId: concept.id },
@@ -65,7 +87,10 @@ export class QaService {
       !canSeeConcept(
         concept,
         placements.map((mc) => ({
-          roadmapReviewStatus: mc.module?.roadmap?.reviewStatus ?? null,
+          roadmapReviewStatus:
+            mc.module?.roadmap && canSeeRoadmap(mc.module.roadmap, undefined)
+              ? mc.module.roadmap.reviewStatus
+              : null,
         })),
         user,
       )
@@ -88,11 +113,7 @@ export class QaService {
     const concept = await this.conceptRepository.findOne({
       where: { id: conceptId },
     });
-    if (
-      !concept ||
-      concept.authorId === null ||
-      concept.authorId !== user.id
-    ) {
+    if (!concept || concept.authorId === null || concept.authorId !== user.id) {
       throw new ForbiddenException(
         'Only the concept author or an admin can verify answers',
       );
@@ -116,12 +137,13 @@ export class QaService {
       conceptId,
       askerId: user.id,
       body: dto.body,
+      target: dto.target ?? 'discussion',
     });
     const savedQuestion = await this.questionRepository.save(question);
 
-    // "Ask AI" is private: the generated answer is visible only to the asking
-    // developer (see getQuestionsForConcept), never in the public discussion.
-    if (dto.target === 'ai') {
+    // Privacy was saved BEFORE any provider/quota error can occur. Do not retry
+    // generation automatically: a request may already have been billed.
+    if (savedQuestion.target === 'ai') {
       const aiAnswerText = await this.aiGenerateService.generateQaAnswer(
         concept.title,
         concept.content,
@@ -146,65 +168,74 @@ export class QaService {
   async getQuestionsForConcept(
     conceptId: string,
     user?: Omit<User, 'passwordHash'> | User,
-  ): Promise<any[]> {
+  ) {
     const concept = await this.conceptRepository.findOne({
       where: { id: conceptId },
     });
     if (!concept) {
       throw new NotFoundException('Concept not found');
     }
-    if (user) {
-      await this.checkConceptVisible(concept, user);
-    }
+    await this.checkConceptVisible(concept, user);
 
     const questions = await this.questionRepository.find({
-      where: { conceptId },
+      where:
+        user?.role === UserRole.ADMIN
+          ? { conceptId }
+          : [
+              { conceptId, target: 'discussion' },
+              ...(user
+                ? [{ conceptId, target: 'ai' as const, askerId: user.id }]
+                : []),
+            ],
       relations: ['asker', 'answers', 'answers.responder'],
       order: { createdAt: 'ASC' },
     });
 
-    // AI answers are private to the developer who asked (admins excepted).
-    // Everyone else sees only the human discussion.
+    // Defensive reply redaction also protects a malformed public thread that
+    // contains an AI reply. Normal AI threads are excluded in their entirety.
     const canSeeAiAnswer = (q: Question): boolean => {
       if (!user) return false;
       if (user.role === UserRole.ADMIN) return true;
       return q.askerId === user.id;
     };
 
-    return questions.map((q) => {
-      const visibleAnswers = (q.answers || []).filter(
-        (a) => !a.isAiAnswer || canSeeAiAnswer(q),
-      );
-      // Verified answers first, then oldest-first within each group.
-      const sortedAnswers = visibleAnswers.sort(
-        (a, b) =>
-          Number(b.isVerified) - Number(a.isVerified) ||
-          a.createdAt.getTime() - b.createdAt.getTime(),
-      );
+    return questions
+      .filter((q) => this.canSeeQuestion(q, user))
+      .map((q) => {
+        const visibleAnswers = (q.answers || []).filter(
+          (a) => !a.isAiAnswer || canSeeAiAnswer(q),
+        );
+        // Verified answers first, then oldest-first within each group.
+        const sortedAnswers = visibleAnswers.sort(
+          (a, b) =>
+            Number(b.isVerified) - Number(a.isVerified) ||
+            a.createdAt.getTime() - b.createdAt.getTime(),
+        );
 
-      return {
-        id: q.id,
-        conceptId: q.conceptId,
-        askerId: q.askerId,
-        askerName: q.asker?.name || null,
-        body: q.body,
-        createdAt: q.createdAt,
-        updatedAt: q.updatedAt,
-        answers: sortedAnswers.map((ans) => ({
-          id: ans.id,
-          questionId: ans.questionId,
-          responderId: ans.responderId,
-          responderName: ans.isAiAnswer
-            ? 'AI Assistant'
-            : ans.responder?.name || null,
-          isAiAnswer: Boolean(ans.isAiAnswer),
-          isVerified: Boolean(ans.isVerified),
-          body: ans.body,
-          createdAt: ans.createdAt,
-          updatedAt: ans.updatedAt,
-        })),
-      };
-    });
+        return {
+          id: q.id,
+          conceptId: q.conceptId,
+          askerId: q.askerId,
+          askerName: q.asker?.name || null,
+          body: q.body,
+          target: q.target,
+          createdAt: q.createdAt,
+          updatedAt: q.updatedAt,
+          answers: sortedAnswers.map((ans) => ({
+            id: ans.id,
+            questionId: ans.questionId,
+            responderId: ans.responderId,
+            responderName: ans.isAiAnswer
+              ? 'AI Assistant'
+              : ans.responder?.name || null,
+            isAiAnswer: Boolean(ans.isAiAnswer),
+            isVerified: Boolean(ans.isVerified),
+            body: ans.body,
+            createdAt: ans.createdAt,
+            updatedAt: ans.updatedAt,
+          })),
+        };
+      });
   }
 
   async updateQuestion(
@@ -216,9 +247,7 @@ export class QaService {
       where: { id },
       relations: ['answers'],
     });
-    if (!question) {
-      throw new NotFoundException('Question not found');
-    }
+    this.checkQuestionVisible(question, user);
     this.checkOwnership(question.askerId, user);
 
     // Any existing answer freezes the question: editing would orphan the
@@ -245,9 +274,7 @@ export class QaService {
     const question = await this.questionRepository.findOne({
       where: { id },
     });
-    if (!question) {
-      throw new NotFoundException('Question not found');
-    }
+    this.checkQuestionVisible(question, user);
     this.checkOwnership(question.askerId, user);
 
     await this.questionRepository.remove(question);
@@ -262,8 +289,11 @@ export class QaService {
       where: { id: questionId },
       relations: ['concept'],
     });
-    if (!question) {
-      throw new NotFoundException('Question not found');
+    this.checkQuestionVisible(question, user);
+    if (question.target === 'ai') {
+      throw new ForbiddenException(
+        'Private Ask AI threads do not accept discussion replies',
+      );
     }
     if (!question.concept) {
       throw new NotFoundException('Concept not found');
@@ -298,10 +328,12 @@ export class QaService {
   ): Promise<Answer> {
     const answer = await this.answerRepository.findOne({
       where: { id },
+      relations: ['question'],
     });
     if (!answer) {
       throw new NotFoundException('Answer not found');
     }
+    this.checkQuestionVisible(answer.question, user);
     this.checkOwnership(answer.responderId, user);
 
     answer.body = dto.body;
@@ -314,10 +346,12 @@ export class QaService {
   ): Promise<void> {
     const answer = await this.answerRepository.findOne({
       where: { id },
+      relations: ['question'],
     });
     if (!answer) {
       throw new NotFoundException('Answer not found');
     }
+    this.checkQuestionVisible(answer.question, user);
     this.checkOwnership(answer.responderId, user);
 
     await this.answerRepository.remove(answer);
@@ -335,6 +369,7 @@ export class QaService {
     if (!answer) {
       throw new NotFoundException('Answer not found');
     }
+    this.checkQuestionVisible(answer.question, user);
     if (answer.isAiAnswer) {
       throw new ForbiddenException('AI answers cannot be verified');
     }

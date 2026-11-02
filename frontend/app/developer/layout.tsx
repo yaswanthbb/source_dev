@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AUTH_CHANGED_EVENT, getToken } from "@/lib/auth";
 import { clearTerminalSessions } from "@/lib/terminal/session";
-import { MinimalTerminalLoader } from "@/components/loaders/minimal-terminal-loader";
+import { ModeAwareLoader } from "@/components/loaders/mode-aware-loader";
 import "./dashboard/terminal-dashboard.css";
 
 /** Auth guard only. Every developer surface — the dashboard and the terminal —
@@ -46,7 +46,9 @@ export default function DeveloperAppShellLayout({
   }, []);
   if (!isAuthChecked || !isLoaderDone)
     return (
-      <MinimalTerminalLoader
+      <ModeAwareLoader
+        guiTitle="Preparing your workspace"
+        guiDescription="Checking access to your account."
         minDuration={2000}
         isAsyncComplete={isAuthChecked}
         onComplete={() => setIsLoaderDone(true)}

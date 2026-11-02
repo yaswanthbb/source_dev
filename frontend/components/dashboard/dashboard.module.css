@@ -1,0 +1,767 @@
+.dashboard {
+  display: grid;
+  gap: 28px;
+}
+.welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 4px;
+  animation: enter 450ms var(--gui-ease) both;
+}
+.eyebrow {
+  margin: 0 0 12px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1.7px;
+  color: var(--gui-muted);
+  font-weight: 550;
+}
+.welcome h1 {
+  font-family: var(--font-space-grotesk), var(--font-inter), sans-serif;
+  font-size: clamp(26px, 2.7vw, 38px);
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -1.3px;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.welcome > div > p:last-child {
+  color: var(--gui-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+.secondaryLink,
+.primaryLink,
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    background 180ms,
+    color 180ms;
+}
+.secondaryLink {
+  padding: 10px 18px;
+  border: 1px solid var(--gui-border);
+  border-radius: 24px;
+  color: var(--gui-ink);
+  background: var(--gui-surface);
+  flex-shrink: 0;
+}
+.primaryLink {
+  padding: 12px 20px;
+  border-radius: 24px;
+  background: var(--gui-primary);
+  color: var(--gui-on-primary);
+  width: fit-content;
+  margin-top: 14px;
+}
+.primaryLink:hover {
+  background: var(--gui-ink);
+  color: var(--gui-bg);
+}
+.secondaryLink:hover {
+  background: var(--gui-soft);
+}
+.textLink {
+  color: var(--gui-accent);
+  width: fit-content;
+}
+.textLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.cli {
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.primaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.panel {
+  min-width: 0;
+  padding: 28px;
+  background: var(--gui-surface);
+  border: 1px solid var(--gui-border);
+  border-radius: 20px;
+}
+.panel h2,
+.roadmapsSection h2 {
+  margin: 0;
+  font-family: var(--font-space-grotesk), var(--font-inter), sans-serif;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.7px;
+  line-height: 1.3;
+}
+.continueCard {
+  position: relative;
+  overflow: hidden;
+  background: var(--gui-accent-soft);
+  padding: 32px;
+  min-height: 288px;
+  animation: enter 500ms 80ms var(--gui-ease) both;
+}
+.continueContent {
+  position: relative;
+  z-index: 1;
+  max-width: 70%;
+}
+.continueContent > h2 {
+  margin-bottom: 18px;
+  font-size: 26px;
+}
+.continueContent h3 {
+  margin: 12px 0 10px;
+  font-size: 17px;
+  font-weight: 550;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.continueContent p:not(.eyebrow) {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+}
+.tag {
+  display: inline-block;
+  padding: 5px 9px;
+  border: 1px solid var(--gui-border);
+  border-radius: 7px;
+  color: var(--gui-muted);
+  background: var(--gui-surface);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.learningPath {
+  position: absolute;
+  right: -26px;
+  top: 18px;
+  width: 250px;
+  height: 230px;
+  color: var(--gui-accent);
+  pointer-events: none;
+  opacity: 0.8;
+  transform: rotate(-12deg);
+}
+.learningPath svg {
+  width: 100%;
+}
+.pathMark {
+  position: absolute;
+  top: 64px;
+  left: 113px;
+  transform: rotate(9deg);
+}
+.pathMark svg {
+  width: 58px;
+}
+.pathLabel {
+  position: absolute;
+  top: 196px;
+  left: 57px;
+  color: var(--gui-muted);
+  font-family: monospace;
+  font-size: 8px;
+  letter-spacing: 0.6px;
+}
+.reviewCard {
+  animation: enter 500ms 150ms var(--gui-ease) both;
+}
+.reviewHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--gui-accent);
+  margin-bottom: 18px;
+}
+.reviewHeading .eyebrow {
+  margin: 0;
+}
+.reviewNumber {
+  font-size: 48px;
+  letter-spacing: -2px;
+  line-height: 1;
+  margin-top: 25px;
+  font-weight: 500;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.reviewNumber span {
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--gui-muted);
+}
+.reviewCard p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--gui-muted);
+  margin: 13px 0 8px;
+}
+.reviewCard .reviewNote {
+  font-size: 10px;
+  margin-block: 5px;
+}
+.handoffNote {
+  margin: -12px 0 -6px;
+  color: var(--gui-muted);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--gui-border);
+  border-radius: 16px;
+  background: var(--gui-surface);
+}
+.metric {
+  position: relative;
+  min-width: 0;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.metric + .metric {
+  border-left: 1px solid var(--gui-border);
+}
+.metricIcon {
+  position: absolute;
+  top: 22px;
+  right: 20px;
+  color: var(--gui-accent);
+}
+.metricLabel {
+  font-size: 10px;
+  color: var(--gui-muted);
+  padding-right: 16px;
+}
+.metric strong {
+  font-size: clamp(20px, 2.5vw, 30px);
+  font-weight: 500;
+  letter-spacing: -0.8px;
+  overflow-wrap: anywhere;
+}
+.metricDetail {
+  font-size: 9px;
+  color: var(--gui-muted);
+}
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.sectionHeader .eyebrow {
+  margin-bottom: 8px;
+}
+.sectionHeader > svg {
+  color: var(--gui-accent);
+}
+.muted {
+  font-size: 12px;
+  color: var(--gui-muted);
+  line-height: 1.8;
+}
+.muted strong {
+  color: var(--gui-ink);
+  font-weight: 600;
+}
+.activityScroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 18px 0 12px;
+  scrollbar-width: thin;
+}
+.heatmap {
+  display: flex;
+  gap: 4px;
+  width: max-content;
+  min-width: 100%;
+}
+.week {
+  display: grid;
+  grid-template-rows: repeat(7, 11px);
+  gap: 4px;
+  flex: 1;
+  min-width: 11px;
+}
+.week span,
+.legend span {
+  border-radius: 2px;
+  background: transparent;
+  height: 11px;
+}
+.week [data-level="0"],
+.legend [data-level="0"] {
+  background: var(--gui-soft);
+}
+.week [data-level="1"],
+.legend [data-level="1"] {
+  background: color-mix(in srgb, var(--gui-accent) 26%, var(--gui-surface));
+}
+.week [data-level="2"],
+.legend [data-level="2"] {
+  background: color-mix(in srgb, var(--gui-accent) 48%, var(--gui-surface));
+}
+.week [data-level="3"],
+.legend [data-level="3"] {
+  background: color-mix(in srgb, var(--gui-accent) 72%, var(--gui-surface));
+}
+.week [data-level="4"],
+.legend [data-level="4"] {
+  background: var(--gui-accent);
+}
+.activityFooter {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--gui-muted);
+  margin-top: 6px;
+}
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend span {
+  width: 11px;
+}
+.activityData,
+.allBadges {
+  margin-top: 16px;
+  color: var(--gui-muted);
+  font-size: 11px;
+}
+.activityData summary,
+.allBadges summary {
+  cursor: pointer;
+  min-height: 32px;
+  padding-block: 8px;
+  width: fit-content;
+}
+.tableScroll {
+  max-height: 260px;
+  overflow: auto;
+}
+.tableScroll table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 11px;
+}
+.tableScroll caption {
+  text-align: left;
+  padding-block: 12px;
+}
+.tableScroll th,
+.tableScroll td {
+  text-align: left;
+  padding: 9px;
+  border-bottom: 1px solid var(--gui-border);
+}
+.tableScroll th {
+  font-weight: 500;
+}
+.roadmapGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.roadmapCard {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 24px;
+  background: var(--gui-surface);
+  border: 1px solid var(--gui-border);
+  border-radius: 16px;
+  transition:
+    border-color 200ms,
+    box-shadow 200ms;
+}
+.roadmapCard:hover {
+  border-color: var(--gui-accent);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--gui-ink) 4%, transparent);
+}
+.roadmapIcon {
+  color: var(--gui-accent);
+  background: var(--gui-accent-soft);
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.roadmapCard h3 {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.roadmapDescription {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--gui-muted);
+  margin: 10px 0 20px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.roadmapProgress {
+  margin-top: auto;
+  width: 100%;
+}
+.roadmapProgress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--gui-muted);
+  font-size: 10px;
+  margin-bottom: 9px;
+}
+.roadmapProgress strong {
+  font-weight: 500;
+  color: var(--gui-ink);
+}
+.roadmapProgress progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--gui-soft);
+  appearance: none;
+}
+.roadmapProgress progress::-webkit-progress-bar {
+  background: var(--gui-soft);
+}
+.roadmapProgress progress::-webkit-progress-value {
+  background: var(--gui-accent);
+  border-radius: 9px;
+}
+.roadmapProgress progress::-moz-progress-bar {
+  background: var(--gui-accent);
+}
+.roadmapCard > .textLink {
+  margin-top: 14px;
+}
+.bottomGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.badgeList,
+.eventList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.badgeList li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 0;
+}
+.badgeList li + li {
+  border-top: 1px solid var(--gui-border);
+}
+.earnedIcon,
+.lockedIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+.earnedIcon {
+  color: var(--gui-accent);
+  background: var(--gui-accent-soft);
+}
+.lockedIcon {
+  color: var(--gui-muted);
+  background: var(--gui-soft);
+}
+.badgeList h3,
+.eventList h3 {
+  margin: 0 0 5px;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.badgeList p {
+  margin: 0 0 5px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--gui-muted);
+}
+.badgeState {
+  color: var(--gui-muted);
+  font-size: 9px;
+}
+.eventList li {
+  display: flex;
+  gap: 18px;
+  padding: 12px 0 18px;
+  position: relative;
+}
+.eventList li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 24px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--gui-border);
+}
+.eventDot {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--gui-accent-soft);
+  border: 1px solid var(--gui-accent);
+}
+.eventKind {
+  margin: 0 0 5px;
+  color: var(--gui-muted);
+  font-size: 9px;
+}
+.eventList time {
+  font-size: 9px;
+  color: var(--gui-muted);
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100px;
+  color: var(--gui-muted);
+}
+.empty > svg {
+  color: var(--gui-accent);
+}
+.empty h3 {
+  margin: 0;
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--gui-ink);
+}
+.empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  max-width: 50ch;
+}
+.retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  min-height: 36px;
+  border-radius: 18px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.retry:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.loading {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding-block: 20px;
+  font-size: 11px;
+  color: var(--gui-muted);
+}
+.skeleton,
+.shortSkeleton {
+  height: 12px;
+  width: 100%;
+  border-radius: 8px;
+  background: var(--gui-soft);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.shortSkeleton {
+  width: 60%;
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  color: var(--gui-muted);
+  font-size: 10px;
+  padding-top: 4px;
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (min-width: 1500px) {
+  .roadmapGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1120px) {
+  .continueContent {
+    max-width: 85%;
+  }
+  .learningPath {
+    opacity: 0.22;
+    right: -65px;
+  }
+  .metric {
+    padding-inline: 16px;
+  }
+  .metricIcon {
+    right: 12px;
+  }
+  .panel {
+    padding: 24px;
+  }
+}
+@media (max-width: 900px) {
+  .primaryGrid {
+    grid-template-columns: 1fr;
+  }
+  .reviewCard {
+    min-height: 240px;
+  }
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .metric:nth-child(3) {
+    border-left: 0;
+  }
+  .metric:nth-child(n + 3) {
+    border-top: 1px solid var(--gui-border);
+  }
+  .bottomGrid {
+    grid-template-columns: 1fr;
+  }
+  .learningPath {
+    opacity: 0.6;
+    right: -20px;
+  }
+  .continueContent {
+    max-width: 72%;
+  }
+}
+@media (max-width: 520px) {
+  .dashboard {
+    gap: 22px;
+  }
+  .welcome {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .panel {
+    padding: 22px;
+  }
+  .continueCard {
+    padding: 26px 22px;
+  }
+  .continueContent {
+    max-width: 100%;
+  }
+  .continueContent > h2 {
+    max-width: 90%;
+    font-size: 24px;
+  }
+  .learningPath {
+    opacity: 0.13;
+    right: -55px;
+  }
+  .roadmapGrid {
+    grid-template-columns: 1fr;
+  }
+  .sectionHeader {
+    gap: 10px;
+  }
+  .sectionHeader .textLink {
+    font-size: 10px;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  .panel h2,
+  .roadmapsSection h2 {
+    font-size: 20px;
+  }
+  .metric {
+    padding: 20px 16px;
+  }
+  .metricLabel {
+    font-size: 9px;
+  }
+  .metricIcon {
+    top: 17px;
+    right: 10px;
+  }
+  .metricDetail {
+    line-height: 1.7;
+  }
+  .activityFooter {
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome,
+  .continueCard,
+  .reviewCard,
+  .skeleton,
+  .shortSkeleton {
+    animation: none;
+  }
+  .secondaryLink,
+  .primaryLink,
+  .textLink,
+  .roadmapCard {
+    transition: none;
+  }
+}

@@ -1,0 +1,338 @@
+.main {
+  max-width: 1140px;
+  margin: auto;
+  padding: 25px 30px 80px;
+}
+.main:focus {
+  outline: none;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--gui-muted);
+}
+.back:hover {
+  color: var(--gui-accent);
+}
+.heading {
+  padding: 42px 0 0;
+  max-width: 930px;
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--gui-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.eyebrow > span {
+  width: 7px;
+  height: 7px;
+  background: var(--gui-accent);
+  border-radius: 50%;
+}
+.main .heading h1,
+.main .state h1 {
+  font-family: var(--font-space-grotesk), var(--font-inter), sans-serif;
+  font-size: clamp(34px, 4.5vw, 58px);
+  font-weight: 550;
+  line-height: 1.12;
+  letter-spacing: -2px;
+  max-width: 24ch;
+  margin: 22px 0 28px;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.byline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.avatar {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--gui-border);
+  background: var(--gui-accent-soft);
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--gui-accent);
+}
+.byline > div {
+  min-width: 0;
+}
+.byline p {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.byline div > span {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--gui-muted);
+}
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 34px 0 0;
+}
+.rule span:first-child {
+  width: 52px;
+  height: 3px;
+  background: var(--gui-accent);
+}
+.rule span:nth-child(2) {
+  width: 7px;
+  height: 3px;
+  background: var(--gui-accent);
+  opacity: 0.5;
+}
+.rule span:last-child {
+  flex: 1;
+  height: 1px;
+  background: var(--gui-border);
+}
+.readingLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 210px) minmax(0, 65ch);
+  gap: 44px;
+  padding-top: 42px;
+  align-items: start;
+}
+.body {
+  grid-column: 2;
+  min-width: 0;
+  font-size: 16px;
+}
+.body > div:first-child {
+  font-size: 16px;
+  line-height: 1.8;
+}
+.main .body :is(p, ul, ol) {
+  margin-block: 20px;
+}
+.main .body :is(h2, h3, h4, h5, h6) {
+  margin-block: 38px 16px;
+  line-height: 1.35;
+  scroll-margin-top: 24px;
+}
+.body > div:first-child > :first-child {
+  margin-top: 0;
+}
+.main .body a {
+  text-decoration: underline;
+}
+.main .body :is(button, summary) {
+  min-height: 44px;
+}
+.main .body :is(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--gui-accent);
+  outline-offset: 4px;
+}
+.contents {
+  grid-column: 1;
+  grid-row: 1;
+  position: sticky;
+  top: 24px;
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  border-left: 1px solid var(--gui-border);
+  padding-left: 18px;
+}
+.contents summary {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 650;
+  color: var(--gui-muted);
+  cursor: pointer;
+  min-height: 44px;
+  padding-top: 12px;
+}
+.contents summary > span {
+  margin-left: 12px;
+  font-size: 10px;
+  color: var(--gui-accent);
+}
+.contents ol {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.contents a {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-height: 44px;
+  padding: 10px 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--gui-muted);
+  overflow-wrap: anywhere;
+}
+.contents a:hover {
+  color: var(--gui-accent);
+}
+.contents svg {
+  flex-shrink: 0;
+}
+.contents .nested {
+  padding-left: 12px;
+}
+.endMark {
+  text-align: center;
+  color: var(--gui-accent);
+  margin: 44px 0;
+  font-size: 13px;
+}
+.related {
+  display: flex;
+  gap: 18px;
+  padding: 26px;
+  border: 1px solid var(--gui-border);
+  border-radius: 18px;
+  background: var(--gui-soft);
+}
+.related > svg {
+  flex-shrink: 0;
+  color: var(--gui-accent);
+  margin-top: 3px;
+}
+.related p.eyebrow {
+  margin: 0;
+  font-size: 10px;
+}
+.related h2 {
+  margin: 10px 0;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+}
+.related p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--gui-muted);
+  margin: 10px 0;
+}
+.related a {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--gui-accent);
+  text-decoration: none;
+}
+.readingEnd {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--gui-border);
+  margin-top: 32px;
+  padding-top: 20px;
+}
+.readingEnd a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--gui-muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+.state {
+  max-width: 760px;
+  padding: 55px 0 85px;
+}
+.main .state h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  margin: 20px 0 32px;
+}
+.stateActions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+.stateActions a {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--gui-border);
+  border-radius: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gui-ink);
+  font-size: 13px;
+}
+.stateActions a:first-child {
+  color: var(--gui-on-primary);
+  background: var(--gui-primary);
+  border-color: var(--gui-primary);
+}
+@media (max-width: 900px) {
+  .readingLayout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .body {
+    grid-column: 1;
+    max-width: 65ch;
+    width: 100%;
+  }
+  .contents {
+    position: static;
+    max-height: 300px;
+    border: 1px solid var(--gui-border);
+    border-radius: 12px;
+    padding: 6px 18px 12px;
+    max-width: 65ch;
+  }
+}
+@media (max-width: 600px) {
+  .main {
+    padding: 16px 20px 48px;
+  }
+  .heading {
+    padding-top: 28px;
+  }
+  .main .heading h1 {
+    letter-spacing: -1px;
+    margin-top: 20px;
+  }
+  .readingLayout {
+    padding-top: 28px;
+  }
+  .body > div:first-child {
+    font-size: 15px;
+  }
+  .related {
+    padding: 20px;
+    gap: 12px;
+  }
+  .readingEnd {
+    flex-wrap: wrap;
+  }
+  .state {
+    padding: 35px 0;
+  }
+}
+
+/* Restore Markdown list markers after the shared Tailwind preflight reset. */
+.main .body ul {
+  list-style: disc;
+}
+.main .body ol {
+  list-style: decimal;
+}

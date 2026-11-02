@@ -22,7 +22,12 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    // An old-session preference request must not interrupt provider verification
+    // or clear a newly verified session. The callback owns its error/retry UI.
+    const completingOAuth =
+      typeof window !== 'undefined' &&
+      window.location.pathname === '/auth/callback';
+    if (error.response && error.response.status === 401 && !completingOAuth) {
       clearAuth();
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';

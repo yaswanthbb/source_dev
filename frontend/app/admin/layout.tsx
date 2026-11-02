@@ -24,7 +24,8 @@ import { getToken, getUser, clearAuth, User } from '@/lib/auth';
 import { LogoutConfirmationModal } from '@/components/logout-confirmation-modal';
 import { ProfileActionsMenu } from '@/components/profile-actions-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { MinimalTerminalLoader } from '@/components/loaders/minimal-terminal-loader';
+import { ModeAwareLoader } from '@/components/loaders/mode-aware-loader';
+import { useUiMode } from '@/providers/ui-mode-provider';
 import '../developer/dashboard/terminal-dashboard.css';
 
 const ADMIN_NAV_ITEMS = [
@@ -51,6 +52,7 @@ export default function AdminAppShellLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { isCli } = useUiMode();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isTokenChecked, setIsTokenChecked] = useState(() => {
@@ -133,7 +135,9 @@ export default function AdminAppShellLayout({
 
   if (!isDataReady || !isLoaderDone) {
     return (
-      <MinimalTerminalLoader
+      <ModeAwareLoader
+        guiTitle="Preparing your admin workspace"
+        guiDescription="Checking access and loading your account."
         minDuration={2000}
         isAsyncComplete={isDataReady}
         onComplete={() => setIsLoaderDone(true)}
@@ -178,12 +182,15 @@ export default function AdminAppShellLayout({
     );
   }
 
-  // The terminal and the terminal-styled dashboard own their full-screen
-  // frames — no sidebar chrome around them. Guards above still apply. The
-  // sidebar remains only for the legacy GUI pages until their Phase C rebuild.
+  // These rebuilt surfaces own their workspace frames. Guards above still apply.
+  // Classic pages retain legacy chrome in CLI appearance.
   if (
     pathname?.startsWith("/admin/terminal") ||
-    pathname === "/admin/dashboard"
+    pathname === "/admin/dashboard" ||
+    pathname === "/admin/jobs" ||
+    pathname === "/admin/articles" ||
+    pathname === "/admin/evaluation" ||
+    ((pathname === "/admin/users" || pathname === "/admin/content-review") && !isCli)
   ) {
     return <>{children}</>;
   }
