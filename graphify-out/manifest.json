@@ -1422,9 +1422,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-provider-clients.ts": {
-    "mtime": 1791442862.4695282,
-    "seen": 1791446257.1956809,
-    "ast_hash": "441c5d49be4f524e10aa66a4227bc687",
+    "mtime": 1793599241.1476815,
+    "seen": 1793603053.6440322,
+    "ast_hash": "4795a56b85283a00c5a33ab24f8ee0c4",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/dto/ai-keys.dto.ts": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "source-dev-master-plan.md": {
-    "mtime": 1793598601.8104796,
-    "seen": 1793598729.3531244,
-    "ast_hash": "5aaa8437729951e31dd28b5a565130d5",
+    "mtime": 1793602638.4903846,
+    "seen": 1793603053.6443653,
+    "ast_hash": "8be8d9b39bdeb5ac7069f1f41642282d",
     "semantic_hash": ""
   },
   "frontend/screenshots/neofetch.png": {
@@ -1920,9 +1920,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-compiler.spec.ts": {
-    "mtime": 1791267825.5622816,
-    "seen": 1791269813.6582322,
-    "ast_hash": "33a7c49100cc56a893b1f1da8d0c9b3e",
+    "mtime": 1793601435.165046,
+    "seen": 1793603053.6440408,
+    "ast_hash": "2aa2edadaa9beffa4d20bcb0288fa816",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/course-context-builder.service.ts": {
@@ -2058,9 +2058,9 @@
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/ai-provider-clients.spec.ts": {
-    "mtime": 1791261365.233491,
-    "seen": 1791261674.353726,
-    "ast_hash": "f2bfe1e6d50379ac12e59544101bd611",
+    "mtime": 1793601435.0646343,
+    "seen": 1793603053.644031,
+    "ast_hash": "97df007b47c7cf710c194d9051b4a805",
     "semantic_hash": ""
   },
   "backend/src/modules/ai-generate/entities/concept-media.entity.ts": {
