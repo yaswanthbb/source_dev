@@ -97,6 +97,7 @@ import {
 import {
   AiProviderClients,
   CompletionOptions,
+  DEFAULT_PLATFORM_PROVIDER,
   defaultModelFor,
   isModelRetiredError,
   providerFailure,
@@ -239,11 +240,11 @@ export class AiGenerateService implements OnApplicationBootstrap {
 
   /**
    * Resolve which credentials an operation runs with (§5):
-   * - Admin: unlimited; default key when set, else the platform NVIDIA key.
+   * - Admin: unlimited; default key when set, else the shared Gemini key.
    * - Developer with a default key: that key's provider (a conflicting
    *   `provider` request is rejected); caller model validated live.
-   * - Developer without one: platform free tier (NVIDIA only, 5/day).
-   *   Gemini is BYOK-only.
+   * - Developer without one: shared Gemini free tier (5/day).
+   *   Explicit NVIDIA selection still uses its own platform key; no provider failover.
    */
   async resolveCredentials(
     user: User,
@@ -263,12 +264,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
       provider = defaultKey.provider;
       key = defaultKey;
     } else {
-      provider ??= AiProvider.NVIDIA;
-      if (provider === AiProvider.GEMINI) {
-        throw new BadRequestException(
-          'Gemini is available with your own key only. Add a Gemini API key to use it.',
-        );
-      }
+      provider ??= DEFAULT_PLATFORM_PROVIDER;
     }
 
     const requestedModel = opts?.model?.trim() || undefined;
@@ -296,15 +292,7 @@ export class AiGenerateService implements OnApplicationBootstrap {
         await this.assertKnownModel(provider, apiKey, requestedModel);
       }
     } else {
-      const platformKey = this.configService
-        .get<string>('NVIDIA_API_KEY')
-        ?.trim();
-      if (!platformKey) {
-        throw new ServiceUnavailableException(
-          'The shared AI service is not configured right now. Please wait until tomorrow, or add your own key to keep generating.',
-        );
-      }
-      apiKey = platformKey;
+      apiKey = this.platformApiKey(provider);
     }
 
     if (isAdmin) {
@@ -344,18 +332,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
   private async credentialsForJob(
     job: AiGenerationJob,
   ): Promise<ResolvedAiCredentials> {
+    // Pre-BYOK jobs have no snapshot and historically used NVIDIA. Preserve
+    // those jobs; new jobs persist the resolved Gemini/caller-key provider.
     const provider = job.provider ?? AiProvider.NVIDIA;
     const model = job.model || this.clients.configuredDefaultModel(provider);
 
     if (!job.providerKeyId) {
-      const platformKey = this.configService
-        .get<string>('NVIDIA_API_KEY')
-        ?.trim();
-      if (!platformKey) {
-        throw new ServiceUnavailableException(
-          'The shared AI service is not configured right now. Please wait until tomorrow, or add your own key to keep generating.',
-        );
-      }
+      const platformKey = this.platformApiKey(provider);
       return {
         provider,
         apiKey: platformKey,
@@ -385,6 +368,18 @@ export class AiGenerateService implements OnApplicationBootstrap {
       limit: key.dailyLimit || OWN_KEY_DEFAULT_LIMIT,
       unlimited: false,
     };
+  }
+
+  private platformApiKey(provider: AiProvider): string {
+    const apiKey = this.configService
+      .get<string>(`${provider.toUpperCase()}_API_KEY`)
+      ?.trim();
+    if (!apiKey) {
+      throw new ServiceUnavailableException(
+        `The shared ${provider === AiProvider.GEMINI ? 'Google Gemini' : 'NVIDIA NIM'} service is not configured right now. Please wait until tomorrow, or add/switch to your own key or another provider in API key settings.`,
+      );
+    }
+    return apiKey;
   }
 
   private async assertKnownModel(

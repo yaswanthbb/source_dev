@@ -4015,6 +4015,31 @@ test("generation settings project metadata only and tie quota to actual default 
     0,
   );
 });
+test("shared Gemini quota follows platform metadata while caller keys stay pinned", () => {
+  const { data } = generationSetup();
+  const providers = generationProviders.map((p) => ({ ...p, byokOnly: false }));
+  const quota = {
+    remaining: 5,
+    limit: 5,
+    unlimited: false,
+    tier: "free",
+    provider: "gemini",
+  };
+  assert.equal(
+    data.parseGenerationSettings(contentUser, [], providers, quota).quota
+      .provider,
+    "gemini",
+  );
+  assert.throws(() =>
+    data.parseGenerationSettings(contentUser, [], generationProviders, quota),
+  );
+  assert.throws(() =>
+    data.parseGenerationSettings(contentUser, [generationKey], providers, {
+      ...generationQuota,
+      provider: "gemini",
+    }),
+  );
+});
 test("generation jobs require requester-owned records, valid progress/dates and exact partial result counts", () => {
   const { data } = generationSetup();
   for (const patch of [

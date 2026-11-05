@@ -600,7 +600,7 @@ export function GenerationView({
               <h3>
                 {selectedKey
                   ? selectedKey.label || "Your default key"
-                  : "Shared NVIDIA service"}
+                  : `Shared ${providerName ?? settings.quota.provider} service`}
               </h3>
               <p>
                 {selectedKey

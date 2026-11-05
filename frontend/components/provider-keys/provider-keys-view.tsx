@@ -291,7 +291,7 @@ export function ProviderKeysView(props: ProviderKeysViewProps) {
               <h3>A place for your own key.</h3>
               <p>
                 Connect NVIDIA or Gemini to use your provider account. Without a
-                default key, generation uses the shared NVIDIA service when
+                default key, generation uses the shared Gemini service when
                 configured.
               </p>
             </div>
@@ -632,7 +632,7 @@ export function ProviderKeysView(props: ProviderKeysViewProps) {
           ····{confirmation?.key.keyHint} from source:dev? This permanently
           removes the stored key. Reconnecting requires the full key again.{" "}
           {confirmation?.key.isDefault
-            ? "New requests will use the shared NVIDIA service when configured; another stored key will not be selected automatically."
+            ? "New requests will use the shared Gemini service when configured; another stored key will not be selected automatically."
             : "The current default and its allowance stay in use."}{" "}
           A pending or running job using this key blocks removal. Your provider
           account key is not revoked.

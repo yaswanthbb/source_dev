@@ -2,7 +2,13 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { AiProvider } from '../../common/enums/ai-provider.enum';
 import { resolveTierModel, taskRouteFor } from './task-routing';
-import { AiProviderClients, isModelRetiredError } from './ai-provider-clients';
+import {
+  AiProviderClients,
+  isModelRetiredError,
+  PROVIDER_METAS,
+  DEFAULT_PLATFORM_PROVIDER,
+  curatedModelsFor,
+} from './ai-provider-clients';
 
 function clientsWith(
   env: Record<string, string | undefined>,
@@ -334,4 +340,153 @@ describe('NVIDIA completion compatibility', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     },
   );
+});
+
+describe('shared Gemini Flash completions', () => {
+  let fetchMock: jest.SpiedFunction<typeof fetch>;
+  let logMock: jest.SpyInstance;
+  const model = 'gemini-3.6-flash';
+  const jsonOptions = {
+    responseFormat: { type: 'json_object' as const },
+    maxTokens: 800,
+  };
+  const response = (parts: Array<{ text: string; thought?: boolean }>) =>
+    new Response(
+      JSON.stringify({
+        candidates: [{ content: { parts } }],
+        usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 34 },
+      }),
+    );
+  const complete = () =>
+    clientsWith({}).complete(
+      AiProvider.GEMINI,
+      'gemini-platform-key',
+      model,
+      'system',
+      'user',
+      jsonOptions,
+    );
+
+  beforeEach(() => {
+    fetchMock = jest.spyOn(globalThis, 'fetch');
+    logMock = jest
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('advertises shared Gemini and defaults both tiers to the only curated Gemini model', () => {
+    const clients = clientsWith({});
+    expect(DEFAULT_PLATFORM_PROVIDER).toBe(AiProvider.GEMINI);
+    expect(
+      PROVIDER_METAS.find((p) => p.provider === AiProvider.GEMINI),
+    ).toMatchObject({ byokOnly: false, defaultModel: model });
+    expect(curatedModelsFor(AiProvider.GEMINI)).toEqual([model]);
+    for (const tier of ['fast', 'strong'] as const) {
+      expect(
+        resolveTierModel(
+          AiProvider.GEMINI,
+          tier,
+          () => undefined,
+          (p) => clients.configuredDefaultModel(p),
+        ),
+      ).toBe(model);
+    }
+  });
+
+  it('preserves provider-specific model overrides without affecting NVIDIA', () => {
+    const clients = clientsWith({
+      GEMINI_MODEL_ID: ' custom-gemini ',
+      NVIDIA_MODEL_ID: 'custom-nvidia',
+    });
+    expect(clients.configuredDefaultModel(AiProvider.GEMINI)).toBe(
+      'custom-gemini',
+    );
+    expect(clients.configuredDefaultModel(AiProvider.NVIDIA)).toBe(
+      'custom-nvidia',
+    );
+  });
+
+  it('requests JSON with minimum thinking and excludes thought parts/signatures from output', async () => {
+    fetchMock.mockResolvedValue(
+      response([
+        { text: 'PRIVATE REASONING', thought: true },
+        { text: '{"title":' },
+        { text: '"Branches"}' },
+      ]),
+    );
+    await expect(complete()).resolves.toEqual({
+      text: '{"title":"Branches"}',
+      tokensIn: 12,
+      tokensOut: 34,
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1]!.body as string) as {
+      generationConfig: Record<string, unknown>;
+    };
+    expect(body.generationConfig).toMatchObject({
+      responseMimeType: 'application/json',
+      maxOutputTokens: 800,
+      thinkingConfig: { thinkingLevel: 'MINIMAL', includeThoughts: false },
+    });
+    expect(body.generationConfig.thinkingConfig).not.toHaveProperty(
+      'thinkingBudget',
+    );
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      '/models/gemini-3.6-flash:generateContent',
+    );
+    expect(logMock).toHaveBeenCalledWith(
+      expect.stringContaining('thinking cannot be fully disabled'),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves normal text generation while still excluding returned thoughts', async () => {
+    fetchMock.mockResolvedValue(
+      response([
+        { text: 'PRIVATE', thought: true },
+        { text: 'Final article.' },
+      ]),
+    );
+    await expect(
+      clientsWith({}).complete(
+        AiProvider.GEMINI,
+        'caller-key',
+        model,
+        'system',
+        'user',
+      ),
+    ).resolves.toMatchObject({ text: 'Final article.' });
+    const body = JSON.parse(fetchMock.mock.calls[0][1]!.body as string) as {
+      generationConfig: Record<string, unknown>;
+    };
+    expect(body.generationConfig).toMatchObject({
+      responseMimeType: 'text/plain',
+    });
+    expect(body.generationConfig).not.toHaveProperty('thinkingConfig');
+  });
+
+  it('rejects a thought-only result rather than exposing it or calling NVIDIA', async () => {
+    fetchMock.mockResolvedValue(
+      response([{ text: '{"private":"thought"}', thought: true }]),
+    );
+    await expect(complete()).rejects.toThrow('empty response');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([401, 429, 404, 500])(
+    'keeps Gemini HTTP %s failures on Gemini with a switch-provider suggestion',
+    async (status) => {
+      fetchMock.mockResolvedValue(new Response('unavailable', { status }));
+      await expect(complete()).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('uses only the current curated Gemini model when no key is available', async () => {
+    await expect(
+      clientsWith({}).listModels(AiProvider.GEMINI),
+    ).resolves.toEqual({ models: [model], live: false });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

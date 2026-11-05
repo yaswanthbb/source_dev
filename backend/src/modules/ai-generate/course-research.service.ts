@@ -115,9 +115,9 @@ export class CourseResearchService {
 
   /**
    * Embedding key: the caller's NVIDIA key when the generation runs on
-   * NVIDIA, else the platform key. Gemini BYOK keys can't embed (NVIDIA-only
-   * embedding backend), so those compilations degrade to brief=null rather
-   * than failing — research is enhancement, never gate.
+   * NVIDIA, else the NVIDIA platform key. Gemini keys (shared or caller-owned)
+   * are never sent to this NVIDIA-only embedding backend. Without an embedding
+   * key, research degrades to brief=null — enhancement, never a generation gate.
    */
   resolveEmbeddingKey(preferredApiKey?: string): string {
     if (preferredApiKey) return preferredApiKey;

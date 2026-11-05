@@ -13,7 +13,7 @@ export class AiGenerationOptions {
   @ApiPropertyOptional({
     enum: AiProvider,
     description:
-      'Provider to run with (must match your default key when one is set; free tier is NVIDIA only)',
+      'Provider to run with (must match your default key when one is set; shared tier defaults to Gemini, with NVIDIA available by explicit selection)',
   })
   @IsOptional()
   @IsEnum(AiProvider)

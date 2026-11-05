@@ -61,7 +61,7 @@ describe('task routing table (§8 per-task routing)', () => {
     // strong honors NVIDIA_STRONG_MODEL_ID, both fall back to the default.
     const globalDefault = (p: AiProvider) =>
       p === AiProvider.GEMINI
-        ? 'gemini-2.0-flash'
+        ? 'gemini-3.6-flash'
         : 'meta/llama-3.1-70b-instruct';
     for (const key of COURSE_TASK_KEYS) {
       const plain = resolveTierModel(

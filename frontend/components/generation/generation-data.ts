@@ -215,7 +215,10 @@ export function parseGenerationSettings(
     row.unlimited !== (user.role === "admin") ||
     row.tier !==
       (user.role === "admin" ? "admin" : selected ? "own-key" : "free") ||
-    quotaProvider !== (selected?.provider ?? "nvidia") ||
+    (selected
+      ? quotaProvider !== selected.provider
+      : providers.find((p) => p.provider === quotaProvider)?.byokOnly !==
+        false) ||
     !providers.some((p) => p.provider === quotaProvider)
   )
     throw new Error("Quota and default key disagree.");

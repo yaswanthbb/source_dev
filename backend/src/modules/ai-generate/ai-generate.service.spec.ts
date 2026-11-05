@@ -78,9 +78,8 @@ describe('AiGenerateService', () => {
     clients = {
       complete: jest.fn(),
       listModels: jest.fn(),
-      configuredDefaultModel: jest.fn(
-        (p: string) =>
-          p === 'gemini' ? 'gemini-2.0-flash' : 'meta/llama-3.1-70b-instruct',
+      configuredDefaultModel: jest.fn((p: string) =>
+        p === 'gemini' ? 'gemini-3.6-flash' : 'meta/llama-3.1-70b-instruct',
       ),
     };
     courseContext = { build: jest.fn() };
@@ -387,17 +386,23 @@ describe('AiGenerateService', () => {
   describe('resolveCredentials (§5)', () => {
     beforeEach(() => {
       configGet.mockImplementation((key: string) =>
-        key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
+        key === 'GEMINI_API_KEY'
+          ? 'gemini-platform-key'
+          : key === 'NVIDIA_API_KEY'
+            ? 'platform-key'
+            : undefined,
       );
       keysService.getDefaultKey.mockResolvedValue(null);
       clients.listModels.mockResolvedValue({ models: ['m1'], live: true });
     });
 
-    it('resolves the free NVIDIA tier when no default key exists', async () => {
+    it('resolves the free Gemini tier when no default key exists', async () => {
       const creds = await service.resolveCredentials(developer as any);
 
       expect(creds).toMatchObject({
-        provider: AiProvider.NVIDIA,
+        provider: AiProvider.GEMINI,
+        apiKey: 'gemini-platform-key',
+        model: 'gemini-3.6-flash',
         keyId: null,
         tier: 'free',
         limit: 5,
@@ -405,12 +410,86 @@ describe('AiGenerateService', () => {
       });
     });
 
-    it('rejects Gemini on the free tier (BYOK-only)', async () => {
+    it('keeps explicit shared NVIDIA selection available', async () => {
       await expect(
-        service.resolveCredentials(developer as any, {
-          provider: AiProvider.GEMINI,
-        }),
-      ).rejects.toThrow('own key only');
+        service.resolveCredentials(developer, { provider: AiProvider.NVIDIA }),
+      ).resolves.toMatchObject({
+        provider: AiProvider.NVIDIA,
+        apiKey: 'platform-key',
+        keyId: null,
+      });
+    });
+
+    it('uses a caller Gemini key ahead of the shared key and preserves its model', async () => {
+      keysService.getDefaultKey.mockResolvedValue({
+        id: 'gemini-key',
+        provider: AiProvider.GEMINI,
+        dailyLimit: 20,
+        defaultModel: 'caller-model',
+      });
+      keysService.decryptForUse.mockReturnValue('caller-gemini-key');
+      await expect(
+        service.resolveCredentials(developer),
+      ).resolves.toMatchObject({
+        provider: AiProvider.GEMINI,
+        apiKey: 'caller-gemini-key',
+        keyId: 'gemini-key',
+        model: 'caller-model',
+        tier: 'own-key',
+      });
+    });
+
+    it('does not fall back to NVIDIA when the shared Gemini key is absent', async () => {
+      configGet.mockImplementation((key: string) =>
+        key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
+      );
+      await expect(service.resolveCredentials(developer)).rejects.toThrow(
+        'shared Google Gemini service is not configured',
+      );
+      expect(clients.complete).not.toHaveBeenCalled();
+    });
+
+    it('gives admins the shared Gemini key with unlimited quota', async () => {
+      await expect(service.resolveCredentials(admin)).resolves.toMatchObject({
+        provider: AiProvider.GEMINI,
+        apiKey: 'gemini-platform-key',
+        tier: 'admin',
+        unlimited: true,
+      });
+    });
+
+    it.each([AiProvider.GEMINI, AiProvider.NVIDIA])(
+      'rebuilds shared job credentials using the snapshotted %s provider',
+      async (provider) => {
+        const credentialsForJob = service['credentialsForJob'].bind(service);
+        await expect(
+          credentialsForJob({
+            provider,
+            model: 'pinned-model',
+            providerKeyId: null,
+          } as AiGenerationJob),
+        ).resolves.toMatchObject({
+          provider,
+          model: 'pinned-model',
+          apiKey:
+            provider === AiProvider.GEMINI
+              ? 'gemini-platform-key'
+              : 'platform-key',
+        });
+      },
+    );
+
+    it('preserves NVIDIA for legacy jobs without provider snapshots', async () => {
+      await expect(
+        service['credentialsForJob']({
+          provider: null,
+          model: null,
+          providerKeyId: null,
+        } as AiGenerationJob),
+      ).resolves.toMatchObject({
+        provider: AiProvider.NVIDIA,
+        apiKey: 'platform-key',
+      });
     });
 
     it('uses the default key and validates the requested model live', async () => {
@@ -420,7 +499,10 @@ describe('AiGenerateService', () => {
         dailyLimit: 20,
       });
       keysService.decryptForUse.mockReturnValue('user-key');
-      clients.listModels.mockResolvedValue({ models: ['m1', 'm2'], live: true });
+      clients.listModels.mockResolvedValue({
+        models: ['m1', 'm2'],
+        live: true,
+      });
 
       const creds = await service.resolveCredentials(developer as any, {
         model: 'm2',
@@ -571,7 +653,7 @@ describe('AiGenerateService', () => {
     beforeEach(() => {
       jest.useFakeTimers().setSystemTime(new Date('2026-08-25T12:00:00.000Z'));
       configGet.mockImplementation((key: string) =>
-        key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
+        key === 'GEMINI_API_KEY' ? 'platform-key' : undefined,
       );
       keysService.getDefaultKey.mockResolvedValue(null);
       logRepo.find.mockResolvedValue([]);
@@ -584,12 +666,17 @@ describe('AiGenerateService', () => {
     });
 
     it('logs prompt version, model, provider and telemetry on every call', async () => {
-      await service.generateQaAnswer('T', 'C', 'What is this about?', developer as any);
+      await service.generateQaAnswer(
+        'T',
+        'C',
+        'What is this about?',
+        developer as any,
+      );
 
       expect(logRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({
           promptVersion: 'legacy-static',
-          model: 'meta/llama-3.1-70b-instruct',
+          model: 'gemini-3.6-flash',
           tokensIn: 10,
           tokensOut: 20,
         }),
@@ -625,7 +712,7 @@ describe('AiGenerateService', () => {
     beforeEach(() => {
       jest.useFakeTimers().setSystemTime(new Date('2026-08-25T12:00:00.000Z'));
       configGet.mockImplementation((key: string) => {
-        if (key === 'NVIDIA_API_KEY') return 'platform-key';
+        if (key === 'GEMINI_API_KEY') return 'platform-key';
         if (key === 'COURSE_ENGINE_ENABLED') return 'true';
         return undefined;
       });
@@ -702,7 +789,7 @@ describe('AiGenerateService', () => {
 
     it('skips the builder entirely with the flag off (legacy behavior)', async () => {
       configGet.mockImplementation((key: string) =>
-        key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
+        key === 'GEMINI_API_KEY' ? 'platform-key' : undefined,
       );
       const registry = (service as any).promptRegistry;
       registry.resolveSystem.mockResolvedValue({
@@ -717,7 +804,7 @@ describe('AiGenerateService', () => {
       );
 
       expect(courseContext.build).not.toHaveBeenCalled();
-      const userPrompt = clients.complete.mock.calls[0][4];
+      const userPrompt: unknown = clients.complete.mock.calls[0][4];
       expect(userPrompt).not.toContain('[Course context');
     });
 
@@ -731,7 +818,9 @@ describe('AiGenerateService', () => {
         ),
       ).resolves.toEqual({ content: 'article' });
       expect(draftPrompt()).not.toContain('[Course context');
-      expect(draftPrompt()).toContain('Approved Outline (realize every section)');
+      expect(draftPrompt()).toContain(
+        'Approved Outline (realize every section)',
+      );
     });
   });
 
@@ -783,7 +872,8 @@ describe('AiGenerateService', () => {
 
       // Explicit wins over everything.
       await expect(
-        service.resolveCredentials(developer as any, {
+        service.resolveCredentials(developer, {
+          provider: AiProvider.NVIDIA,
           model: 'explicit-m',
           taskKey: 'concept_draft',
         }),
@@ -791,7 +881,8 @@ describe('AiGenerateService', () => {
 
       // Key default wins over the task default.
       await expect(
-        service.resolveCredentials(developer as any, {
+        service.resolveCredentials(developer, {
+          provider: AiProvider.NVIDIA,
           taskKey: 'concept_draft',
         }),
       ).resolves.toMatchObject({ model: 'key-default' });
@@ -799,14 +890,17 @@ describe('AiGenerateService', () => {
       // Task default applies with no explicit or key default.
       keysService.getDefaultKey.mockResolvedValue(null);
       await expect(
-        service.resolveCredentials(developer as any, {
+        service.resolveCredentials(developer, {
+          provider: AiProvider.NVIDIA,
           taskKey: 'concept_draft',
         }),
       ).resolves.toMatchObject({ model: 'strong-m' });
 
       // Global default when no task key is given.
       await expect(
-        service.resolveCredentials(developer as any),
+        service.resolveCredentials(developer, {
+          provider: AiProvider.NVIDIA,
+        }),
       ).resolves.toMatchObject({ model: 'meta/llama-3.1-70b-instruct' });
     });
 
@@ -815,14 +909,17 @@ describe('AiGenerateService', () => {
         key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
       );
       await expect(
-        service.resolveCredentials(developer as any, {
+        service.resolveCredentials(developer, {
+          provider: AiProvider.NVIDIA,
           taskKey: 'concept_draft',
         }),
       ).resolves.toMatchObject({ model: 'meta/llama-3.1-70b-instruct' });
-      expect((service as any).routeParams('concept_draft', {
-        maxTokens: 1,
-        temperature: 0.1,
-      })).toEqual({ maxTokens: 1, temperature: 0.1 });
+      expect(
+        service['routeParams']('concept_draft', {
+          maxTokens: 1,
+          temperature: 0.1,
+        }),
+      ).toEqual({ maxTokens: 1, temperature: 0.1 });
     });
 
     it('advances the chain on a retired model and records what served', async () => {
@@ -831,7 +928,8 @@ describe('AiGenerateService', () => {
         .mockRejectedValueOnce(retiredError())
         .mockResolvedValue({ text: 'ok', tokensIn: 1, tokensOut: 2 });
 
-      const creds = await service.resolveCredentials(developer as any, {
+      const creds = await service.resolveCredentials(developer, {
+        provider: AiProvider.NVIDIA,
         taskKey: 'concept_draft',
       });
       expect(creds.model).toBe('strong-m');
@@ -854,7 +952,8 @@ describe('AiGenerateService', () => {
     it('throws immediately on non-retired errors without touching the chain', async () => {
       flagOn({ NVIDIA_STRONG_MODEL_ID: 'strong-m' });
       clients.complete.mockRejectedValue(new Error('transport down'));
-      const creds = await service.resolveCredentials(developer as any, {
+      const creds = await service.resolveCredentials(developer, {
+        provider: AiProvider.NVIDIA,
         taskKey: 'concept_draft',
       });
       await expect(
@@ -868,7 +967,9 @@ describe('AiGenerateService', () => {
         key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
       );
       clients.complete.mockRejectedValue(retiredError());
-      const creds = await service.resolveCredentials(developer as any);
+      const creds = await service.resolveCredentials(developer, {
+        provider: AiProvider.NVIDIA,
+      });
       await expect(
         service.complete(creds, 'sys', 'user', undefined, 'concept_draft'),
       ).rejects.toMatchObject({ status: 502 });

@@ -23,14 +23,16 @@ describe('AiKeysService', () => {
   let jobRepo: MockRepository;
   let crypto: { encrypt: jest.Mock; decrypt: jest.Mock };
   let clients: { listModels: jest.Mock; configuredDefaultModel: jest.Mock };
+  let configGet: jest.Mock;
 
   beforeEach(async () => {
+    configGet = jest.fn();
     crypto = { encrypt: jest.fn(), decrypt: jest.fn() };
     clients = {
       listModels: jest.fn(),
       configuredDefaultModel: jest.fn(
         (p: string) =>
-          p === 'gemini' ? 'gemini-2.0-flash' : 'meta/llama-3.1-70b-instruct',
+          p === 'gemini' ? 'gemini-3.6-flash' : 'meta/llama-3.1-70b-instruct',
       ),
     };
 
@@ -47,7 +49,7 @@ describe('AiKeysService', () => {
         },
         { provide: AiKeyCryptoService, useValue: crypto },
         { provide: AiProviderClients, useValue: clients },
-        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: ConfigService, useValue: { get: configGet } },
       ],
     }).compile();
 
@@ -246,6 +248,35 @@ describe('AiKeysService', () => {
   });
 
   describe('getProviderModels', () => {
+    it('uses the shared Gemini key for the live catalog, and an owned key when selected', async () => {
+      configGet.mockImplementation((key: string) =>
+        key === 'GEMINI_API_KEY' ? ' shared-gemini-key ' : undefined,
+      );
+      clients.listModels.mockResolvedValue({
+        models: ['gemini-3.6-flash'],
+        live: true,
+      });
+      await expect(
+        service.getProviderModels('u1', AiProvider.GEMINI),
+      ).resolves.toMatchObject({
+        defaultModel: 'gemini-3.6-flash',
+        live: true,
+      });
+      expect(clients.listModels).toHaveBeenLastCalledWith(
+        AiProvider.GEMINI,
+        'shared-gemini-key',
+      );
+      keyRepo.findOne.mockResolvedValue(
+        storedKey({ provider: AiProvider.GEMINI }),
+      );
+      crypto.decrypt.mockReturnValue('owned-gemini-key');
+      await service.getProviderModels('u1', AiProvider.GEMINI, 'key-1');
+      expect(clients.listModels).toHaveBeenLastCalledWith(
+        AiProvider.GEMINI,
+        'owned-gemini-key',
+      );
+    });
+
     it('uses the owned key for the matching provider', async () => {
       keyRepo.findOne.mockResolvedValue(storedKey());
       crypto.decrypt.mockReturnValue('plain-key');
@@ -278,10 +309,7 @@ describe('AiKeysService', () => {
     it('falls back without a key (curated list, live:false for Gemini)', async () => {
       clients.listModels.mockResolvedValue({ models: ['g1'], live: false });
 
-      const result = await service.getProviderModels(
-        'u1',
-        AiProvider.GEMINI,
-      );
+      const result = await service.getProviderModels('u1', AiProvider.GEMINI);
 
       expect(clients.listModels).toHaveBeenCalledWith(
         AiProvider.GEMINI,

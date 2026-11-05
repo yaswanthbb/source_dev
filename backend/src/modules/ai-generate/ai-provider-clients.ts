@@ -24,13 +24,14 @@ function numOrNull(v: unknown): number | null {
 export interface ProviderMeta {
   provider: AiProvider;
   displayName: string;
-  /** Gemini has no platform key — usable only with the caller's own key. */
+  /** Whether the provider requires a caller-owned key. */
   byokOnly: boolean;
   defaultModel: string;
 }
 
 const NVIDIA_DEFAULT_MODEL = 'meta/llama-3.1-70b-instruct';
 const GEMINI_DEFAULT_MODEL = 'gemini-3.6-flash';
+export const DEFAULT_PLATFORM_PROVIDER = AiProvider.GEMINI;
 const NVIDIA_DEFAULT_EMBEDDING_MODEL = 'nvidia/nemotron-3-embed-1b';
 
 const CURATED_MODELS: Record<AiProvider, string[]> = {
@@ -39,25 +40,21 @@ const CURATED_MODELS: Record<AiProvider, string[]> = {
     'meta/llama-3.1-405b-instruct',
     'nvidia/llama-3.1-nemotron-70b-instruct',
   ],
-  [AiProvider.GEMINI]: [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-  ],
+  [AiProvider.GEMINI]: [GEMINI_DEFAULT_MODEL],
 };
 
 export const PROVIDER_METAS: ProviderMeta[] = [
+  {
+    provider: AiProvider.GEMINI,
+    displayName: 'Google Gemini',
+    byokOnly: false,
+    defaultModel: GEMINI_DEFAULT_MODEL,
+  },
   {
     provider: AiProvider.NVIDIA,
     displayName: 'NVIDIA NIM',
     byokOnly: false,
     defaultModel: NVIDIA_DEFAULT_MODEL,
-  },
-  {
-    provider: AiProvider.GEMINI,
-    displayName: 'Google Gemini',
-    byokOnly: true,
-    defaultModel: GEMINI_DEFAULT_MODEL,
   },
 ];
 
@@ -93,7 +90,7 @@ export function providerFailure(
   return new HttpException(
     {
       statusCode: status,
-      message: `AI provider ${name} is unavailable right now (${detail}). Please wait until tomorrow, or add/switch to your own key.`,
+      message: `AI provider ${name} is unavailable right now (${detail}). Please wait until tomorrow, or add/switch to your own key or another provider in API key settings.`,
       error: status === 429 ? 'Too Many Requests' : 'Bad Gateway',
     },
     status,
@@ -140,18 +137,13 @@ export class AiProviderClients {
 
   constructor(private readonly configService: ConfigService) {}
 
-  /**
-   * Server default model per provider. NVIDIA honors NVIDIA_MODEL_ID when
-   * set (restores the pre-BYOK operator override); otherwise curated default.
-   */
+  /** Server model overrides remain provider-specific; both tiers share this default. */
   configuredDefaultModel(provider: AiProvider): string {
-    if (provider === AiProvider.NVIDIA) {
-      const override = this.configService
-        .get<string>('NVIDIA_MODEL_ID')
-        ?.trim();
-      if (override) return override;
-    }
-    return defaultModelFor(provider);
+    return (
+      this.configService
+        .get<string>(`${provider.toUpperCase()}_MODEL_ID`)
+        ?.trim() || defaultModelFor(provider)
+    );
   }
 
   async complete(
@@ -476,6 +468,16 @@ export class AiProviderClients {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent` +
       `?key=${encodeURIComponent(apiKey)}`;
+    const jsonOutput = options?.responseFormat?.type === 'json_object';
+    // Google documents Gemini 3.6 Flash as a thinking model: thinking cannot
+    // be disabled. MINIMAL is its lowest supported level, not a zero budget.
+    // Keep reasoning separate from schema-bound output and never return thought parts.
+    const structuredThinking = jsonOutput && model === GEMINI_DEFAULT_MODEL;
+    if (structuredThinking) {
+      this.logger.log(
+        `Gemini JSON request model="${model}": thinkingLevel=MINIMAL (thinking cannot be fully disabled), includeThoughts=false.`,
+      );
+    }
     const body: Record<string, unknown> = {
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: [{ parts: [{ text: userPrompt }] }],
@@ -483,10 +485,15 @@ export class AiProviderClients {
         ...(options?.seed !== undefined ? { seed: options.seed } : {}),
         temperature: options?.temperature ?? 0.6,
         maxOutputTokens: options?.maxTokens ?? 2048,
-        responseMimeType:
-          options?.responseFormat?.type === 'json_object'
-            ? 'application/json'
-            : 'text/plain',
+        responseMimeType: jsonOutput ? 'application/json' : 'text/plain',
+        ...(structuredThinking
+          ? {
+              thinkingConfig: {
+                thinkingLevel: 'MINIMAL',
+                includeThoughts: false,
+              },
+            }
+          : {}),
       },
     };
 
@@ -537,13 +544,16 @@ export class AiProviderClients {
     }
 
     const data = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+      }>;
       usageMetadata?: {
         promptTokenCount?: unknown;
         candidatesTokenCount?: unknown;
       };
     };
     const text = (data.candidates?.[0]?.content?.parts ?? [])
+      .filter((p) => p.thought !== true)
       .map((p) => p.text ?? '')
       .join('')
       .trim();
@@ -560,7 +570,7 @@ export class AiProviderClients {
   /**
    * Live model list (LibreChat-style fetch). Falls back to curated defaults
    * with live:false when the provider is unreachable or no key is available
-   * (e.g. Gemini without a caller key).
+   * (e.g. a provider without its platform key or a caller key).
    */
   async listModels(
     provider: AiProvider,

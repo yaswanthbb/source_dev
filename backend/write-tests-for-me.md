@@ -286,7 +286,7 @@ Prerequisite: `$CONCEPT` published via 1.9 (authored by `A`, visible to all).
 
 ### 5.1 Developer can check quota
 - **Endpoint:** `GET /ai-generate/quota` (as `B`)
-- **Expected:** `200`, `{ remaining, limit, unlimited: false, tier: "free", provider: "nvidia" }` (no approval-gate `403`).
+- **Expected:** `200`, `{ remaining, limit, unlimited: false, tier: "free", provider: "gemini" }` (no approval-gate `403`).
 
 ---
 
@@ -316,17 +316,23 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 - Priority check: generate with explicit `"model"` (uses it) vs without (uses the key default).
 
 ### 6.3 Providers + live models
-- **Endpoint:** `GET /ai-providers` — **Expected:** nvidia (`byokOnly: false`), gemini (`byokOnly: true`), defaults.
+- **Endpoint:** `GET /ai-providers` — **Expected:** Gemini and NVIDIA both `byokOnly: false`; Gemini default model `gemini-3.6-flash`.
 - **Endpoint:** `GET /ai-providers/gemini/models?keyId=<gemini-id>` (as `B`) — **Expected:** live list (`live: true`).
-- **Endpoint:** `GET /ai-providers/gemini/models` without key — **Expected:** curated list, `live: false`.
+- **Endpoint:** `GET /ai-providers/gemini/models` without caller key — **Expected:** uses `GEMINI_API_KEY` for the live catalog; without a platform key or on a catalog outage, curated `gemini-3.6-flash` with `live: false`.
 
 ### 6.4 Free tier is 5/day, own key uses its bucket
 - Fresh `B` (no keys): burn 5 one-shot generations (`POST /ai-generate/concept-mcqs` + `{ "title": "X" }`) → 6th returns `429` mentioning own key.
 - With default key: `GET /ai-generate/quota` shows `tier: "own-key"`, `limit` = key cap.
 - As `ADMIN`: `GET /ai-generate/quota` → `unlimited: true` (generate freely, no 429s).
 
-### 6.5 gemini without a key is rejected
-- Fresh user, `POST /ai-generate/concept-content` + `{ "title": "X", "provider": "gemini" }` — **Expected:** `400` (BYOK-only).
+### 6.5 Shared Gemini platform (2026-11-05)
+- Operator setup: set `GEMINI_API_KEY` on Render and restart/deploy the backend. Both tiers default to `gemini-3.6-flash`; optional `GEMINI_MODEL_ID` / `GEMINI_STRONG_MODEL_ID` override them. Do not use retired `gemini-2.5-flash`.
+- Fresh user without a default caller key: `GET /ai-generate/quota` reports Gemini; new generation jobs snapshot Gemini. Existing NVIDIA job retries retain their original provider/model.
+- Caller default keys take precedence over platform credentials, for either provider. Explicit shared NVIDIA requests still use `NVIDIA_API_KEY` when there is no caller default; conflicting caller-key/provider selection remains rejected.
+- Gemini 3.6 Flash cannot fully disable thinking. The user-approved JSON policy is `thinkingLevel: MINIMAL`, `includeThoughts: false`, plus filtering any returned `thought: true` parts. Logs identify the model and policy without text or secrets. Verify outline and MCQ responses contain only the requested final JSON.
+- With no `GEMINI_API_KEY`, new default requests fail as not configured; NVIDIA is not selected automatically. On provider failure, show the switch-key/provider suggestion; verify there is no cross-provider retry, no published concept and no consumed quota for a failed outline.
+- Research embeddings remain NVIDIA-only and optional. Keep `NVIDIA_API_KEY` for them if desired; absent/failing embeddings degrade gracefully.
+- Local proof: mocked provider/request/credential/quota tests, not live Render generation. The human performs these live acceptance checks after configuration.
 
 ### 6.6 In-use deletion lock
 - Start a job (`POST /ai-generate/module-concepts` + `{ "moduleId": "<id>" }`) as `B` (default key set), then `DELETE /ai-keys/<default-id>` while pending/running — **Expected:** `400` (in use). After completion → `200`, quota falls back to free tier.

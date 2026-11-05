@@ -78,10 +78,7 @@ export class AiKeysService {
     return this.crypto.decrypt(key.keyCiphertext);
   }
 
-  async createKey(
-    userId: string,
-    dto: CreateAiKeyDto,
-  ): Promise<AiKeyMetadata> {
+  async createKey(userId: string, dto: CreateAiKeyDto): Promise<AiKeyMetadata> {
     const existing = await this.keyRepository.count({ where: { userId } });
     if (existing >= MAX_KEYS_PER_USER) {
       throw new BadRequestException(
@@ -168,10 +165,7 @@ export class AiKeysService {
       );
     }
     if (dto.isDefault === true && !key.isDefault) {
-      await this.keyRepository.update(
-        { userId },
-        { isDefault: false },
-      );
+      await this.keyRepository.update({ userId }, { isDefault: false });
       key.isDefault = true;
     } else if (dto.isDefault === false) {
       key.isDefault = false;
@@ -260,10 +254,12 @@ export class AiKeysService {
         );
       }
       apiKey = this.decryptForUse(key);
-    } else if (provider === AiProvider.NVIDIA) {
-      apiKey = this.configService.get<string>('NVIDIA_API_KEY')?.trim() || undefined;
+    } else {
+      apiKey =
+        this.configService
+          .get<string>(`${provider.toUpperCase()}_API_KEY`)
+          ?.trim() || undefined;
     }
-    // Gemini without a caller key: curated fallback (live:false).
 
     const { models, live } = await this.clients.listModels(provider, apiKey);
     return {

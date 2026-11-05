@@ -24,6 +24,7 @@ import { CourseResearchService } from './course-research.service';
 import { ConceptMedia } from './entities/concept-media.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { AiProvider } from '../../common/enums/ai-provider.enum';
 import {
   createMockRepository,
   MockRepository,
@@ -427,6 +428,47 @@ describe('ConceptCompiler (§8 course compiler)', () => {
     }
   });
 
+  it('does not consume quota or publish when shared Gemini fails, and never calls NVIDIA', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('Gemini unavailable', { status: 503 }));
+    const realClient = new AiProviderClients({
+      get: configGet,
+    } as unknown as ConfigService);
+    clients.complete.mockImplementation(
+      (...args: Parameters<AiProviderClients['complete']>) =>
+        realClient.complete(...args),
+    );
+    const input = baseInput as Parameters<
+      AiGenerateService['compileConcept']
+    >[0];
+    try {
+      await expect(
+        service.compileConcept({
+          ...input,
+          creds: {
+            ...input.creds,
+            provider: AiProvider.GEMINI,
+            apiKey: 'shared-gemini-key',
+            model: 'gemini-3.6-flash',
+          },
+        }),
+      ).rejects.toThrow('Google Gemini');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toEqual(
+        expect.stringContaining('generativelanguage.googleapis.com'),
+      );
+      expect(logRepo.save).not.toHaveBeenCalled();
+      expect(conceptsService.createConcept).not.toHaveBeenCalled();
+      const saves = compilationRepo.save.mock.calls as Array<
+        [{ status: string }]
+      >;
+      expect(saves.at(-1)?.[0].status).toBe('failed');
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it('fails the concept when the outline references unknown builds_on ids', async () => {
     stagePayloads({
       outline: { ...OUTLINE, builds_on: ['ghost-id'] },
@@ -478,7 +520,7 @@ describe('ConceptCompiler (§8 course compiler)', () => {
 
   it('flag off keeps the legacy single-shot shape (one call, {content})', async () => {
     configGet.mockImplementation((key: string) =>
-      key === 'NVIDIA_API_KEY' ? 'platform-key' : undefined,
+      key === 'GEMINI_API_KEY' ? 'platform-key' : undefined,
     );
     const keysService = (service as any).keysService;
     keysService.getDefaultKey.mockResolvedValue(null);
