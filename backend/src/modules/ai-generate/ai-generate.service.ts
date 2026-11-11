@@ -1394,7 +1394,10 @@ export class AiGenerateService implements OnApplicationBootstrap {
       creds,
       sysModules.text,
       userPrompt,
-      this.routeParams('roadmap_titles', { maxTokens: 400, temperature: 0.5 }),
+      {
+        ...this.routeParams('roadmap_titles', { maxTokens: 400, temperature: 0.5 }),
+        responseFormat: { type: 'json_object' },
+      },
       'roadmap_titles',
     );
 
@@ -1522,10 +1525,13 @@ export class AiGenerateService implements OnApplicationBootstrap {
       creds,
       sysConcepts.text,
       userPrompt,
-      this.routeParams('module_concept_titles', {
-        maxTokens: 400,
-        temperature: 0.5,
-      }),
+      {
+        ...this.routeParams('module_concept_titles', {
+          maxTokens: 400,
+          temperature: 0.5,
+        }),
+        responseFormat: { type: 'json_object' },
+      },
       'module_concept_titles',
     );
 
